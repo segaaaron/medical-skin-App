@@ -51,6 +51,37 @@ services:
       timeout: 3s
       retries: 30
 
+  # PgBouncer en MODO TRANSACCIÓN, el mismo que habrá en producción.
+  # Está en desarrollo a propósito: es donde se demuestra que el contexto de inquilino
+  # fijado con un SET de sesión se filtraría al siguiente cliente que reutiliza la conexión.
+  # La aplicación puede apuntar aquí; las migraciones nunca, van directas al dueño.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    container_name: medskin-pgbouncer
+    depends_on:
+      postgres: { condition: service_healthy }
+    # PgBouncer escucha en 5432 dentro del contenedor; 6432 es solo el puerto del anfitrión.
+    ports: ["6432:5432"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: medskin
+      DB_USER: medskin
+      DB_PASSWORD: dev_local_only
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      AUTH_TYPE: scram-sha-256
+      # Con pool en modo transacción no puede haber sentencias preparadas con nombre
+      # compartidas entre transacciones: node-postgres usa las anónimas y así funciona.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U medskin -d medskin"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+# El correo de desarrollo lo atrapa el Mailpit que ya corre en esta máquina (1025 · panel en 8025).
+# No se duplica en un contenedor: ya está, y dos procesos no pueden escuchar el mismo puerto.
 volumes:
   medskin-pg:
   medskin-redis:

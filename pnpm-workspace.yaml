@@ -1,0 +1,7 @@
+allowBuilds:
+  msgpackr-extract: set this to true or false
+# argon2 y esbuild traen binario nativo: su script de instalación es obligatorio.
+# pnpm 11 lee esta lista desde aquí, no desde package.json.
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
