@@ -1,0 +1,57 @@
+# Servicios de desarrollo de MedSkin.
+# Las credenciales de este archivo son locales y de desarrollo: no sirven fuera de esta máquina
+# y no se usan en ningún entorno real. Los secretos de verdad no viven en el repositorio.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: medskin-postgres
+    # 5433 a propósito: deja libre el 5432 del PostgreSQL 16 ya instalado en el sistema
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_USER: medskin_owner
+      POSTGRES_PASSWORD: dev_local_only
+      POSTGRES_DB: medskin
+    volumes:
+      - medskin-pg:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medskin_owner -d medskin"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: medskin-redis
+    ports: ["6380:6379"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - medskin-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # S3 de desarrollo. MinIO salió de Docker Hub en 2025 y su imagen pide cuenta;
+  # LocalStack da el mismo S3 para desarrollo sin registro ninguno.
+  s3:
+    image: localstack/localstack:4
+    container_name: medskin-s3
+    ports: ["4566:4566"]
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+      PERSISTENCE: "1"
+    volumes:
+      - medskin-s3:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": *\"available\"'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  medskin-pg:
+  medskin-redis:
+  medskin-s3:
