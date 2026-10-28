@@ -37,19 +37,26 @@ export class ErrorFilter implements ExceptionFilter {
     }
 
     // Lo que HTTP produce ANTES de llegar a un controlador: una ruta que no existe, un
-    // cuerpo que no es JSON, un cuerpo que pasa del límite. Son los seis de
-    // _convenciones.md · «Los errores del transporte», y salen del catálogo como los
-    // demás: tres de ellos no le dicen nada al usuario —`mensaje` vacío— porque son
+    // cuerpo que no es JSON, un cuerpo que pasa del límite, el límite de ritmo. Son los
+    // de _convenciones.md · «Los errores del transporte», y salen del MISMO catálogo que
+    // los demás: dos de ellos no le dicen nada al usuario —`mensaje` vacío— porque son
     // errores de programación del cliente, pero TIENEN código y la app los registra.
-    if (thrown instanceof HttpException) {
-      const status = thrown.getStatus();
-      const code = TRANSPORT_CODE_BY_STATUS[status];
-      if (code !== undefined && status < 500) {
-        this.reply(res, status, {
-          error: { codigo: code, mensaje: CATALOG[code].message, campo: null },
-        });
-        return;
-      }
+    //
+    // El estado se lee de las dos formas a propósito. `@fastify/rate-limit` y el resto de
+    // los errores de nivel Fastify NO lanzan un `HttpException` de NestJS: lanzan un
+    // objeto con `statusCode`. Mirar solo lo primero convertía el `429` en un `500`, y eso
+    // tenía tres consecuencias medidas: la app mostraba la alerta que BLOQUEA con
+    // «Reintentar» en vez de «Vas muy rápido», cada petición limitada escribía una fila en
+    // `service_failure` —un cliente sin sesión inundando el registro gratis, que es lo
+    // contrario del punto 9 de OWASP— y el 500 mentía, porque el servidor sí respondió:
+    // respondió que no.
+    const status = statusOf(thrown);
+    const code = status === null ? undefined : TRANSPORT_CODE_BY_STATUS[status];
+    if (status !== null && code !== undefined && status < 500) {
+      this.reply(res, status, {
+        error: { codigo: code, mensaje: CATALOG[code].message, campo: null },
+      });
+      return;
     }
 
     // Todo lo demás es un fallo del servidor, y lleva la frase del endpoint: la frase es
@@ -88,4 +95,19 @@ export class ErrorFilter implements ExceptionFilter {
             },
     });
   }
+}
+
+/**
+ * El estado de HTTP de lo que se lanzó, por las dos vías que existen: `getStatus()` si es
+ * un `HttpException` de NestJS, y `statusCode`/`status` si viene del nivel de Fastify. Un
+ * error que no trae ninguna de las dos no es un error de transporte: es un fallo nuestro,
+ * y se va a la rama del 500 con su causa real.
+ */
+function statusOf(thrown: unknown): number | null {
+  if (thrown instanceof HttpException) return thrown.getStatus();
+  if (typeof thrown !== 'object' || thrown === null) return null;
+  const { statusCode, status } = thrown as { statusCode?: unknown; status?: unknown };
+  if (typeof statusCode === 'number') return statusCode;
+  if (typeof status === 'number') return status;
+  return null;
 }

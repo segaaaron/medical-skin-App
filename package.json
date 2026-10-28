@@ -8,7 +8,8 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "start:dev": "nest start --watch",
+    "start:dev": "tsx watch --env-file=.env src/main.ts",
+    "start": "node --env-file=.env dist/main.js",
     "build": "nest build",
     "db:generate": "node --env-file=.env ./node_modules/.bin/drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env src/shared/db/migrate.ts",
@@ -22,7 +23,6 @@
     "@fastify/helmet": "13.2.0",
     "@fastify/rate-limit": "11.2.1",
     "@nestjs/common": "11.2.8",
-    "@nestjs/config": "12.0.1",
     "@nestjs/core": "11.2.8",
     "@nestjs/platform-fastify": "11.2.8",
     "@simplewebauthn/server": "14.0.3",

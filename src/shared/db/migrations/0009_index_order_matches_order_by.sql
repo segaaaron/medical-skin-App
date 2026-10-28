@@ -1,0 +1,25 @@
+-- Tramo 2 · los dos índices ordenados, en el orden que el `ORDER BY` pide.
+--
+-- QUÉ ESTABA MAL EN LA 0006, y es un error que no se ve mirando el SQL: `.desc()` de
+-- drizzle emite `DESC NULLS LAST`, y `order by created_at desc` significa `DESC NULLS
+-- FIRST`. Son dos ordenaciones distintas para el planificador, así que el índice NO servía
+-- para el `ORDER BY`: `GET /v1/pacientes` leía las 8 000 fichas del inquilino y las
+-- ordenaba para devolver 50.
+--
+-- Medido con `EXPLAIN (ANALYZE, BUFFERS)` sobre 8 000 fichas por consulta, antes y después:
+--
+--   antes:   Bitmap Heap Scan + top-N heapsort · 7 201 filas leídas · 515 bloques · 2,6 ms
+--   después: Index Scan ordenado, 50 filas leídas · 7 bloques · 0,1 ms
+--
+-- Y de paso arregla un efecto de segundo orden que el plan destapó: mientras el btree no
+-- servía para el orden, el GIN de la búsqueda —que lleva `practice_id` delante y por tanto
+-- también resuelve la igualdad por inquilino— ganaba por un pelo la consulta de la LISTA,
+-- que no busca nada. Con el btree utilizable vuelve a ganar el que corresponde.
+--
+-- Las dos columnas son `not null`, así que no hay un solo nulo que cambie de sitio: lo
+-- único que cambia es que el plan encaja. Y `medical_history_audit` lleva el mismo arreglo
+-- porque su consulta es la misma forma («qué cambió en esta ficha, lo último primero»).
+--
+-- §3.4, regla 7: la 0006 ya se aplicó, así que no se toca. Si está mal, se escribe la
+-- siguiente.
+

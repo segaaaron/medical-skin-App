@@ -282,7 +282,13 @@ describe('POST /v1/acceso · el orden de las comprobaciones', () => {
     expect(pasos).not.toContain('sesion:abrir');
   });
 
-  it('la temporal ya gastada eligiendo la definitiva da contrasena_temporal_ya_usada', async () => {
+  // El `contrasena_temporal_ya_usada` que había aquí se RETIRÓ con el código (decisión 27,
+  // 27 de octubre). No era solo inalcanzable: el día que exista el reenvío de acceso, una
+  // función que ponga `is_temporary = true` sin limpiar `temp_used_at` haría que esa rama
+  // rechazara una temporal NUEVA Y LEGÍTIMA con «ya elegiste la tuya», y dejaría a la
+  // paciente fuera de su cuenta. Lo que queda es que la temporal vieja no coincide con el
+  // hash y cae en `acceso_no_coincide`, que es correcto y no filtra nada.
+  it('una temporal consumida que ya no coincide cae en el 401 de siempre', async () => {
     const error = await errorDe(() =>
       armar({
         credencial: {
@@ -291,11 +297,11 @@ describe('POST /v1/acceso · el orden de las comprobaciones', () => {
           tempExpiresAt: new Date(AHORA.getTime() + 3_600_000),
           tempUsedAt: new Date(AHORA.getTime() - 3_600_000),
         },
-        coincide: true,
+        coincide: false,
       }).caso.run(PETICION),
     );
 
-    expect(error.code).toBe('contrasena_temporal_ya_usada');
+    expect(error.code).toBe('acceso_no_coincide');
   });
 });
 
@@ -351,6 +357,9 @@ describe('POST /v1/acceso · la pausa', () => {
 
     expect(error.userMessage).toBe('Revisa tu correo y tu contraseña.');
     expect(error.data).toEqual({
+      // Decisión 19: los dos campos que se encienden viajan en `datos.campos`, porque
+      // `campo` admite uno y este es el único error del tramo con dos.
+      campos: ['correo', 'contrasena'],
       intentos_restantes: 3,
       pausa_minutos: 15,
       aviso: 'Te quedan 3 intentos antes de una pausa de 15 minutos.',

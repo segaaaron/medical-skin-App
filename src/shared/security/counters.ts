@@ -56,6 +56,20 @@ export class Counters {
     return this.toCount(Number(result[0]?.[1] ?? 0), Number(result[2]?.[1] ?? -2));
   }
 
+  /**
+   * Una marca con su propia caducidad, no un contador: solo importa si está o no está. Se
+   * reescribe en cada llamada —al contrario que `increment()`, que fija la ventana una
+   * sola vez— porque lo que marca es «esto vale hasta tal hora», y pedir otro código
+   * mueve esa hora.
+   */
+  async mark(name: string, seconds: number): Promise<void> {
+    await this.redis.set(name, '1', 'EX', seconds);
+  }
+
+  async has(name: string): Promise<boolean> {
+    return (await this.redis.exists(name)) === 1;
+  }
+
   async forget(...names: string[]): Promise<void> {
     if (names.length > 0) await this.redis.del(...names);
   }
@@ -93,4 +107,11 @@ export const COUNTER_KEYS = {
   // en la tabla de `_convenciones.md` y el contrato lo exige. Va por `cuenta_id` y no por
   // correo porque aquí quien llama ya está dentro: hay fila de cuenta segura que contar.
   passwordChangeByAccount: (accountId: string) => `cuenta:contrasena:intentos:${accountId}`,
+
+  /**
+   * La marca de «hay un código vivo para este correo», con la misma vida que el código.
+   * No es un límite: es lo que permite que un correo SIN cuenta reciba los mismos dos 410
+   * que uno con cuenta. Sin ella, el código de estado diría si el correo existe.
+   */
+  recoveryCodeIsLive: (fingerprint: string) => `recuperacion:vive:${fingerprint}`,
 } as const;

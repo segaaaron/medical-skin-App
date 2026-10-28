@@ -1,0 +1,22 @@
+-- Tramo 2 · la columna que le faltaba a la política de `medical_history`.
+--
+-- QUÉ ESTABA MAL: las políticas de `app_patient` sobre `medical_history` y sobre
+-- `medical_history_audit` comparan `l.account_id = medskin_current_account()` dentro de un
+-- `EXISTS` sobre `patient_link`, y el `GRANT SELECT` de la 0006 no incluía `account_id`.
+--
+-- Una subconsulta de política se ejecuta CON LOS PRIVILEGIOS DE QUIEN CONSULTA, no con los
+-- del dueño de la política, así que toda lectura de sus antecedentes moría con
+-- `permission denied for table patient_link`. La paciente se queda sin su propia ficha
+-- médica: su `PUT /v1/vinculos/{id}/ficha-medica` no puede ni leer para comparar.
+--
+-- POR QUÉ SE CONCEDE LA COLUMNA Y NO SE QUITA EL PREDICADO: sin él, la subconsulta se
+-- apoyaría solo en que la política de `patient_link` ya filtra por cuenta. Es verdad hoy, y
+-- es exactamente la clase de verdad que se cae el día que alguien añada otra política de
+-- `SELECT` a esa tabla, sin que ninguna prueba se queje. La defensa explícita se queda y lo
+-- que se abre es una columna que no dice nada que ella no sepa: SU propio `account_id`, en
+-- SU propia fila, que es el valor que su token lleva dentro.
+--
+-- §3.4, regla 7: la 0006 ya se aplicó, así que no se toca. Si está mal, se escribe la
+-- siguiente.
+
+GRANT SELECT (account_id) ON "patient_link" TO app_patient;

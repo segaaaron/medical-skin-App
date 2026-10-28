@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
 import { AccessModule } from './modules/access/access.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
+import { RecoveryModule } from './modules/recovery/recovery.module';
 import { FailureLog } from './shared/failures/service-failure';
 import { ErrorFilter } from './shared/http/error.filter';
 import { ScopeGuard } from './shared/http/scope.guard';
@@ -17,7 +19,7 @@ import { SharedModule } from './shared/shared.module';
 // `undefined` convierte el primer 500 en un cuelgue del proceso. Con fábricas no hay
 // metadatos de los que depender y las dos rutas de ejecución se comportan igual.
 @Module({
-  imports: [SharedModule, AccessModule],
+  imports: [SharedModule, AccessModule, RecoveryModule, AccountsModule],
   providers: [
     { provide: APP_GUARD, useFactory: (tokens: Tokens) => new ScopeGuard(tokens), inject: [Tokens] },
     {

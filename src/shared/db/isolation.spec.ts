@@ -458,7 +458,8 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
       // Las tres cadenas están copiadas justo para que esto siga cerrado (pregunta 7).
       practice: await whatItSees(app, ctxPatient, 'select name from practice'),
       practitioner: await whatItSees(app, ctxPatient, 'select first_name from practitioner'),
-      // La ficha es de la consulta: no tiene política aquí.
+      // La ficha es de la consulta: no tiene política aquí NI grant, que es la forma
+      // fuerte de «no lee nada»: no hay consulta que escribir.
       patient: await whatItSees(app, ctxPatient, 'select id from patient'),
       // Y de su propio vínculo no lee ni cuándo le mandaron el acceso ni el correo:
       // columnas que no están en su grant.
@@ -467,7 +468,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     }).toEqual({
       practice: 'permiso denegado',
       practitioner: 'permiso denegado',
-      patient: '0 filas',
+      patient: 'permiso denegado',
       access_sent_at: 'permiso denegado',
       email: 'permiso denegado',
     });
@@ -666,5 +667,135 @@ describe('a través de PgBouncer en modo transacción (6432)', () => {
     } finally {
       await third.end();
     }
+  });
+});
+
+// =========================================================================================
+// LOS PLANES · regla 5 de §7.3: sin un índice que empiece por el inquilino, el predicado de
+// la política provoca recorridos completos de tabla. Esto no se razona, se mide:
+// `EXPLAIN (ANALYZE, BUFFERS)` por la ruta caliente y con el rol y el contexto de verdad,
+// porque el plan CAMBIA cuando la política añade su predicado.
+//
+// Con cuatro filas cualquier plan es un recorrido y no probaría nada, así que esta suite
+// siembra 8 000 fichas con sus antecedentes en cada una de las dos consultas y hace `ANALYZE`. Va al final del archivo a
+// propósito: las suites anteriores cuentan filas y esta las multiplica.
+// =========================================================================================
+describe('los planes de las rutas calientes del tramo 2', () => {
+  beforeAll(async () => {
+    await owner.query(
+      `insert into account (email, role, region, first_name, last_name)
+       select 'bulk-' || g || '@prueba.local', 'paciente', 'latam', 'Bulk', 'Paciente'
+         from generate_series(1, 1600) g`,
+    );
+    const bulkPatients = async (t: typeof A, howMany: number) =>
+      owner.query(
+        `insert into patient (practice_id, first_name, last_name, birth_date, email, phone,
+                              how_arrived, status, archived_at)
+         select $1::uuid, left(md5(g::text), 9), left(md5((g * 7)::text), 9), '1990-01-01',
+                'ficha-' || g || '-' || left($1::uuid::text, 4) || '@prueba.local',
+                '+5917' || lpad(g::text, 7, '0'), 'instagram',
+                case when g % 10 = 0 then 'archivada' else 'activa' end,
+                case when g % 10 = 0 then now() end
+           from generate_series(1, $2::int) g`,
+        [t.practice, howMany],
+      );
+    // Una de cada diez archivada, con su `archived_at`: sin él no entra, lo impide
+    // `patient_archived_ck`, y así el índice se mide sobre datos con las dos clases.
+    await bulkPatients(A, 8_000);
+    await bulkPatients(B, 8_000);
+    await owner.query(
+      `insert into patient_link (practice_id, patient_id, account_id, email, practice_name, practitioner_name)
+       select p.practice_id, p.id, a.id, a.email, 'Clinica', 'Dra. Andrea Paz'
+         from (select id, practice_id, row_number() over (order by id) as rn
+                 from patient where id <> all($1::uuid[])) p
+         join (select id, email, row_number() over (order by id) as rn
+                 from account where email like 'bulk-%') a using (rn)`,
+      [[A.patient, B.patient]],
+    );
+    await owner.query(
+      `insert into medical_history (practice_id, patient_id, has_allergies, phototype, phototype_source,
+                                    phototype_source_at)
+       select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctora', now()
+         from patient p where p.email like 'ficha-%@prueba.local'`,
+    );
+    await owner.query('analyze patient');
+    await owner.query('analyze patient_link');
+    await owner.query('analyze medical_history');
+  }, 120_000);
+
+  afterAll(async () => {
+    await owner.query(`delete from patient where email like 'ficha-%@prueba.local'`);
+    await owner.query(`delete from account where email like 'bulk-%@prueba.local'`);
+  }, 120_000);
+
+  /** El plan tal cual lo ejecuta el rol de la aplicación, con su política puesta. */
+  async function plan(ctx: TenantContext, sql: string, params: unknown[] = []) {
+    const rows = await read<{ 'QUERY PLAN': string }>(app, ctx, `explain (analyze, buffers) ${sql}`, params);
+    return rows.map((r) => r['QUERY PLAN']).join('\n');
+  }
+
+  it('la lista de pacientes entra por el índice que empieza por el inquilino', async () => {
+    // `GET /v1/pacientes` sin búsqueda: las activas, las últimas primero. Y sin
+    // `where practice_id`: lo pone la política, que es justo lo que hay que medir.
+    const used = await plan(
+      ctxPractitionerA,
+      `select id, first_name, last_name from patient where status = 'activa'
+        order by created_at desc limit 50`,
+    );
+    expect(used).toContain('patient_practice_status_idx');
+    expect(used).not.toContain('Seq Scan on patient');
+  });
+
+  it('la búsqueda por trigramas entra por el GIN que empieza por el inquilino', async () => {
+    // Una búsqueda de verdad es selectiva: «apellido1234» es una ficha, no mil. Con un
+    // patrón que acierta a una de cada veinte, el motor hace bien en entrar por el btree
+    // del inquilino y filtrar, y eso también es un plan correcto; lo que el GIN evita es
+    // el recorrido completo cuando la aguja es fina, que es el caso que la pantalla manda.
+    // La aguja sale de una ficha real de A: es el caso de la pantalla —teclear un trozo
+    // de un nombre— y no un patrón inventado. Los nombres de la siembra son resúmenes
+    // hexadecimales justo para que sus trigramas no sean todos el mismo: con «Nombre1,
+    // Nombre2, …» cada trigrama está en las 8 000 filas y el motor hace bien en no entrar
+    // por el GIN, que es un artefacto de la siembra y no de los datos de una consulta.
+    const { rows: needle } = await owner.query<{ needle: string }>(
+      'select substr(search_text, 2, 8) as needle from patient where practice_id = $1 limit 1',
+      [A.practice],
+    );
+    const used = await plan(ctxPractitionerA, `select id from patient where search_text like $1 limit 50`, [
+      `%${needle[0]?.needle}%`,
+    ]);
+    expect(used).toContain('patient_search_idx');
+    expect(used).not.toContain('Seq Scan on patient');
+  });
+
+  it('los vínculos de la paciente entran por el índice de cuenta, sin inquilino delante', async () => {
+    // La única lectura que cruza inquilinos. No hay `practice_id` que poner delante porque
+    // quien pregunta no tiene uno, y por eso este índice es de una sola columna.
+    const used = await plan(ctxPatient, 'select id, practice_name from patient_link');
+    expect(used).toContain('patient_link_account_idx');
+    expect(used).not.toContain('Seq Scan on patient_link');
+  });
+
+  it('la autorización del reenvío de acceso entra por (practice_id, account_id)', async () => {
+    // `POST /v1/cuentas/{cuenta_id}/acceso`: `EXISTS (... where account_id = $1)` bajo la
+    // política del inquilino. Es la consulta literal del contrato.
+    const used = await plan(ctxPractitionerA, 'select exists (select 1 from patient_link where account_id = $1)', [
+      PATIENT.account,
+    ]);
+    // Entra por índice, y el motor elige entre los dos que empiezan por una de las dos
+    // columnas: con un `account_id` concreto gana `patient_link_account_idx`, que resuelve
+    // en una fila, y el inquilino se comprueba en el filtro de la política. El compuesto
+    // que empieza por el inquilino es el que sirve las consultas que SALEN del inquilino
+    // (la lista filtrada por vínculo). Lo que la regla 5 prohíbe es el recorrido completo,
+    // y aquí no hay ninguno.
+    expect(used).toMatch(/Index Scan using patient_link_(practice_)?account_idx/);
+    expect(used).not.toContain('Seq Scan on patient_link');
+  });
+
+  it('los antecedentes de la paciente no recorren la tabla de nadie', async () => {
+    const used = await plan(ctxPatient, 'select has_allergies from medical_history where patient_id = $1', [A.patient]);
+    expect(used).toContain('medical_history_patient_uq');
+    // Y el `EXISTS` de su política tampoco: una fila por `patient_link_patient_uq`.
+    expect(used).toContain('patient_link_patient_uq');
+    expect(used).not.toContain('Seq Scan');
   });
 });
