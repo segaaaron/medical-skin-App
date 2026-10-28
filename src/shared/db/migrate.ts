@@ -10,7 +10,7 @@ async function aplicar() {
 
   const pool = new Pool({ connectionString: url, max: 1 });
   try {
-    await migrate(drizzle(pool), { migrationsFolder: 'src/compartido/db/migraciones' });
+    await migrate(drizzle(pool), { migrationsFolder: 'src/shared/db/migrations' });
     process.stdout.write('migraciones aplicadas\n');
   } finally {
     await pool.end();

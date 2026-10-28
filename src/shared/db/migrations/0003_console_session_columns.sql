@@ -1,0 +1,28 @@
+-- Tramo 1 · las dos columnas que le faltaban a la consola, y ni una más.
+--
+-- Cierra la pregunta 14 de docs/contratos/preguntas-abiertas.md: la decisión 5 concedió
+-- `(account_id, app_version, last_seen_at)` de `session` a `app_platform`, y con esas tres
+-- `GET /v1/plataforma/inquilinos/{id}` no puede devolver ninguno de sus dos campos:
+--
+--   `doctora.sesiones_activas`  necesita `revoked_at` → «vivas» es `revoked_at IS NULL`.
+--   `versiones_app: {ios, android}`  necesita `platform` → sin ella la versión no se
+--                                    puede separar por sistema, y el campo es un objeto
+--                                    con dos claves, no una cadena.
+--
+-- CINCO COLUMNAS EN TOTAL, Y AHÍ SE PARA. No `device`, no `city`, no `device_id`, no `os`:
+-- eso es «desde qué teléfono y desde qué ciudad entró una paciente», y es un dato de
+-- localización de quien va a una clínica de estética. El `README` de los contratos lo deja
+-- fuera a propósito y `Consola.dc.html` lo promete en la propia pantalla: cuántas, no
+-- cuáles. `revoked_at` y `platform` no dicen dónde ni con quién, así que no mueven esa
+-- línea: dicen cuántas siguen vivas y de qué sistema es la app.
+--
+-- Lo que impide que mañana se cuele `city` no es este comentario: es que
+-- `access-functions.spec.ts` enumera las nueve columnas que siguen cerradas y falla si
+-- alguna se abre.
+--
+-- No hace falta política nueva: `session_platform_select` (0002) ya es `FOR SELECT TO
+-- app_platform`, y una política no mira columnas. Esto es solo el grant.
+--
+-- §3.4, regla 7: versionada, y NUNCA editada después de aplicarse.
+
+GRANT SELECT (revoked_at, platform) ON "session" TO app_platform;

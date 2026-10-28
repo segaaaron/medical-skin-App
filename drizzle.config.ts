@@ -4,8 +4,8 @@ import { defineConfig } from 'drizzle-kit';
 // la conexión de la API no es dueña de las tablas para que RLS sí se le aplique.
 export default defineConfig({
   dialect: 'postgresql',
-  schema: './src/compartido/db/esquema/*.ts',
-  out: './src/compartido/db/migraciones',
+  schema: './src/shared/db/schema/*.ts',
+  out: './src/shared/db/migrations',
   dbCredentials: { url: process.env.DATABASE_URL_OWNER ?? '' },
   strict: true,
   verbose: true,
