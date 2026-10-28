@@ -35,3 +35,47 @@ export interface PasswordAttemptsPort {
   recordFailure(accountId: string): Promise<void>;
   clear(accountId: string): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------------------
+// El acceso de SU paciente · `POST /v1/cuentas/{cuenta_id}/acceso`.
+//
+// La autorización no es un `if` del código: es la política de `patient_link` sobre
+// `practice_id` más la función `SECURITY DEFINER` que empieza buscando ese vínculo. Un
+// `cuenta_id` de otra consulta no devuelve fila, y esa es la respuesta.
+// ---------------------------------------------------------------------------------------
+
+/** Lo que hace falta para escribir el mensaje, y nada más. Ni un dato clínico. */
+export type PatientForDelivery = {
+  firstName: string;
+  email: string;
+  phone: string | null;
+  /** El nombre con el que la doctora se presenta: «Dra. Andrea Paz». */
+  practitionerName: string;
+};
+
+export type ResendOutcome = 'acceso_renovado' | 'ya_eligio_su_contrasena' | 'paciente_no_existe';
+
+export interface PatientAccessPort {
+  /**
+   * La ficha de esa cuenta en ESTA consulta, bajo la política de `patient_link`. `null`
+   * cuando no hay vínculo, que es la misma respuesta que un `cuenta_id` inventado.
+   */
+  forDelivery(owner: AccountOwner, accountId: string): Promise<PatientForDelivery | null>;
+
+  /**
+   * `medskin_resend_patient_access()`: acuña la temporal nueva, mata la anterior y marca
+   * el envío. Devuelve el veredicto, nunca la fila.
+   */
+  resend(p: {
+    owner: AccountOwner;
+    accountId: string;
+    hash: string;
+    expiresAt: Date;
+    via: string;
+  }): Promise<{ outcome: ResendOutcome; expiresAt: Date | null }>;
+}
+
+/** El contador del `429 demasiados_reenvios`: «más de 3 en una hora para la misma cuenta». */
+export interface ResendLimitPort {
+  count(accountId: string): Promise<{ tooMany: boolean }>;
+}

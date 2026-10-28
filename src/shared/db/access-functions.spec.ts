@@ -1218,6 +1218,17 @@ describe('el registro de fallos del rol sin sesión (0004 y 0005)', () => {
 // EL SEÑUELO Y SU COSTE (0007) · el oráculo del reloj, cerrado
 // =========================================================================================
 describe('los parámetros del señuelo del acceso (0007)', () => {
+  // El señuelo de esta base es el que sembró la migración y así se queda: si una prueba
+  // lo tocara, el «mismo tiempo» de las siguientes mediría otra cosa.
+  let seeded: string;
+  beforeAll(async () => {
+    const { rows } = await owner.query<{ hash: string }>('select hash from access_decoy where only_row');
+    seeded = rows[0]?.hash ?? '';
+  });
+  afterAll(async () => {
+    await owner.query('update access_decoy set hash = $1 where only_row and hash <> $1', [seeded]);
+  });
+
   it('el señuelo está sembrado con los MISMOS parámetros con los que hashea la aplicación', async () => {
     // Esta es la prueba que faltaba el día que la 0002 sembró el señuelo con los valores
     // por defecto de la librería: `m=65536,t=3,p=4` contra los `m=19456,t=2,p=1` reales.
@@ -1258,16 +1269,29 @@ describe('los parámetros del señuelo del acceso (0007)', () => {
     });
   });
 
-  it('la fila no acepta un hash que no sea un Argon2id codificado de verdad', async () => {
-    // La cadena de la 0002 llevaba los parámetros en un orden que la librería no emite.
-    // Con esta restricción, una cadena escrita a mano ya no entra, así que la comprobación
-    // de arranque siempre tiene tres números que parsear.
-    await expect(
-      owner.query(`update access_decoy set hash = '$argon2id$v=19$m=65536,p=4,t=3$sal$hash' where only_row`),
-    ).rejects.toMatchObject({ code: '23514' });
-    await expect(
-      owner.query(`update access_decoy set hash = 'no soy un hash' where only_row`),
-    ).rejects.toMatchObject({ code: '23514' });
+  it('la fila no acepta nada que no se pueda parsear como Argon2id', async () => {
+    // Lo que la restricción garantiza es que la comprobación de arranque SIEMPRE tenga tres
+    // números que leer. Lo que NO puede garantizar es que sean los correctos —una cadena
+    // con `m=65536` es igual de parseable—, y por eso el arreglo son dos cosas: esta
+    // restricción y la comparación contra `ARGON2_COST` de la prueba anterior.
+    const broken = [
+      'no soy un hash',
+      '$argon2id$v=19$m=19456,p=1$c2FsdA$aGFzaA',
+      '$argon2d$v=19$m=19456,p=1,t=2$c2FsdA$aGFzaA',
+      '$argon2id$v=19$m=19456,p=1,t=2$c2FsdA',
+      '',
+    ];
+    const results = await Promise.all(
+      broken.map(async (hash) => {
+        try {
+          await owner.query('update access_decoy set hash = $1 where only_row', [hash]);
+          return 'entra';
+        } catch (failure) {
+          return (failure as { code?: string }).code === '23514' ? 'rechazado' : 'otro';
+        }
+      }),
+    );
+    expect(results).toEqual(['rechazado', 'rechazado', 'rechazado', 'rechazado', 'rechazado']);
   });
 });
 

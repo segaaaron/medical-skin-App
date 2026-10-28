@@ -77,6 +77,10 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.changePassword,
   },
+  'POST /v1/cuentas/:cuenta_id/acceso': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.sendPatientAccess,
+  },
 };
 
 export function policyFor(method: string, route: string | undefined): RoutePolicy | null {

@@ -103,6 +103,9 @@ export const COUNTER_KEYS = {
   recoveryRequestsByIp: (ip: string) => `recuperacion:pedidos:ip:${ip}`,
   recoveryAttemptsByIp: (ip: string) => `recuperacion:intentos:ip:${ip}`,
 
+  /** `cuentas.md` · 429 `demasiados_reenvios`: «más de 3 en una hora para la misma cuenta». */
+  accessResendsByAccount: (accountId: string) => `acceso:reenvios:${accountId}`,
+
   // El de `PATCH /v1/cuentas/mia/contrasena`: «5 fallos de `actual` en 15 min». No está
   // en la tabla de `_convenciones.md` y el contrato lo exige. Va por `cuenta_id` y no por
   // correo porque aquí quien llama ya está dentro: hay fila de cuenta segura que contar.

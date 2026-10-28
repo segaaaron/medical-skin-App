@@ -45,6 +45,13 @@ export type ErrorCode =
   // PATCH /v1/cuentas/mia/contrasena
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // POST /v1/cuentas/{cuenta_id}/acceso
+  | 'paciente_no_existe'
+  | 'celular_necesario_para_whatsapp'
+  | 'ya_eligio_su_contrasena'
+  | 'demasiados_reenvios'
+  | 'via_no_valida'
+  | 'sin_permiso'
   // los seis del transporte (_convenciones.md · «Los errores del transporte»)
   | 'ruta_no_existe'
   | 'cuerpo_no_valido'
@@ -187,6 +194,43 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------
+  // POST /v1/cuentas/{cuenta_id}/acceso · `cuentas.md`.
+  // ---------------------------------------------------------------------------------
+  // «Un `cuenta_id` de otra consulta no devuelve fila y el endpoint responde
+  // `404 paciente_no_existe`, la misma respuesta que un `cuenta_id` inventado: no se
+  // distingue "no es tuya" de "no existe".»
+  paciente_no_existe: { status: 404, message: 'Esa paciente no está en tu lista.', field: null },
+  celular_necesario_para_whatsapp: {
+    status: 400,
+    message: 'Para mandárselo por WhatsApp hace falta su celular.',
+    field: 'celular',
+  },
+  // «Una doctora NO puede resetear la contraseña de su paciente una vez elegida. Si
+  // pudiera, sería dueña del acceso al expediente de una persona adulta.» La frase lleva
+  // el nombre de la paciente y la pone quien lanza.
+  ya_eligio_su_contrasena: {
+    status: 409,
+    message: 'Ya eligió su contraseña. Si no puede entrar, dile que use «Olvidé mi contraseña».',
+    field: null,
+  },
+  demasiados_reenvios: {
+    status: 429,
+    message: 'Ya le mandaste el acceso 3 veces en la última hora. Espera un rato.',
+    field: null,
+  },
+  // No está en la tabla del contrato: el cuerpo es `{ "via": … }` con tres valores y hace
+  // falta un error para el cuarto. Anotado para `producto`.
+  via_no_valida: {
+    status: 400,
+    message: 'Elige por dónde mandárselo: correo, WhatsApp, o dárselo en persona.',
+    field: 'via',
+  },
+  // Un `codigo`, dos frases: esta es la del reenvío. `POST /v1/pacientes` dice «Recepción
+  // no puede dar de alta pacientes.» y la pasa cuando se implemente. Anotado para
+  // `producto`.
+  sin_permiso: { status: 403, message: 'Recepción no puede mandar accesos.', field: null },
+
   // Los del transporte (_convenciones.md · «Los errores del transporte», 27 de octubre).
   // No son de ningún endpoint: los devuelve el borde antes de llegar a uno. Dos no le
   // dicen nada al usuario —`mensaje` vacío— porque son errores de programación del
@@ -313,7 +357,9 @@ export const FAILURE_PHRASES = {
   checkRecoveryCode:
     'No pudimos comprobar el código. El servidor no respondió. El código sigue valiendo: puedes volver a intentarlo.',
 
-  // `cuentas.md` · PATCH /v1/cuentas/mia/contrasena.
+  // `cuentas.md`.
+  sendPatientAccess:
+    'No pudimos preparar el acceso. El servidor no respondió. Su ficha está intacta: puedes volver a intentarlo.',
   changePassword:
     'No pudimos guardar tu contraseña. El servidor no respondió. La de ahora sigue valiendo: puedes volver a intentarlo.',
 
