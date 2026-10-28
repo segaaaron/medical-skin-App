@@ -1453,3 +1453,88 @@ describe('el reenvío del acceso de la doctora (0006)', () => {
     });
   });
 });
+
+// =========================================================================================
+// EL CAMINO DE RECUPERACIÓN, ENTERO (0013)
+//
+// Es el único camino en que el servidor no sabe QUÉ es quien llama: el token de recuperación
+// no lleva el rol a propósito. Así que adopta `app_account`, y la función tiene que
+// devolverle todo lo que necesita para contestar —incluido el rol dentro de la consulta—
+// en UNA transacción: si hiciera falta una segunda lectura y fallara, la contraseña ya
+// estaría guardada y el 500 del contrato diría «todavía puedes entrar con la temporal»,
+// que en ese instante es mentira.
+// =========================================================================================
+describe('la contraseña definitiva por recuperación, con app_account (0013)', () => {
+  const RECOVERED = '$argon2id$v=19$m=19456,p=1,t=2$cmVjdXBlcmFkYXNhbA$4+9Luamu4CrTRSqz7rWxCJY49vSQUkKTBlaiJPvmXcs';
+  // La dueña de A: tiene credencial definitiva y una sesión viva, que es el estado de quien
+  // olvidó su contraseña. Y es doctora, que es lo que la columna nueva tiene que decir.
+  const ctxAccountOwner: TenantContext = { role: 'app_account', accountId: A.account };
+
+  beforeAll(async () => {
+    await owner.query(
+      `insert into recovery_code (account_id, code_hash, expires_at)
+       values ($1, $2, now() + interval '10 minutes')`,
+      [A.account, HASH],
+    );
+  });
+
+  it('devuelve el rol de la consulta en la misma transacción que guarda la contraseña', async () => {
+    const [verdict] = await read<Record<string, string | null>>(
+      app,
+      ctxAccountOwner,
+      'select verdict, role, practitioner_role, practice_id, sessions_revoked::text from medskin_set_final_password($1, $2, null)',
+      [RECOVERED, 'recuperacion'],
+    );
+    expect(verdict).toEqual({
+      verdict: 'saved',
+      // `account.role` es el de autenticación y no sirve para encender pantallas...
+      role: 'practitioner',
+      // ...y este sí: es el que el borde traduce a `rol` en la respuesta.
+      practitioner_role: 'doctora',
+      practice_id: A.practice,
+      // No se le pasó `p_current_session`: por recuperación se revocan TODAS, incluida la
+      // que llamó. Quien tuviera la contraseña vieja se queda fuera.
+      sessions_revoked: '1',
+    });
+
+    // Y el código vivo se anuló en la misma transacción.
+    const { rows } = await owner.query<{ voided_reason: string | null }>(
+      'select voided_reason from recovery_code where account_id = $1 order by created_at desc limit 1',
+      [A.account],
+    );
+    expect(rows[0]?.voided_reason).toBe('usado');
+  });
+
+  it('para una paciente el rol de consulta es nulo, y eso también es una respuesta', async () => {
+    // `paciente` no es un rol de `practitioner` (decisión 12): vive en `account`. Nulo aquí
+    // es «no es de ninguna consulta», no un dato que falte.
+    await owner.query(
+      `insert into recovery_code (account_id, code_hash, expires_at)
+       values ($1, $2, now() + interval '10 minutes')`,
+      [RESEND.account, HASH],
+    );
+    const [verdict] = await read<Record<string, string | null>>(
+      app,
+      { role: 'app_account', accountId: RESEND.account },
+      'select verdict, role, practitioner_role, practice_id from medskin_set_final_password($1, $2, null)',
+      [RECOVERED, 'recuperacion'],
+    );
+    expect(verdict).toEqual({
+      verdict: 'saved',
+      role: 'paciente',
+      practitioner_role: null,
+      practice_id: null,
+    });
+  });
+
+  it('con este rol no se puede guardar la contraseña de otra cuenta', async () => {
+    // La autorización es `medskin.account_id` y nunca un argumento: la función no recibe
+    // ninguna cuenta. Sin contexto no hay nada que guardar.
+    await expect(
+      read(app, { role: 'app_anonymous' }, 'select * from medskin_set_final_password($1, $2, null)', [
+        RECOVERED,
+        'recuperacion',
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+});

@@ -14,15 +14,21 @@
 
 import type { Pool, PoolClient } from 'pg';
 
-// Los cuatro roles de la migración. Ninguno con SUPERUSER ni con BYPASSRLS.
-export const DB_ROLES = ['app_practitioner', 'app_patient', 'app_platform', 'app_anonymous'] as const;
+// Los cinco roles de la migración. Ninguno con SUPERUSER ni con BYPASSRLS.
+export const DB_ROLES = [
+  'app_practitioner',
+  'app_patient',
+  'app_platform',
+  'app_anonymous',
+  'app_account',
+] as const;
 export type DbRole = (typeof DB_ROLES)[number];
 
 export type TenantContext = {
   role: DbRole;
   /** `medskin.practice_id`. Solo doctora y equipo. */
   practiceId?: string | null;
-  /** `medskin.account_id`. Los tres roles con sesión. `app_anonymous` no lo fija. */
+  /** `medskin.account_id`. Los cuatro roles con sesión. `app_anonymous` no lo fija. */
   accountId?: string | null;
 };
 
@@ -61,6 +67,14 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   }
 
   if (!accountId) throw new Error(`El rol ${ctx.role} exige accountId: toda petición autenticada lo fija.`);
+  // `app_account` es el rol del token que NO dice qué es la persona: el de recuperación
+  // (§ migración 0013). Sus políticas son las tres por `account_id` —`account`,
+  // `credential`, `session`— más el `SELECT` de `patient_link`, y nada clínico ni de
+  // ninguna consulta. Por eso no fija `practice_id`: cuando llega no se sabe si hay uno, y
+  // un `practice_id` adivinado sería una lectura que ese token no autoriza.
+  if (ctx.role === 'app_account' && practiceId) {
+    throw new Error('app_account no fija practiceId: su token no dice a qué consulta pertenece quien llama.');
+  }
   if (ctx.role === 'app_practitioner' && !practiceId) {
     throw new Error('app_practitioner exige practiceId: sus políticas se leen por inquilino.');
   }

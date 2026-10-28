@@ -140,6 +140,55 @@ async function seed(): Promise<void> {
       },
     );
 
+    const patientAccount = patientRow?.account_id;
+    if (patientAccount === undefined) throw new Error('medskin_create_patient_account no devolvió cuenta');
+
+    // 5 · Su FICHA y su VÍNCULO, con el rol de la doctora y bajo sus políticas, que es
+    // exactamente lo que hace `POST /v1/pacientes`: la cuenta la crea la función, la ficha
+    // y el vínculo los escribe ella. Sin el vínculo no se puede ejercitar
+    // `POST /v1/cuentas/{cuenta_id}/acceso`, cuya autorización ES esa fila.
+    //
+    // `patient_link` copia el nombre de la consulta, el de la doctora y la ciudad (la
+    // pregunta 7): la paciente no tiene política en `practice` ni en `practitioner`.
+    // `medical_history` nace con todo en nulo —«puedes atenderla hoy y llenar esto
+    // después»—, y nulo no es `false`: es «nadie preguntó todavía».
+    const ficha = await withTenantContext(
+      app,
+      { role: 'app_practitioner', accountId: practitionerAccount, practiceId: PRACTICE },
+      async (c) => {
+        const { rows } = await c.query<{ id: string }>(
+          `insert into patient (practice_id, first_name, last_name, birth_date, email, phone,
+                                has_whatsapp, reminders_via, how_arrived)
+           values ($1, $2, $3, '1992-04-18', $4, $5, true, 'ambas', 'instagram')
+           returning id`,
+          [PRACTICE, PATIENT.firstName, PATIENT.lastName, PATIENT.email, PATIENT.phone],
+        );
+        const patient = rows[0]?.id;
+        if (patient === undefined) throw new Error('la ficha de la paciente no se creó');
+
+        await c.query(
+          `insert into patient_link (practice_id, patient_id, account_id, status, email,
+                                     access_sent_at, practice_name, practitioner_name, city)
+           select $1, $2, $3, 'invitada', $4, now(), p.name,
+                  $5 || ' ' || $6, p.city
+             from practice p where p.id = $1`,
+          [
+            PRACTICE,
+            patient,
+            patientAccount,
+            PATIENT.email,
+            PRACTITIONER.firstName,
+            PRACTITIONER.lastName,
+          ],
+        );
+        await c.query('insert into medical_history (practice_id, patient_id) values ($1, $2)', [
+          PRACTICE,
+          patient,
+        ]);
+        return patient;
+      },
+    );
+
     process.stdout.write(
       [
         'sembrado para desarrollo:',
@@ -148,7 +197,9 @@ async function seed(): Promise<void> {
         `  paciente   ${PATIENT.email} / ${TEMP_PATIENT}  (temporal, 72 h) · ${
           patientRow?.already_existed ? 'ya existía' : 'creada'
         }`,
+        `  ficha      ${ficha} · vínculo invitada, antecedentes en blanco (nulo, que no es «no»)`,
         '  las dos entran con siguiente_paso = contrasena_nueva y alcance restringido.',
+        `  reenvío    POST /v1/cuentas/${patientAccount}/acceso ya se puede ejercitar.`,
         '',
       ].join('\n'),
     );
