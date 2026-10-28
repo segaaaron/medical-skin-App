@@ -10,11 +10,12 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/compartido/db/migrar.ts",
+    "db:generate": "node --env-file=.env ./node_modules/.bin/drizzle-kit generate",
+    "db:migrate": "tsx --env-file=.env src/shared/db/migrate.ts",
     "test": "vitest run",
     "lint": "eslint src",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "db:seed": "tsx --env-file=.env src/shared/db/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",
@@ -28,6 +29,7 @@
     "argon2": "0.45.1",
     "bullmq": "6.5.0",
     "drizzle-orm": "0.45.4",
+    "fastify": "5.12.7",
     "ioredis": "6.0.0",
     "jose": "6.2.13",
     "nodemailer": "10.2.1",

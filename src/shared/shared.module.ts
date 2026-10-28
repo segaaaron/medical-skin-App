@@ -1,0 +1,87 @@
+// Lo transversal, en un módulo: la configuración validada, el pool, Redis, las llaves del
+// token, el reloj, Argon2id, los contadores, la idempotencia, el correo y el registro de
+// fallos. Lo usan los 23 endpoints del tramo, así que se construye una vez.
+
+import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
+import { Redis } from 'ioredis';
+import { Pool } from 'pg';
+
+import { SystemClock } from './clock';
+import { config, type Config } from './config/config';
+import { FailureLog } from './failures/service-failure';
+import { IdempotencyStore } from './idempotency/idempotency-store';
+import { SmtpMail } from './mail/mailer';
+import { Counters } from './security/counters';
+import { Argon2Passwords } from './security/passwords';
+import { Tokens } from './security/tokens';
+
+export const CONFIG = Symbol('CONFIG');
+export const POOL = Symbol('POOL');
+export const REDIS = Symbol('REDIS');
+
+@Global()
+@Module({
+  providers: [
+    { provide: CONFIG, useFactory: (): Config => config() },
+    {
+      provide: POOL,
+      // La API va por el pooler en modo transacción, como en producción.
+      // `withTenantContext()` es lo que hace que eso sea seguro: `SET LOCAL` y
+      // `set_config(…, true)` se deshacen en el COMMIT, y nunca un `SET` de sesión, que se
+      // filtra al siguiente cliente.
+      useFactory: (cfg: Config): Pool =>
+        new Pool({ connectionString: cfg.DATABASE_URL_POOLER ?? cfg.DATABASE_URL, max: 10 }),
+      inject: [CONFIG],
+    },
+    {
+      provide: REDIS,
+      // `maxRetriesPerRequest: 1` y sin cola fuera de línea: si Redis no está, el contador
+      // falla rápido y el endpoint responde 500. Un límite de intentos que espera en vez
+      // de fallar es un límite que no cuenta (_convenciones.md · «Los contadores»).
+      useFactory: (cfg: Config): Redis =>
+        new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false }),
+      inject: [CONFIG],
+    },
+    { provide: Tokens, useFactory: (cfg: Config) => Tokens.fromFiles(cfg), inject: [CONFIG] },
+    {
+      provide: SystemClock,
+      useFactory: (cfg: Config) => new SystemClock(cfg.ZONA_HORARIA),
+      inject: [CONFIG],
+    },
+    { provide: Argon2Passwords, useClass: Argon2Passwords },
+    {
+      provide: Counters,
+      useFactory: (redis: Redis, cfg: Config) => new Counters(redis, cfg.SERVICE_HMAC_KEY),
+      inject: [REDIS, CONFIG],
+    },
+    {
+      provide: IdempotencyStore,
+      useFactory: (redis: Redis) => new IdempotencyStore(redis),
+      inject: [REDIS],
+    },
+    { provide: SmtpMail, useFactory: (cfg: Config) => new SmtpMail(cfg), inject: [CONFIG] },
+    { provide: FailureLog, useFactory: (pool: Pool) => new FailureLog(pool), inject: [POOL] },
+  ],
+  exports: [
+    CONFIG,
+    POOL,
+    REDIS,
+    Tokens,
+    SystemClock,
+    Argon2Passwords,
+    Counters,
+    IdempotencyStore,
+    SmtpMail,
+    FailureLog,
+  ],
+})
+export class SharedModule implements OnApplicationShutdown {
+  constructor(
+    @Inject(POOL) private readonly pool: Pool,
+    @Inject(REDIS) private readonly redis: Redis,
+  ) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await Promise.allSettled([this.pool.end(), this.redis.quit()]);
+  }
+}

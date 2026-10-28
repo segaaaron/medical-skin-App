@@ -1,7 +1,24 @@
+# pnpm 11.4 decide los scripts de instalación por AQUÍ, y los valores que había eran el
+# literal «set this to true or false» que pnpm deja cuando pregunta: con ellos
+# `pnpm install` aborta con ERR_PNPM_IGNORED_BUILDS en cuanto algo obliga a volver a
+# resolver, y se lleva por delante `pnpm lint` y `pnpm test`, que comprueban el estado de
+# las dependencias antes de correr.
+#   argon2 y esbuild: binario nativo, su script de instalación es obligatorio.
+#   msgpackr-extract: acelerador nativo OPCIONAL de bullmq. Sin él funciona igual, así que
+#                     no se compila C en cada instalación para ganar unos microsegundos.
 allowBuilds:
-  msgpackr-extract: set this to true or false
+  argon2: true
+  esbuild: true
+  msgpackr-extract: false
 # argon2 y esbuild traen binario nativo: su script de instalación es obligatorio.
 # pnpm 11 lee esta lista desde aquí, no desde package.json.
 onlyBuiltDependencies:
   - argon2
   - esbuild
+
+# @nestjs/platform-fastify 11.2.8 fija fastify en 5.11.3 EXACTO, así que la copia que sirve
+# las peticiones era la vulnerable aunque `fastify` estuviera pineado arriba. Ocho avisos de
+# `pnpm audit`, y uno es nuestro de lleno: suplantación de `X-Forwarded-*` con `trustProxy`,
+# que es de donde sale la IP del contador por IP del acceso.
+overrides:
+  fastify: 5.12.7
