@@ -48,7 +48,14 @@ export const REDIS = Symbol('REDIS');
       useFactory: (cfg: Config) => new SystemClock(cfg.ZONA_HORARIA),
       inject: [CONFIG],
     },
-    { provide: Argon2Passwords, useClass: Argon2Passwords },
+    // Con el registro de fallos puesto: un hash de credencial ilegible sigue devolviendo
+    // «no coincide» —indistinguible de una contraseña mal, que es lo correcto— pero deja
+    // una fila de aviso en vez de desaparecer.
+    {
+      provide: Argon2Passwords,
+      useFactory: (failures: FailureLog) => new Argon2Passwords(failures),
+      inject: [FailureLog],
+    },
     {
       provide: Counters,
       useFactory: (redis: Redis, cfg: Config) => new Counters(redis, cfg.SERVICE_HMAC_KEY),

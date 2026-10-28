@@ -29,6 +29,12 @@ export type ErrorCode =
   | 'token_no_valido'
   | 'sesion_revocada'
   | 'contrasena_temporal_pendiente'
+  // POST /v1/sesion/refresco
+  | 'refresco_vacio'
+  | 'refresco_no_valido'
+  | 'refresco_caducado'
+  | 'refresco_reutilizado'
+  | 'demasiados_refrescos'
   // sesiones activas
   | 'sesion_no_existe'
   | 'es_esta_sesion'
@@ -52,6 +58,16 @@ export type ErrorCode =
   | 'demasiados_reenvios'
   | 'via_no_valida'
   | 'sin_permiso'
+  // POST /v1/equipo
+  | 'nombre_vacio'
+  | 'rol_no_asignable'
+  | 'correo_no_disponible'
+  // POST /v1/equipo/{miembro_id}/acceso
+  | 'miembro_no_existe'
+  // DELETE /v1/cuentas/mia
+  | 'consulta_con_equipo'
+  | 'consulta_con_pacientes'
+  | 'suscripcion_activa'
   // los seis del transporte (_convenciones.md · «Los errores del transporte»)
   | 'ruta_no_existe'
   | 'cuerpo_no_valido'
@@ -133,6 +149,34 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Primero elige tu contraseña.',
     field: null,
   },
+
+  // ---------------------------------------------------------------------------------
+  // POST /v1/sesion/refresco · los cinco de `sesion.md`.
+  //
+  // TRES VAN CON `mensaje` VACÍO Y ES CORRECTO (decisión del 28 de octubre): la app los
+  // resuelve **sin texto** —va a «Entra a MedSkin», o espera y reintenta con retroceso—,
+  // igual que `ruta_no_existe` y `formato_no_admitido`. Lo que la regla exige es que
+  // tengan código estable, no que tengan frase; lo que no puede pasar es que no tengan
+  // código.
+  //
+  // Los otros dos sí llevan la suya, y son distintas a propósito: «pasó tiempo sin usar
+  // MedSkin» es información, «cerramos tu sesión por seguridad» es una advertencia que
+  // puede hacerla cambiar la contraseña. Juntarlas quitaría la única señal que tiene de
+  // que algo pasó.
+  // ---------------------------------------------------------------------------------
+  refresco_vacio: { status: 400, message: '', field: 'refresco' },
+  refresco_no_valido: { status: 401, message: '', field: null },
+  refresco_caducado: {
+    status: 401,
+    message: 'Pasó tiempo sin usar MedSkin. Entra otra vez.',
+    field: null,
+  },
+  refresco_reutilizado: {
+    status: 401,
+    message: 'Cerramos tu sesión por seguridad. Entra otra vez.',
+    field: null,
+  },
+  demasiados_refrescos: { status: 429, message: '', field: null },
 
   sesion_no_existe: { status: 404, message: 'Esa sesión ya no está abierta.', field: null },
   es_esta_sesion: {
@@ -231,6 +275,65 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // `producto`.
   sin_permiso: { status: 403, message: 'Recepción no puede mandar accesos.', field: null },
 
+  // ---------------------------------------------------------------------------------
+  // POST /v1/equipo · `cuentas.md`. «Errores de correo, duplicado, permiso,
+  // idempotencia y 500: los mismos de `POST /v1/pacientes`», así que `correo_vacio` y
+  // `correo_mal_escrito` son los de arriba con la frase de ESE endpoint, que la pasa
+  // quien lanza.
+  // ---------------------------------------------------------------------------------
+  nombre_vacio: { status: 400, message: 'Escribe el nombre y el apellido.', field: 'nombre' },
+  rol_no_asignable: {
+    status: 400,
+    message: 'Ese permiso no se puede dar desde aquí.',
+    field: 'rol',
+  },
+  // UN SOLO 409 PARA DOS CAUSAS, Y LA FRASE NO CONFIRMA NINGUNA (28 de octubre de 2026).
+  // El correo puede estar tomado porque la persona ya está en este equipo o porque ese
+  // correo ya tiene cuenta en la región —una paciente de otra consulta—. Dar dos códigos
+  // sería el oráculo del padrón que §12.2.1 cierra: la dueña escribiría correos ajenos de
+  // uno en uno y el segundo código le diría cuáles son pacientes de MedSkin, que es dato
+  // de salud. El precio es una frase con menos filo, y se paga a propósito.
+  correo_no_disponible: {
+    status: 409,
+    message:
+      'Ese correo no se puede usar para el equipo. Dale de alta con otro correo suyo, o escríbenos a hola@medskin.app.',
+    field: 'correo',
+  },
+
+  // ---------------------------------------------------------------------------------
+  // POST /v1/equipo/{miembro_id}/acceso · el reenvío del acceso del equipo.
+  //
+  // UN SOLO `404` PARA CUATRO SITUACIONES —no es de esta consulta, está retirada, su
+  // cuenta está borrada, o es la fila de quien llama— e indistinguible de un
+  // `miembro_id` inventado, como el de las pacientes. Que cubra «eres tú» es decisión:
+  // la dueña no se reenvía el acceso a sí misma, porque sería acuñarse credenciales sin
+  // saber su contraseña actual, que es justo lo que `PATCH …/contrasena` exige.
+  // ---------------------------------------------------------------------------------
+  miembro_no_existe: { status: 404, message: 'Esa persona no está en tu equipo.', field: null },
+
+  // ---------------------------------------------------------------------------------
+  // DELETE /v1/cuentas/mia · los tres `409` hermanos: «antes de borrar a la persona hay
+  // que desarmar lo que depende de ella». Dos llevan un número o una fecha dentro de la
+  // frase, y los pone quien lanza con el dato que devuelve la función del borrado.
+  // ---------------------------------------------------------------------------------
+  consulta_con_equipo: {
+    status: 409,
+    message:
+      'Primero saca a tu equipo de la consulta: si borras tu cuenta ahora, se quedan sin acceso.',
+    field: null,
+  },
+  consulta_con_pacientes: {
+    status: 409,
+    message:
+      'Tu consulta tiene {pacientes} con su historia clínica. Por ley alguien tiene que seguir siendo responsable de ella, así que primero hay que traspasar o cerrar la consulta. Escríbenos a hola@medskin.app y lo hacemos contigo.',
+    field: null,
+  },
+  suscripcion_activa: {
+    status: 409,
+    message: 'Tu plan sigue activo hasta el {fecha}. Cancélalo primero y después borra tu cuenta.',
+    field: null,
+  },
+
   // Los del transporte (_convenciones.md · «Los errores del transporte», 27 de octubre).
   // No son de ningún endpoint: los devuelve el borde antes de llegar a uno. Dos no le
   // dicen nada al usuario —`mensaje` vacío— porque son errores de programación del
@@ -295,12 +398,20 @@ export class ContractError extends Error {
     readonly data?: Record<string, unknown>,
     /** Sustituye el `mensaje` del catálogo. Lo usan el 500 y las frases con hora. */
     message?: string,
+    /**
+     * Sustituye el `campo` del catálogo. Existe por un caso concreto:
+     * `contrasena_actual_no_coincide` nació en `PATCH /v1/cuentas/mia/contrasena`, cuyo
+     * cuerpo es `{ actual, nueva }`, y `DELETE /v1/cuentas/mia` lo reusa con un cuerpo
+     * cuyo campo se llama `contrasena`. El `codigo` es contrato y no se duplica por un
+     * nombre de campo; lo que cambia es a qué casilla se enciende en la pantalla.
+     */
+    field?: string | null,
   ) {
     const entry = CATALOG[code];
     super(code);
     this.name = 'ContractError';
     this.status = entry.status;
-    this.field = entry.field;
+    this.field = field === undefined ? entry.field : field;
     this.userMessage = message ?? entry.message;
   }
 
@@ -360,8 +471,57 @@ export const FAILURE_PHRASES = {
   // `cuentas.md`.
   sendPatientAccess:
     'No pudimos preparar el acceso. El servidor no respondió. Su ficha está intacta: puedes volver a intentarlo.',
+  /**
+   * El 500 del envío, que es OTRO caso y por eso otra frase: aquí el acceso **sí** se acuñó
+   * y lo que falló fue el relé, así que la temporal anterior ya está muerta. Es la única
+   * frase del tramo que admite que algo se perdió, y lo admite porque se perdió.
+   */
+  sendPatientAccessMail:
+    'No pudimos mandarle el acceso. Su ficha está intacta, pero su contraseña anterior ya no vale: vuelve a mandárselo.',
   changePassword:
     'No pudimos guardar tu contraseña. El servidor no respondió. La de ahora sigue valiendo: puedes volver a intentarlo.',
+  readOwnAccount:
+    'No pudimos cargar tu cuenta. El servidor no respondió: puedes volver a intentarlo.',
+  deleteOwnAccount:
+    'No pudimos borrar tu cuenta. El servidor no respondió. No se borró nada: puedes volver a intentarlo.',
+  /**
+   * `POST /v1/equipo`. NO es la de `POST /v1/pacientes`: «los mismos errores» no alcanza a
+   * la frase del 500, porque un alta de equipo no crea ninguna ficha y decir «no pudimos
+   * crear la ficha» a quien dio de alta a su recepcionista es nombrar algo que no existe
+   * (`cuentas.md`, 28 de octubre, en respuesta a la pregunta que levantó construirlo).
+   */
+  createTeamMember:
+    'No pudimos dar de alta a esa persona. El servidor no respondió: puedes volver a intentarlo.',
+  /**
+   * El 500 del envío del acceso del equipo, que es OTRO caso: la cuenta ya está creada y lo
+   * que falló fue el relé, así que reintentar el alta devuelve `409 correo_no_disponible` y
+   * «puedes volver a intentarlo» sería falso.
+   *
+   * **Ya no manda a soporte**, y es el cambio que trae
+   * `POST /v1/equipo/{miembro_id}/acceso`: desde que ese endpoint existe hay una salida
+   * dentro del producto —volver a mandarle el acceso a esa misma persona— y la frase la
+   * nombra en vez de prometer un reintento que daba 409 (`cuentas.md` · «El hueco que
+   * obliga a un endpoint más»).
+   */
+  createTeamMemberMail:
+    'No pudimos mandarle el acceso. Su cuenta ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+  /**
+   * El 500 del reenvío del acceso del equipo. **No dice «su ficha está intacta»**, al
+   * contrario que el de pacientes: una recepcionista no tiene ficha, y es el mismo motivo
+   * por el que el 500 del alta de equipo dejó de nombrarla. Lo que sí admite es lo que se
+   * perdió: la temporal nueva ya está acuñada y la anterior ya está muerta.
+   */
+  resendTeamAccess:
+    'No pudimos mandarle el acceso. Su contraseña anterior ya no vale: vuelve a mandárselo.',
+
+  /**
+   * Las dos de `sesion.md`, y las dos prometen lo mismo: **el 500 de la sesión NO
+   * expulsa.** «Un fallo al comprobar la sesión no es una sesión inválida»: si la app
+   * mandara a la doctora al login cada vez que el servidor tose, le borraría la cola de
+   * salida sin conexión (§9.3) en el peor momento posible. La app solo expulsa con un 401.
+   */
+  readSession: 'No pudimos comprobar tu sesión. Puedes seguir con lo último guardado.',
+  refreshSession: 'No pudimos renovar tu sesión. Puedes seguir con lo último guardado.',
 
   /**
    * La frase del 500 cuando el fallo ocurre ANTES de saber a qué ruta iba

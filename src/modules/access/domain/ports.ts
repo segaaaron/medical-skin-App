@@ -78,7 +78,17 @@ export type SavedPassword = {
 // `401 acceso_no_coincide` existe para cerrar.
 // ---------------------------------------------------------------------------------------
 export interface PasswordHasher {
-  verify(hash: string, password: string): Promise<boolean>;
+  /**
+   * `who` es solo para el REGISTRO: un hash ilegible devuelve `false` igual que una
+   * contraseña mal —si no, el 500 distinguiría una credencial rota de un error de quien
+   * escribe— pero deja un aviso en `service_failure` con la cuenta. Se omite cuando no hay
+   * cuenta que nombrar, que es el camino del señuelo.
+   */
+  verify(
+    hash: string,
+    password: string,
+    who?: { accountId: string; practiceId: string | null; accountRole: AccountRole },
+  ): Promise<boolean>;
   hash(password: string): Promise<string>;
 }
 

@@ -99,6 +99,55 @@
       "when": 1793157000002,
       "tag": "0013_app_account_and_practitioner_role",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793199089267,
+      "tag": "0014_account_delete_team_and_console_resend",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793208173523,
+      "tag": "0015_license_row_and_console_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793208384955,
+      "tag": "0016_rejection_reason_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793209114773,
+      "tag": "0017_first_use_mark_is_a_fact",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793209114830,
+      "tag": "0018_session_refresh_returns_the_whole_200",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793210095104,
+      "tag": "0019_team_access_resend",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793210607903,
+      "tag": "0020_resend_revokes_sessions_and_refresh_knows_the_life",
+      "breakpoints": true
     }
   ]
 }

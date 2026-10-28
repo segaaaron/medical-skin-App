@@ -31,6 +31,21 @@ export type Failure = {
   context: FailureContext | null;
 };
 
+/**
+ * EL CORREO SE TAPA EN LAS DOS RUTAS, no solo en la anónima. El mensaje del motor es la
+ * causa real y por eso se guarda; lo que no puede guardarse es una dirección dentro de él, y
+ * las hay en los dos lados: «Key (email)=(…) already exists» en la ruta sin sesión, y el
+ * rechazo de un relé —«550 5.1.1 <carla@…> User unknown»— en la ruta CON sesión, que es la
+ * del envío del acceso. El patrón es el MISMO que el de `medskin_record_anonymous_failure`
+ * (migraciones 0004 y 0005), y se aplica donde se aplica allí: el mensaje, la cadena de
+ * causas y la pila.
+ *
+ * Va como parámetro y no como literal en el SQL por la regla de siempre: lo que entra en una
+ * consulta, entra parametrizado (OWASP A03).
+ */
+const EMAIL_PATTERN = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
+const EMAIL_MASK = '[correo]';
+
 type CauseLink = { name: string; message: string };
 
 function causeChain(cause: unknown): CauseLink[] {
@@ -81,10 +96,16 @@ export class FailureLog {
     try {
       await withTenantContext(this.pool, ctx, (c) =>
         c.query(
+          // Los tres campos de texto libre pasan por el enmascarado; los demás son
+          // identificadores y etiquetas cerradas, donde no cabe una dirección.
           `insert into service_failure (service, operation, severity, error_code, error_message,
                                         cause_chain, stack, practice_id, actor_id, trace_id,
                                         request_id, app_version, platform, region, will_retry)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false)`,
+           values ($1, $2, $3, $4,
+                   regexp_replace($5, $15, $16, 'g'),
+                   regexp_replace($6, $15, $16, 'g')::jsonb,
+                   regexp_replace($7, $15, $16, 'g'),
+                   $8, $9, $10, $11, $12, $13, $14, false)`,
           [
             failure.service,
             failure.operation,
@@ -100,6 +121,8 @@ export class FailureLog {
             failure.appVersion,
             failure.platform,
             failure.region,
+            EMAIL_PATTERN,
+            EMAIL_MASK,
           ],
         ),
       );

@@ -324,8 +324,10 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       credential: await canRun(ctxAnonymous, 'select * from medskin_access_credential($1)', [PATIENT.email]),
       refresh: await canRun(
         ctxAnonymous,
-        `select * from medskin_session_refresh($1, $2, now() + '30 days'::interval)`,
-        ['z'.repeat(64), 'y'.repeat(64)],
+        // Cuatro argumentos desde la 0020: las dos vidas del refresco en segundos, que es
+        // lo que le deja calcular la caducidad con el rol que ya sabe.
+        `select * from medskin_session_refresh($1, $2, $3, $4)`,
+        ['z'.repeat(64), 'y'.repeat(64), 30 * 24 * 3600, 12 * 3600],
       ),
       // Lo que no es suyo: guardar una contraseña, crear una paciente, mover una licencia.
       password: await canRun(ctxAnonymous, 'select * from medskin_set_final_password($1, $2, null)', [
@@ -846,8 +848,9 @@ describe('el refresco · rotación de un solo uso', () => {
       read<{ verdict: string; session_id: string | null; account_id: string | null; role: string | null }>(
         app,
         ctxAnonymous,
-        `select * from medskin_session_refresh($1, $2, now() + '30 days'::interval)`,
-        [oldHash, newHash],
+        // Las dos vidas, en segundos, desde la 0020: paciente 30 días · doctora 12 h.
+        `select * from medskin_session_refresh($1, $2, $3, $4)`,
+        [oldHash, newHash, 30 * 24 * 3600, 12 * 3600],
       );
 
     const [rotated] = await refresh(REFRESH, ROTATED_REFRESH);
@@ -859,6 +862,14 @@ describe('el refresco · rotación de un solo uso', () => {
 
     // El mismo otra vez: ya usado. Se revoca la sesión, que ES la familia derivada de ese
     // inicio —cada entrada crea una fila y la rotación la actualiza en su sitio—.
+    //
+    // La rotación se envejece 21 segundos antes de reutilizarlo, y es obligatorio desde la
+    // 0018: dentro de los 20 s de gracia el mismo refresco se acepta y rota otra vez
+    // (`sesion.md`, 28 oct), así que sin esto se mediría la gracia y no el reuso. La
+    // gracia tiene sus propios casos en `refresh-and-first-use.spec.ts`.
+    await owner.query(`update session set refresh_rotated_at = now() - interval '21 seconds' where id = $1`, [
+      PATIENT.session,
+    ]);
     const [reused] = await refresh(REFRESH, 'b'.repeat(64));
     expect({ verdict: reused?.verdict, session: reused?.session_id }).toEqual({
       verdict: 'reused',
@@ -1536,5 +1547,28 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
         'recuperacion',
       ]),
     ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('y la bitácora de la MISMA transacción entra con el inquilino que devolvió la función', async () => {
+    // Es la segunda consulta que el repositorio hace en esa transacción, y la que faltaba
+    // por probar: `practice_id` es el de la doctora —lo acaba de devolver la función— y
+    // `medskin.practice_id` está VACÍO, porque este rol no fija inquilino. La política de
+    // inserción de `access_audit` es `with check (true)` a propósito; si no lo fuera, o si
+    // faltara el `GRANT INSERT`, `POST /v1/acceso/contrasena-nueva` sería un 500 con la
+    // contraseña ya guardada, que es justo lo que el contrato promete que no pasa.
+    await withTenantContext(app, ctxAccountOwner, (c) =>
+      c.query(
+        `insert into access_audit (practice_id, actor_account_id, actor_label, action,
+                                   subject_type, subject_id, data, region)
+         values ($1, $2, null, 'acceso.contrasena_elegida', 'cuenta', $2, $3, null)`,
+        [A.practice, A.account, JSON.stringify({ via: 'recuperacion' })],
+      ),
+    );
+    const { rows } = await owner.query<{ practice_id: string; data: { via: string } }>(
+      `select practice_id, data from access_audit
+        where actor_account_id = $1 and action = 'acceso.contrasena_elegida'`,
+      [A.account],
+    );
+    expect(rows).toEqual([{ practice_id: A.practice, data: { via: 'recuperacion' } }]);
   });
 });

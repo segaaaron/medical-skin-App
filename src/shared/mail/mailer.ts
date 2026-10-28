@@ -32,6 +32,15 @@ export class SmtpMail implements MailPort {
       host: cfg.SMTP_HOST,
       port: cfg.SMTP_PORT,
       secure: cfg.SMTP_SECURE,
+      // Los tres topes, porque hay un envío que pasa DENTRO del ciclo de la petición —el
+      // acceso de una paciente por correo— y los valores por omisión de nodemailer son de
+      // un trabajador: 2 min para conectar y 10 para el socket. Un relé que acepta la
+      // conexión y se queda callado dejaría a la doctora esperando diez minutos en vez de
+      // darle el 500 con su salida. Para el trabajador de recuperación es igual de bueno:
+      // falla antes y BullMQ reintenta.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
       ...(cfg.SMTP_USER ? { auth: { user: cfg.SMTP_USER, pass: cfg.SMTP_PASSWORD ?? '' } } : {}),
     });
   }

@@ -57,6 +57,63 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   // voluntad porque su token sea restringido.
   'DELETE /v1/acceso': { scopes: ALL_SCOPES, failurePhrase: FAILURE_PHRASES.signOut },
 
+  // `sesion.md`: «cualquiera con sesión, de cualquier alcance». Los tres alcances que
+  // llevan `sid`, y NO `recuperacion`, que no es una sesión: su token no trae `sid` porque
+  // cuando se acierta el código todavía no hay fila que comprobar, y este endpoint es
+  // justamente la fila. Un token de recuperación aquí es `401 token_sin_alcance`.
+  //
+  // Que el alcance restringido entre es la condición de que sirva para lo que existe: de
+  // aquí saca la app qué pantalla abrir, así que negárselo a la sesión que tiene la
+  // contraseña temporal la dejaría sin forma de que el servidor le dijera que le toca
+  // «Crea tu contraseña». La tabla de alcances de `sesion.md` necesita la misma enmienda
+  // que ya se le hizo a `DELETE /v1/acceso` el 27 de octubre.
+  'GET /v1/sesion': {
+    scopes: ['contrasena_temporal', 'segundo_factor', 'completo'],
+    failurePhrase: FAILURE_PHRASES.readSession,
+  },
+
+  // `sesion.md`: «quien tenga un refresco vivo. NO lleva `Authorization`». Anónima como el
+  // acceso y los dos de recuperación: cuando llega no hay token que verificar —acaba de
+  // caducar— y la autorización es el refresco, que valida la base con `app_anonymous`
+  // contra una función `SECURITY DEFINER` `VOLATILE`. El `practice_id` del token nuevo se
+  // copia de la FILA de la sesión: si lo aceptara del cuerpo, sería un cambio de inquilino
+  // gratuito.
+  'POST /v1/sesion/refresco': {
+    anonymous: true,
+    failurePhrase: FAILURE_PHRASES.refreshSession,
+  },
+
+  // `cuentas.md` · «cualquiera con sesión, incluida la restringida». Es el único endpoint
+  // que una sesión con la contraseña todavía temporal puede llamar aparte de
+  // `POST /v1/acceso/contrasena-nueva`, y por el mismo motivo que `GET /v1/sesion`: de aquí
+  // sale qué pantalla toca. `recuperacion` NO entra: su token no trae `rol` ni `sid`, así
+  // que no hay `Caller` que servir.
+  'GET /v1/cuentas/mia': {
+    scopes: ['contrasena_temporal', 'segundo_factor', 'completo'],
+    failurePhrase: FAILURE_PHRASES.readOwnAccount,
+  },
+
+  // Solo `completo`: la pantalla pide la contraseña actual, que es justo lo que una sesión
+  // restringida no tiene. Y la 0014 le niega el `EXECUTE` del borrado a `app_account`, que
+  // es el rol de esa sesión: la frontera está en los dos lados.
+  'DELETE /v1/cuentas/mia': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.deleteOwnAccount,
+  },
+
+  'POST /v1/equipo': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.createTeamMember,
+  },
+
+  // El reenvío del acceso del equipo, que es el endpoint que cierra el hueco del alta: si el
+  // relé falla, la cuenta ya existe y reintentar el alta da `409 correo_no_disponible`. Solo
+  // `completo`, igual que el alta y que el reenvío de pacientes.
+  'POST /v1/equipo/:miembro_id/acceso': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.resendTeamAccess,
+  },
+
   'GET /v1/acceso/sesiones': {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.listSessions,

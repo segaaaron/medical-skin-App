@@ -1,0 +1,31 @@
+-- Tramo 1 · el agujero que levantó la prueba de la decisión de la licencia, media hora
+-- después de aplicar la 0015. Va aparte porque la 0015 YA SE APLICÓ y no se toca (§3.4,
+-- regla 7 · §1.5 del napkin: si está mal, se escribe la siguiente).
+--
+-- QUÉ ESTABA MAL. La 0000 trajo esto:
+--
+--   license_rejection_reason_ck CHECK (status <> 'rechazada'
+--                                      OR length(rejection_reason) BETWEEN 10 AND 300)
+--
+-- y con `rejection_reason` NULO **ese CHECK no falla**: `length(NULL)` es NULL, los dos
+-- comparadores dan NULL, y `false OR NULL` es NULL, que para un CHECK de Postgres no es
+-- `false` y por lo tanto pasa. Medido el 28 oct con el rol de la consola: un
+--
+--   UPDATE license SET status = 'rechazada', decided_at = now() WHERE ... -- sin motivo
+--
+-- entra sin una queja. El contrato promete `400 motivo_rechazo_vacio` y la frase «Escribe
+-- el motivo del rechazo: la doctora lo va a leer», y la doctora se quedaba con una
+-- licencia rechazada y `motivo_rechazo: null` en su `GET /v1/inquilinos/mio`: el único
+-- estado de la pantalla `Licencia.dc.html` que no tiene nada que mostrar.
+--
+-- El `CHECK` de la 0000 cubre la cadena corta y se queda —no está mal, está incompleto—; lo
+-- que falta es la mitad nula, y va con su propio nombre para que el día que falle se sepa
+-- cuál de las dos cosas fue. La validación del controlador también tiene que estar, por el
+-- código de error y la frase; esto es lo que hace que no haya una segunda puerta.
+--
+-- `patient_archived_ck` ya tenía la forma correcta (`status <> 'archivada' OR archived_at
+-- IS NOT NULL`), así que este error es de esta columna y de ninguna otra: se revisaron los
+-- demás `CHECK` del esquema y los otros son listas sobre columnas `NOT NULL`.
+ALTER TABLE "license"
+  ADD CONSTRAINT "license_rejection_reason_present_ck"
+  CHECK (status <> 'rechazada' OR rejection_reason IS NOT NULL);

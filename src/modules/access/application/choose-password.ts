@@ -22,7 +22,7 @@ import {
   FAILURE_PHRASES,
   ServiceFailure,
 } from '../../../shared/contract/error-catalog';
-import type { NextStep } from '../../../shared/contract/session';
+import type { AccountRole, NextStep } from '../../../shared/contract/session';
 import { resolveNextStep } from '../domain/next-step';
 import { checkNewPassword } from '../domain/password-rules';
 import type {
@@ -30,6 +30,7 @@ import type {
   CredentialPort,
   Device,
   PasswordHasher,
+  SavePasswordVerdict,
   SessionPort,
   TokenPort,
 } from '../domain/ports';
@@ -66,7 +67,7 @@ export class ChoosePassword {
     // Node contra lo que devuelve `medskin_current_credential()`.
     const current = await this.credentials.readMine(caller.accountId, caller.practiceId);
     if (current !== null && current.isTemporary) {
-      if (await this.passwords.verify(current.hash, candidate)) {
+      if (await this.passwords.verify(current.hash, candidate, callerAsOwner(caller))) {
         throw new ContractError('contrasena_igual_a_la_temporal');
       }
     }
@@ -89,6 +90,8 @@ export class ChoosePassword {
 
     // `already_chosen` es la temporal que ya dejó de serlo; `no_code`, el código de
     // recuperación que ya se gastó. Para quien lo lee son el mismo hecho: ya eligió.
+    // `no_credential` no: es que la fila de credencial NO ESTÁ, y eso no lo hizo ella.
+    this.refuseIfCredentialIsMissing(saved.verdict, caller.accountId);
     if (saved.verdict !== 'saved') throw new ContractError('contrasena_ya_elegida');
 
     const facts = await this.sessions.nextStepFacts({
@@ -149,6 +152,7 @@ export class ChoosePassword {
       refreshDigest: null,
       refreshExpiresAt: null,
     });
+    this.refuseIfCredentialIsMissing(saved.verdict, who.accountId);
     if (saved.verdict !== 'saved' || saved.accountRole === null) {
       throw new ContractError('contrasena_ya_elegida');
     }
@@ -208,6 +212,20 @@ export class ChoosePassword {
     };
   }
 
+  /**
+   * `no_credential` es una CUENTA SIN FILA DE CREDENCIAL: una inconsistencia del servidor,
+   * no algo que hizo quien llama. Colapsarla en el `409 contrasena_ya_elegida` le contesta
+   * algo falso —«ya elegiste tu contraseña, entra con ella», y no puede— y además no deja
+   * rastro en `service_failure`, así que nadie se enteraría nunca.
+   */
+  private refuseIfCredentialIsMissing(verdict: SavePasswordVerdict, accountId: string): void {
+    if (verdict !== 'no_credential') return;
+    throw new ServiceFailure(
+      FAILURE_PHRASES.savePassword,
+      new Error(`la cuenta ${accountId} no tiene fila de credencial que escribir`),
+    );
+  }
+
   private readBody(input: unknown): unknown {
     const parsed = bodySchema.safeParse(input ?? {});
     return parsed.success ? parsed.data.nueva : undefined;
@@ -217,4 +235,17 @@ export class ChoosePassword {
 /** `sesion.md`: paciente 30 días · doctora y equipo 12 h. */
 function lifetimeFor(role: string): number {
   return role === 'paciente' ? REFRESH_LIFETIME_MS.patient : REFRESH_LIFETIME_MS.practitioner;
+}
+
+/** Quién es, solo para el aviso de una credencial ilegible. Nunca para autorizar nada. */
+function callerAsOwner(caller: Caller): {
+  accountId: string;
+  practiceId: string | null;
+  accountRole: AccountRole;
+} {
+  return {
+    accountId: caller.accountId,
+    practiceId: caller.practiceId,
+    accountRole: caller.accountRole,
+  };
 }

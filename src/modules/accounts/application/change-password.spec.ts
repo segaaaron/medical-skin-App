@@ -112,6 +112,24 @@ describe('PATCH /v1/cuentas/mia/contrasena', () => {
     ).toBe('contrasena_muy_usada');
   });
 
+  it('pero la FRASE es la de `cuentas.md`, no el ítem de checklist de `acceso.md`', async () => {
+    // Leído como mensaje, el del catálogo afirma lo contrario de lo que pasó: ella escribió
+    // `password1` y el servidor le contestaría «No es una de las contraseñas más usadas».
+    // Aquí es un error que salta al enviar, no un requisito que se marca al cumplirse.
+    const corta = await errorDe(() =>
+      armar({}).caso.run({ actual: 'la-de-ahora', nueva: 'siete77' }, DOCTORA),
+    );
+    const usada = await errorDe(() =>
+      armar({}).caso.run({ actual: 'la-de-ahora', nueva: 'password1' }, DOCTORA),
+    );
+
+    expect(corta.userMessage).toBe('Tiene que tener 8 caracteres o más.');
+    expect(usada.userMessage).toBe('Esa es una de las contraseñas más usadas. Elige otra.');
+    // El código y el campo NO cambian: son los que la app lleva indexados.
+    expect([corta.code, usada.code]).toEqual(['contrasena_corta', 'contrasena_muy_usada']);
+    expect([corta.field, usada.field]).toEqual(['nueva', 'nueva']);
+  });
+
   it('la nueva igual a la actual no es un fallo de autenticación: no gasta intento', async () => {
     const { caso, pasos } = armar({});
     const error = await errorDe(() =>

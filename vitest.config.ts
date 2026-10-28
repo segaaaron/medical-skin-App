@@ -10,7 +10,10 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'],
     environment: 'node',
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    // Vitest 4 eliminó `poolOptions.forks.singleFork` y lo ignora en silencio: la garantía
+    // pasa a ser `fileParallelism: false`, que según su propio tipo fuerza `maxWorkers` a 1.
+    // Sin esto los archivos corren en paralelo contra la MISMA base y se pisan la siembra.
+    fileParallelism: false,
     testTimeout: 20_000,
   },
 });

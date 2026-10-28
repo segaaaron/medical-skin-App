@@ -17,13 +17,24 @@ import {
   TRANSPORT_CODE_BY_STATUS,
   type ErrorBody,
 } from '../contract/error-catalog';
+import type { Region } from '../contract/session';
 import { FailureLog } from '../failures/service-failure';
 import { registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
 
 @Catch()
 export class ErrorFilter implements ExceptionFilter {
-  constructor(private readonly failures: FailureLog) {}
+  /**
+   * `region` es la del DESPLIEGUE y no la de quien llama: el proceso solo sirve una, y en
+   * un fallo sin sesión —`POST /v1/acceso`, los dos de recuperación, el refresco— la del
+   * `caller` no existe todavía. Con `null` la columna quedaba vacía justo en las filas que
+   * más se miran, y `medskin_record_anonymous_failure` acepta el argumento y lo valida
+   * contra la lista cerrada (0005).
+   */
+  constructor(
+    private readonly failures: FailureLog,
+    private readonly region: Region,
+  ) {}
 
   catch(thrown: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
@@ -84,7 +95,8 @@ export class ErrorFilter implements ExceptionFilter {
       requestId: ctx?.requestId ?? 'sin-peticion',
       appVersion: ctx?.device.appVersion ?? null,
       platform: ctx?.device.platform ?? null,
-      region: caller?.region ?? null,
+      // La de la sesión si la hay, y la del proceso si no: las dos son la misma región.
+      region: caller?.region ?? this.region,
       context:
         caller === null
           ? null

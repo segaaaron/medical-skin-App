@@ -29,6 +29,15 @@ const esquema = z.object({
   // idéntica exista o no la cuenta.
   ZONA_HORARIA: z.string().min(1),
 
+  // El plazo legal de conservación del expediente, en años. Sale de aquí y NO de una tabla
+  // (decisión del 28 de octubre, `cuentas.md` · DELETE /v1/cuentas/mia): no es dato de
+  // inquilino —todos los de un despliegue comparten el plazo— y guardarlo por fila serían N
+  // copias del mismo literal que se pueden desincronizar. `se_conserva.hasta` se calcula
+  // sumándolo a la fecha del borrado, y lo que queda escrito en la bitácora es la FECHA
+  // resultante, no el parámetro: si mañana cambia el plazo, no cambia lo que se le prometió
+  // a quien ya se borró. El número por país sigue siendo decisión abierta (§16.7).
+  CONSERVACION_ANOS: z.coerce.number().int().positive().max(50),
+
   JWT_PRIVATE_KEY_PATH: z.string().min(1),
   JWT_PUBLIC_KEY_PATH: z.string().min(1),
 

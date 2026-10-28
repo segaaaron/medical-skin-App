@@ -4,11 +4,13 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AccessModule } from './modules/access/access.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { RecoveryModule } from './modules/recovery/recovery.module';
+import { SessionModule } from './modules/session/session.module';
+import type { Config } from './shared/config/config';
 import { FailureLog } from './shared/failures/service-failure';
 import { ErrorFilter } from './shared/http/error.filter';
 import { ScopeGuard } from './shared/http/scope.guard';
 import { Tokens } from './shared/security/tokens';
-import { SharedModule } from './shared/shared.module';
+import { CONFIG, SharedModule } from './shared/shared.module';
 
 // El guardia de alcance es GLOBAL y por lista blanca de rutas: una ruta nueva nace cerrada.
 // El filtro es global también: una sola forma de error en toda la API.
@@ -19,13 +21,13 @@ import { SharedModule } from './shared/shared.module';
 // `undefined` convierte el primer 500 en un cuelgue del proceso. Con fábricas no hay
 // metadatos de los que depender y las dos rutas de ejecución se comportan igual.
 @Module({
-  imports: [SharedModule, AccessModule, RecoveryModule, AccountsModule],
+  imports: [SharedModule, AccessModule, RecoveryModule, AccountsModule, SessionModule],
   providers: [
     { provide: APP_GUARD, useFactory: (tokens: Tokens) => new ScopeGuard(tokens), inject: [Tokens] },
     {
       provide: APP_FILTER,
-      useFactory: (failures: FailureLog) => new ErrorFilter(failures),
-      inject: [FailureLog],
+      useFactory: (failures: FailureLog, cfg: Config) => new ErrorFilter(failures, cfg.REGION),
+      inject: [FailureLog, CONFIG],
     },
   ],
 })

@@ -707,11 +707,20 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     // `patient_archived_ck`, y así el índice se mide sobre datos con las dos clases.
     await bulkPatients(A, 8_000);
     await bulkPatients(B, 8_000);
+    // El `not exists` de aquí abajo no es un adorno: sin él este `insert … select`
+    // empareja TODAS las fichas de la base contra las 1 600 cuentas en bloque, y la que
+    // siembra `pnpm db:seed` ya tiene vínculo, así que chocaba contra
+    // `patient_link_patient_uq` y se llevaba el `beforeAll` entero. La lista de `$1` nombra
+    // las dos fichas de esta siembra; lo que faltaba era no contar NINGUNA que ya tuviera
+    // uno, venga de donde venga. Con la base sembrada —que es lo normal— fallaba sola, sin
+    // que nadie más estuviera corriendo.
     await owner.query(
       `insert into patient_link (practice_id, patient_id, account_id, email, practice_name, practitioner_name)
        select p.practice_id, p.id, a.id, a.email, 'Clinica', 'Dra. Andrea Paz'
          from (select id, practice_id, row_number() over (order by id) as rn
-                 from patient where id <> all($1::uuid[])) p
+                 from patient p2
+                where p2.id <> all($1::uuid[])
+                  and not exists (select 1 from patient_link l where l.patient_id = p2.id)) p
          join (select id, email, row_number() over (order by id) as rn
                  from account where email like 'bulk-%') a using (rn)`,
       [[A.patient, B.patient]],

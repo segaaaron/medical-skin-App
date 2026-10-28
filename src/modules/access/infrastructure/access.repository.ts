@@ -53,14 +53,18 @@ function contextFor(owner: {
   accountRole: AccountRole | null;
 }): TenantContext {
   // `accountRole` nulo es la entrada por recuperación: su token no lleva rol a propósito,
-  // así que no se puede adoptar `app_practitioner` —que exige inquilino— y se adopta el
-  // único rol cuyas políticas se leen por `cuenta_id` sin inquilino. Lo que esta
-  // transacción puede tocar es exactamente la fila de quien pregunta: `credential` y
-  // `session` tienen política sobre `account_id`, y `medskin_set_final_password()` es
-  // `SECURITY DEFINER` y se autoriza por `medskin.account_id`, nunca por un argumento.
-  // Anotado para `datos-senior`: el nombre del rol dice «paciente» y aquí puede ser una
-  // doctora; lo que corresponde es un rol de cuenta sin inquilino, o renombrarlo.
-  if (owner.accountRole === null || owner.accountRole === 'paciente') {
+  // así que adopta `app_account` (migración 0013), el rol de «sé quién eres y no sé qué
+  // eres»: políticas por `account_id` sobre `account`, `credential` y `session`, y ni una
+  // que sea solo de paciente. Por ahí entra una doctora igual que una paciente, y por eso
+  // no es `app_patient`: ese rol lleva además el `UPDATE` de `credential.hash`, el de
+  // `medical_history` y el `EXECUTE` de `medskin_delete_own_account`, que la 0014 le niega
+  // a una sesión a medio abrir. Verificado en el catálogo el 28 oct: lo que esta
+  // transacción hace —`medskin_set_final_password()` y su línea de bitácora— cabe exacto
+  // en `app_account`, y no hizo falta migración.
+  if (owner.accountRole === null) {
+    return { role: 'app_account', accountId: owner.accountId };
+  }
+  if (owner.accountRole === 'paciente') {
     return { role: 'app_patient', accountId: owner.accountId };
   }
   return {

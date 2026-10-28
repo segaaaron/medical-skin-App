@@ -4,9 +4,12 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { Pool } from 'pg';
 
 import { AppModule } from './app.module';
 import { config } from './shared/config/config';
+import { assertDecoyParity } from './shared/security/decoy-parity';
+import { POOL } from './shared/shared.module';
 
 async function start() {
   // Lo primero: si falta una variable, el proceso no arranca y dice cuál.
@@ -44,6 +47,12 @@ async function start() {
       'Idempotency-Key',
       'X-MedSkin-App',
       'X-MedSkin-Dispositivo',
+      // Las dos del 27 de octubre (`_convenciones.md`). Opcionales, y por eso faltaban sin
+      // romper nada: las apps nativas no mandan `Origin`. Un cliente de navegador que las
+      // mande sin estar aquí ve la petición rechazada por el preflight, no una etiqueta
+      // menos en «sesiones activas».
+      'X-MedSkin-Modelo',
+      'X-MedSkin-Sistema',
     ],
   });
 
@@ -51,6 +60,18 @@ async function start() {
   // los contadores de Redis, que cuenta por correo y sobrevive a un cambio de IP: este de
   // aquí es contra el ruido, no contra el ataque dirigido (`diseño` · OWASP A04).
   await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+
+  // Sin esto NO corre ningún `onApplicationShutdown`: ni el de `SharedModule` —que cierra
+  // el pool y Redis— ni el de `RecoveryModule`, que cierra el trabajador de BullMQ y su
+  // cola. En un despliegue rodante el trabajador moría con un trabajo a medias, y un
+  // trabajo de correo a medias es una paciente esperando un código que nunca sale.
+  app.enableShutdownHooks();
+
+  // LA PARIDAD DEL SEÑUELO, antes de aceptar una sola petición: si el señuelo no cuesta lo
+  // mismo que una contraseña real, el tiempo del `401 acceso_no_coincide` dice si un correo
+  // tiene cuenta en MedSkin, y eso es dato de salud. El proceso no arranca y dice qué
+  // difiere (migración 0007 · `medskin_access_decoy_params()`).
+  await assertDecoyParity(app.get<Pool>(POOL));
 
   await app.listen(cfg.PORT, '0.0.0.0');
   process.stdout.write(`medskin-api escuchando en ${cfg.PORT} · región ${cfg.REGION}\n`);

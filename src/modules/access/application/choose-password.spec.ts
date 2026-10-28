@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ContractError } from '../../../shared/contract/error-catalog';
+import { ContractError, FAILURE_PHRASES } from '../../../shared/contract/error-catalog';
 import type {
   AccessCredential,
   ClockPort,
@@ -277,6 +277,35 @@ describe('POST /v1/acceso/contrasena-nueva · el guardado', () => {
     );
 
     expect(error.code).toBe('contrasena_ya_elegida');
+  });
+
+  it('`no_credential` NO es «ya elegiste»: es un 500 que va a `service_failure`', async () => {
+    // La fila de credencial no está, y eso no lo hizo ella: contestarle «ya elegiste tu
+    // contraseña, entra con ella» es decirle algo falso sobre una cuenta con la que no
+    // puede entrar, y además dejaba la inconsistencia sin una línea en ningún sitio.
+    const porTemporal = armar({ actual: null, veredicto: 'no_credential' });
+    const error = await errorDe(() =>
+      porTemporal.caso.run({ nueva: 'tejado-nuevo-07' }, PACIENTE),
+    );
+
+    expect(error.code).toBe('fallo_de_servicio');
+    expect(error.status).toBe(500);
+    expect(error.userMessage).toBe(FAILURE_PHRASES.savePassword);
+    // Y la causa nombra la cuenta, que es lo que hace falta para arreglarlo.
+    expect(String((error as { cause?: unknown }).cause)).toContain(PACIENTE.accountId);
+  });
+
+  it('`no_credential` por recuperación tampoco se disfraza de 409', async () => {
+    const { caso } = armar({ actual: null, veredicto: 'no_credential' });
+    const error = await errorDe(() =>
+      caso.runFromRecovery(
+        { nueva: 'tejado-nuevo-07' },
+        { via: 'recuperacion', accountId: PACIENTE.accountId, region: 'latam' },
+        DISPOSITIVO,
+      ),
+    );
+
+    expect(error.code).toBe('fallo_de_servicio');
   });
 
   it('el refresco se acuña ANTES de guardar: la sesión se asciende en la misma transacción', async () => {

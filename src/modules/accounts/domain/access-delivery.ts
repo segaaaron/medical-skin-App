@@ -42,13 +42,27 @@ export type DeliveryFacts = {
 };
 
 /**
+ * «soy la Dra. Andrea Paz» cuando el nombre guardado trae título, «soy Andrea Paz» cuando
+ * no. El artículo pertenece al TÍTULO y no a la plantilla: con «la » fija y un
+ * `practitioner_name` sin título —que la base admite— a la paciente le llegaba «soy la
+ * Andrea Paz». Y el artículo lo decide el título porque es lo único que tiene género; el
+ * nombre no se mira.
+ */
+const ARTICLE_BY_TITLE: Readonly<Record<string, string>> = { 'Dra.': 'la', 'Dr.': 'el' };
+
+export function presentationOf(practitionerName: string): string {
+  const article = ARTICLE_BY_TITLE[practitionerName.split(' ')[0] ?? ''];
+  return article === undefined ? practitionerName : `${article} ${practitionerName}`;
+}
+
+/**
  * El texto del WhatsApp, literal del contrato. Dice para qué sirve la app en los términos
  * de la propia paciente —«tus tratamientos, tus cuidados y tus citas»— y NO dice ni un dato
  * clínico: ni qué tratamiento, ni cuándo, ni por qué.
  */
 export function whatsappText(facts: DeliveryFacts): string {
   return [
-    `Hola ${facts.patientFirstName}, soy la ${facts.practitionerName}. Te di de alta en MedSkin para que veas tus tratamientos, tus cuidados y tus citas.`,
+    `Hola ${facts.patientFirstName}, soy ${presentationOf(facts.practitionerName)}. Te di de alta en MedSkin para que veas tus tratamientos, tus cuidados y tus citas.`,
     '',
     `Entra con ${facts.patientEmail} y esta contraseña:`,
     facts.temporaryPassword,
@@ -67,9 +81,58 @@ export function whatsappTextForExistingAccount(facts: {
   practitionerName: string;
 }): string {
   return [
-    `Hola ${facts.patientFirstName}, soy la ${facts.practitionerName}. Te di de alta en MedSkin para que veas tus tratamientos, tus cuidados y tus citas.`,
+    `Hola ${facts.patientFirstName}, soy ${presentationOf(facts.practitionerName)}. Te di de alta en MedSkin para que veas tus tratamientos, tus cuidados y tus citas.`,
     '',
     'Entra con tu cuenta de siempre y te va a preguntar si soy tu doctora.',
+    'medskin.app/entrar',
+  ].join('\n');
+}
+
+/**
+ * El cuerpo del correo del acceso. Hoy dice LO MISMO que el de WhatsApp —son los mismos
+ * hechos, para la misma paciente, con la misma contraseña— y por eso reutiliza su texto en
+ * vez de copiarlo. Vive con su propio nombre porque son dos canales: el de WhatsApp es
+ * literal del contrato y solo cambia ahí, y el del correo puede divergir sin tocarlo.
+ *
+ * Nada clínico, igual que el otro: ni tratamiento, ni zona del cuerpo, ni por qué. Texto
+ * plano, sin HTML y sin imagen de seguimiento (el patrón de `recovery-mail.ts`).
+ */
+export function accessMailBody(facts: DeliveryFacts): string {
+  return whatsappText(facts);
+}
+
+/** Lo que la frase del equipo necesita. Ni un dato clínico, igual que la de la paciente. */
+export type TeamDeliveryFacts = {
+  firstName: string;
+  email: string;
+  /** El nombre de la consulta a la que la dieron de alta: «Clínica Paz». */
+  practiceName: string;
+  temporaryPassword: string;
+  expiryText: string;
+};
+
+/**
+ * EL CORREO DEL ACCESO DEL EQUIPO · `POST /v1/equipo`. «El acceso del equipo sale solo por
+ * correo: no hay `wa.me` aquí. La vía por WhatsApp existe porque muchas pacientes no abren
+ * el correo; quien trabaja en la consulta sí.»
+ *
+ * ES UNA PLANTILLA MÁS, NO UN MECANISMO MÁS: el envío es el mismo `MailPort` y el asunto es
+ * el mismo «Tu acceso a MedSkin». Lo que cambia es la primera frase, porque la de la
+ * paciente habla de «tus tratamientos, tus cuidados y tus citas» y eso no es lo que una
+ * recepcionista va a ver.
+ *
+ * El texto NO está en el contrato —`cuentas.md` escribe el de la paciente y el de WhatsApp,
+ * no este— y está anotado para `producto`. No dice el rol ni nada clínico: un correo es lo
+ * que se lee en la pantalla bloqueada de un teléfono.
+ */
+export function teamAccessMailBody(facts: TeamDeliveryFacts): string {
+  return [
+    `Hola ${facts.firstName}, te dieron de alta en el equipo de ${facts.practiceName} en MedSkin.`,
+    '',
+    `Entra con ${facts.email} y esta contraseña:`,
+    facts.temporaryPassword,
+    '',
+    'Caduca en 72 horas y al entrar eliges la tuya.',
     'medskin.app/entrar',
   ].join('\n');
 }

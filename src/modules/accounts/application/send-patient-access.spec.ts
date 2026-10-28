@@ -15,7 +15,9 @@ import { describe, expect, it } from 'vitest';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Caller } from '../../access/application/caller';
 import type { PasswordHasher } from '../../access/domain/ports';
+import { DELIVERY_CHANNELS, type DeliveryFacts } from '../domain/access-delivery';
 import type {
+  PatientAccessMailPort,
   PatientAccessPort,
   PatientForDelivery,
   ResendLimitPort,
@@ -39,19 +41,27 @@ const DOCTORA: Caller = {
 
 const RECEPCION: Caller = { ...DOCTORA, role: 'recepcion', permissions: ['pacientes:leer'] };
 
+// Con un envío anterior que SÍ ocurrió: es el caso que hace falso poner nulo al compensar.
+const DIA_1 = new Date('2026-08-03T22:24:00.000Z');
+
 const VALERIA: PatientForDelivery = {
   firstName: 'Valeria',
   email: 'valeria.antelo@gmail.com',
   phone: '+59177124408',
   practitionerName: 'Dra. Andrea Paz',
+  accessSentAt: DIA_1,
 };
 
 function armar(opciones: {
   paciente?: PatientForDelivery | null;
   veredicto?: ResendOutcome;
   demasiados?: boolean;
+  correoFalla?: boolean;
+  deshacerFalla?: boolean;
 }) {
   const pasos: string[] = [];
+  const mandados: DeliveryFacts[] = [];
+  const restaurados: (Date | null)[] = [];
 
   const patients: PatientAccessPort = {
     forDelivery: () => {
@@ -64,6 +74,14 @@ function armar(opciones: {
         outcome: opciones.veredicto ?? ('acceso_renovado' as const),
         expiresAt: p.expiresAt,
       });
+    },
+    restoreAccessSentAt: (_owner, _accountId, previous) => {
+      pasos.push('marca:deshacer');
+      if (opciones.deshacerFalla === true) {
+        return Promise.reject(new Error('la marca de envío no se pudo deshacer: 0 filas'));
+      }
+      restaurados.push(previous);
+      return Promise.resolve();
     },
   };
 
@@ -85,7 +103,28 @@ function armar(opciones: {
     localLongWhen: () => 'viernes 30 a las 18:24',
   };
 
-  return { caso: new SendPatientAccess(patients, passwords, limit, clock), pasos };
+  // El doble del correo guarda LO QUE SE MANDA, no cuántas veces se le llamó: lo que la
+  // prueba afirma es el contenido del mensaje y que exista, no que un espía se activara.
+  const mail: PatientAccessMailPort = {
+    sendAccess: (facts) => {
+      pasos.push('correo:mandar');
+      if (opciones.correoFalla === true) {
+        // El rechazo de un relé de VERDAD lleva la dirección dentro: «550 5.1.1
+        // <carla@…> User unknown». Un doble que rechaza con `ECONNREFUSED` deja pasar una
+        // aserción que dice «la causa no lleva el correo» sin comprobar nada.
+        return Promise.reject(new Error(`550 5.1.1 <${VALERIA.email}> User unknown`));
+      }
+      mandados.push(facts);
+      return Promise.resolve();
+    },
+  };
+
+  return {
+    caso: new SendPatientAccess(patients, passwords, limit, clock, mail),
+    pasos,
+    mandados,
+    restaurados,
+  };
 }
 
 async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> {
@@ -149,13 +188,18 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · la temporal en claro', () => {
   });
 
   it('por `correo` NO viaja: lo manda MedSkin y que la doctora la lea solo la expone', async () => {
-    const { caso } = armar({});
+    const { caso, mandados } = armar({});
     const bloque = await caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA);
 
     expect(bloque.contrasena_temporal).toBeNull();
     expect(bloque.whatsapp).toBeUndefined();
     // La fecha sí: la doctora tiene que poder decirle hasta cuándo vale.
     expect(bloque.caduca_en_texto).toBe('Caduca el viernes 30 a las 18:24');
+    // Y SÍ se manda, que es la otra mitad: la temporal está en el correo o en ninguna
+    // parte, y lo que la doctora recibe es `enviado: true` de verdad.
+    expect(bloque.enviado).toBe(true);
+    expect(mandados[0]?.patientEmail).toBe('valeria.antelo@gmail.com');
+    expect(mandados[0]?.temporaryPassword).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
   });
 
   it('el texto del WhatsApp no dice ni un dato clínico', async () => {
@@ -197,6 +241,73 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · lo que no se hace', () => {
     expect(pasos).toEqual([]);
   });
 
+  it('si el correo no sale, es 500 con la frase del contrato y no un 200 que miente', async () => {
+    const { caso, pasos } = armar({ correoFalla: true });
+    const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
+
+    expect(error.code).toBe('fallo_de_servicio');
+    expect(error.status).toBe(500);
+    // La única frase del tramo que admite que algo se perdió, porque se perdió.
+    expect(error.userMessage).toBe(
+      'No pudimos mandarle el acceso. Su ficha está intacta, pero su contraseña anterior ya no vale: vuelve a mandárselo.',
+    );
+    // Y la marca de envío se deshace ANTES de contestar: `access_sent_at` solo puede
+    // afirmar un envío que ocurrió.
+    expect(pasos).toEqual(['ficha:leer', 'contador:reenvio', 'acunar:correo', 'correo:mandar', 'marca:deshacer']);
+
+    // LA CADENA DE CAUSAS, RECORRIDA DE VERDAD. `String(error.cause)` solo renderiza el
+    // mensaje del PRIMER eslabón: no mira el `cause` encadenado, así que la aserción
+    // anterior pasaba con el correo dentro y no podía fallar nunca.
+    const cadena = mensajesDeLaCausa(error);
+
+    // Lo nuestro: la cuenta sí, y ni el correo ni la contraseña. Es lo único que este
+    // código escribe, y es lo que esta prueba puede garantizar.
+    expect(cadena[0]).toContain(CUENTA_PACIENTE);
+    expect(cadena[0]).not.toContain('@');
+    expect(cadena[0]).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
+
+    // Y el rechazo del relé se CONSERVA encadenado, con su texto tal cual: es la causa real
+    // y sin ella nadie arregla el relé (§10.3). Que ahí viaje una dirección es un hecho del
+    // mensaje del motor, y lo que lo tapa es `service_failure`, que enmascara el correo al
+    // escribir la fila —en las dos rutas, con y sin sesión—.
+    expect(cadena.at(-1)).toContain('550 5.1.1');
+    expect(cadena).toHaveLength(2);
+  });
+
+  it('la compensación devuelve la marca a su valor ANTERIOR, no a nulo', async () => {
+    // Si el correo salió el día 1 y el reenvío del día 5 falla, poner nulo haría que la
+    // consola leyera «nunca se le mandó» de una paciente que sí lo recibió: el mismo
+    // defecto de B1 en la otra dirección.
+    const conEnvioAnterior = armar({ correoFalla: true });
+    await errorDe(() => conEnvioAnterior.caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
+    expect(conEnvioAnterior.restaurados).toEqual([DIA_1]);
+
+    // Y la primera vez sí es nulo, porque nulo es lo que había.
+    const primeraVez = armar({
+      correoFalla: true,
+      paciente: { ...VALERIA, accessSentAt: null },
+    });
+    await errorDe(() => primeraVez.caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
+    expect(primeraVez.restaurados).toEqual([null]);
+  });
+
+  it('si la compensación también falla, lo dice la causa y sigue siendo el mismo 500', async () => {
+    const { caso } = armar({ correoFalla: true, deshacerFalla: true });
+    const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
+
+    expect(error.code).toBe('fallo_de_servicio');
+    // Para la doctora es el mismo hecho; la fila de `service_failure` dice además que la
+    // marca quedó puesta, que es lo que alguien tiene que ir a corregir.
+    expect(String((error as { cause?: unknown }).cause)).toContain('la marca de envío quedó puesta');
+  });
+
+  it('cuando el correo SÍ sale, la marca de envío no se toca', async () => {
+    const { caso, pasos } = armar({});
+    await caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA);
+
+    expect(pasos).not.toContain('marca:deshacer');
+  });
+
   it('el cuarto reenvío de la hora es 429 y tampoco acuña', async () => {
     const { caso, pasos } = armar({ demasiados: true });
     const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
@@ -206,3 +317,54 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · lo que no se hace', () => {
     expect(pasos).not.toContain('acunar:correo');
   });
 });
+
+// =========================================================================================
+// EL INVARIANTE · es lo que arregla esto para siempre
+// =========================================================================================
+describe('POST /v1/cuentas/{cuenta_id}/acceso · el invariante de la entrega', () => {
+  it('para CADA vía: o se entregó un mensaje, o la contraseña viaja. Nunca ninguna', async () => {
+    // Acuñar mata la temporal anterior y devuelve `temp_first_used_at` a nulo, y
+    // `medskin_recovery_mint` solo acuña si está estrenada: una vía que no entregue
+    // mensaje y no devuelva la contraseña deja fuera para siempre a una paciente que ya
+    // entraba, sin aviso y sin salida. Si alguien vuelve a quitar el envío, falla aquí.
+    const resultados: Record<string, boolean> = {};
+
+    for (const via of DELIVERY_CHANNELS) {
+      const { caso, mandados } = armar({});
+      const bloque = await caso.run({ via }, CUENTA_PACIENTE, DOCTORA);
+
+      const seEntrego = bloque.enviado && mandados.length === 1;
+      const laContrasenaViaja = bloque.contrasena_temporal !== null;
+      resultados[via] = seEntrego !== laContrasenaViaja;
+    }
+
+    // `ninguna` cumple con la contraseña en la respuesta: la doctora eligió dársela en
+    // persona, y eso es una entrega aunque no pase por ningún relé.
+    expect(resultados).toEqual({ correo: true, whatsapp: true, ninguna: true });
+  });
+
+  it('el artículo lo pone el título guardado: «soy Andrea Paz», no «soy la Andrea Paz»', async () => {
+    const { caso } = armar({ paciente: { ...VALERIA, practitionerName: 'Andrea Paz' } });
+    const bloque = await caso.run({ via: 'whatsapp' }, CUENTA_PACIENTE, DOCTORA);
+
+    expect(bloque.whatsapp?.texto).toContain('soy Andrea Paz');
+    expect(bloque.whatsapp?.texto).not.toContain('soy la Andrea Paz');
+  });
+});
+
+/**
+ * Los mensajes de toda la cadena de causas, del primero al último. Es lo que
+ * `FailureLog.causeChain()` recorre para escribir `cause_chain`, y por eso una prueba que
+ * dice «la causa no lleva el correo» tiene que recorrer lo mismo: `String(un Error)` no
+ * renderiza su `cause`, así que afirmarlo sobre la cadena entera es lo único que puede
+ * fallar cuando alguien meta el correo en un mensaje nuestro.
+ */
+function mensajesDeLaCausa(error: unknown): string[] {
+  const mensajes: string[] = [];
+  let actual: unknown = error instanceof Error ? error.cause : undefined;
+  for (let i = 0; i < 5 && actual instanceof Error; i += 1) {
+    mensajes.push(actual.message);
+    actual = actual.cause;
+  }
+  return mensajes;
+}

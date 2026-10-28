@@ -440,7 +440,8 @@ describe('POST /v1/acceso · la respuesta', () => {
     expect(respuesta.siguiente_paso).toBe('contrasena_nueva');
     // «Esa sesión no se puede prolongar, solo terminar eligiendo la contraseña.»
     expect(respuesta.refresco).toBeNull();
-    expect(respuesta.refresco_caduca_en).toBeUndefined();
+    // Presente y nulo, no ausente (`sesion.md`, 28 de octubre): una sola forma del campo.
+    expect(respuesta.refresco_caduca_en).toBeNull();
   });
 
   it('una cuenta `practitioner` sin fila de consulta no inventa un rol: es 500', async () => {

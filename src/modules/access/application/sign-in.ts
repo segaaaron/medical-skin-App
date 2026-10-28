@@ -20,9 +20,16 @@ import {
   FAILURE_PHRASES,
   ServiceFailure,
 } from '../../../shared/contract/error-catalog';
-import type { NextStep, Region, Role, Scope } from '../../../shared/contract/session';
+import type {
+  AccountRole,
+  NextStep,
+  Region,
+  Role,
+  Scope,
+} from '../../../shared/contract/session';
 import { resolveNextStep } from '../domain/next-step';
 import type {
+  AccessCredential,
   AccessPausePort,
   ClockPort,
   CredentialPort,
@@ -53,7 +60,12 @@ export type SignInResponse = {
   token: string;
   token_caduca_en: string;
   refresco: string | null;
-  refresco_caduca_en?: string;
+  /**
+   * SIEMPRE presente, con nulo cuando no hay refresco —alcance restringido—, y no omitido:
+   * `sesion.md`, 28 de octubre. Dos formas para el mismo campo en dos endpoints obligan a
+   * la app a llevar dos decodificadores, y `GET /v1/sesion` y el refresco ya lo mandan así.
+   */
+  refresco_caduca_en: string | null;
   region: Region;
   rol: Role;
   siguiente_paso: NextStep;
@@ -87,7 +99,9 @@ export class SignIn {
     // --- 3 · el verificado, siempre. El hash es el real o el del señuelo, y la función de
     // la base garantiza que nunca falta: sin él no hay «mismo tiempo».
     const credential = await this.credentials.read(email);
-    const matched = await this.passwords.verify(credential.hash, password);
+    // Sin `who` cuando el hash es el del SEÑUELO: no hay cuenta que nombrar, y una fila de
+    // aviso por cada intento sobre un correo que no existe es inundar el registro gratis.
+    const matched = await this.passwords.verify(credential.hash, password, whoOf(credential));
 
     // --- 4 · si no coincide, aquí termina. No se consulta el estado de la cuenta, ni el
     // de la contraseña temporal, ni nada más.
@@ -166,7 +180,7 @@ export class SignIn {
       token,
       token_caduca_en: expiresAt.toISOString(),
       refresco: refresh?.refresh ?? null,
-      ...(refreshExpiresAt ? { refresco_caduca_en: refreshExpiresAt.toISOString() } : {}),
+      refresco_caduca_en: refreshExpiresAt?.toISOString() ?? null,
       region: credential.region,
       rol: role,
       siguiente_paso: resolveNextStep(role, {
@@ -214,4 +228,19 @@ export class SignIn {
       aviso: `Te quedan ${intentos} antes de una pausa de ${PAUSE_MINUTES} minutos.`,
     });
   }
+}
+
+/**
+ * Quién es el dueño de ese hash, para el aviso de una credencial ilegible. `undefined`
+ * cuando la función devolvió el SEÑUELO —`accountId` nulo—, que no tiene dueño.
+ */
+function whoOf(
+  credential: AccessCredential,
+): { accountId: string; practiceId: string | null; accountRole: AccountRole } | undefined {
+  if (credential.accountId === null || credential.accountRole === null) return undefined;
+  return {
+    accountId: credential.accountId,
+    practiceId: credential.practiceId,
+    accountRole: credential.accountRole,
+  };
 }

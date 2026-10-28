@@ -11,7 +11,7 @@
     "start:dev": "tsx watch --env-file=.env src/main.ts",
     "start": "node --env-file=.env dist/main.js",
     "build": "nest build",
-    "db:generate": "node --env-file=.env ./node_modules/.bin/drizzle-kit generate",
+    "db:generate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "tsx --env-file=.env src/shared/db/migrate.ts",
     "test": "vitest run",
     "lint": "eslint src",
@@ -51,6 +51,6 @@
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
-    "vitest": "3.2.7"
+    "vitest": "4.1.12"
   }
 }

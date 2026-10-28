@@ -20,5 +20,11 @@ onlyBuiltDependencies:
 # las peticiones era la vulnerable aunque `fastify` estuviera pineado arriba. Ocho avisos de
 # `pnpm audit`, y uno es nuestro de lleno: suplantación de `X-Forwarded-*` con `trustProxy`,
 # que es de donde sale la IP del contador por IP del acceso.
+# `esbuild` entra por drizzle-kit, que no lo tiene pineado al día: un aviso de `pnpm audit`
+# que se cierra aquí sin tocar ninguna dependencia de producción. 28 oct.
+# Y uno que NO se puede cerrar: `deepmerge` (bajo, por @nestjs/cli > fork-ts-checker), cuyo
+# aviso pide >=4.3.2 y **esa versión no existe**: la última publicada es 4.3.1. No es que falte
+# subirlo, es que no hay parche. No volver a intentarlo hasta que publiquen.
 overrides:
   fastify: 5.12.7
+  esbuild: 0.27.2
