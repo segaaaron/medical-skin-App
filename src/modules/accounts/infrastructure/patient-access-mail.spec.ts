@@ -8,7 +8,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MailMessage, MailPort } from '../../../shared/mail/mailer';
-import { accessMailBody, type DeliveryFacts } from '../domain/access-delivery';
+import {
+  accessMailBody,
+  linkNoticeMailBody,
+  type DeliveryFacts,
+  type LinkNoticeFacts,
+} from '../domain/access-delivery';
 import { ACCESS_SUBJECT, PatientAccessMail } from './patient-access-mail';
 
 const VALERIA: DeliveryFacts = {
@@ -17,6 +22,13 @@ const VALERIA: DeliveryFacts = {
   practitionerName: 'Dra. Andrea Paz',
   temporaryPassword: 'tejado-lila-07',
   expiryText: 'Caduca el jueves 30 a las 18:24',
+};
+
+/** La misma persona, cuando su correo YA tenía cuenta: no se le acuña contraseña ninguna. */
+const YA_TIENE: LinkNoticeFacts = {
+  patientFirstName: 'Valeria',
+  patientEmail: 'valeria.antelo@gmail.com',
+  practitionerName: 'Dra. Andrea Paz',
 };
 
 describe('el correo del acceso', () => {
@@ -60,6 +72,46 @@ describe('el correo del acceso', () => {
     await new PatientAccessMail(mail).sendAccess(VALERIA);
 
     expect(mandados[0]?.to).toBe('valeria.antelo@gmail.com');
+    expect(mandados[0]?.subject).toBe(ACCESS_SUBJECT);
+    expect(Object.keys(mandados[0] ?? {}).sort()).toEqual(['subject', 'text', 'to']);
+  });
+});
+
+// El aviso de `POST /v1/pacientes` cuando el correo ya tenía cuenta en la región. Existe
+// porque esa persona tiene que enterarse de que una consulta la dio de alta: es su identidad
+// la que queda vinculada (decisión del dueño, 28 de octubre de 2026).
+describe('el correo de quien ya tiene cuenta', () => {
+  it('no nombra ninguna contraseña, porque no se le acuñó ninguna', () => {
+    const cuerpo = linkNoticeMailBody(YA_TIENE);
+
+    expect(cuerpo).toContain('soy la Dra. Andrea Paz');
+    expect(cuerpo).toContain('Entra con tu cuenta de siempre');
+    // Ni una contraseña con la forma de las temporales, ni la promesa de que algo caduca.
+    expect(cuerpo).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
+    expect(cuerpo).not.toContain('Caduca');
+  });
+
+  it('no dice ni un dato clínico', () => {
+    const cuerpo = linkNoticeMailBody(YA_TIENE).toLowerCase();
+
+    for (const prohibida of ['diagnos', 'alergia', 'embarazo', 'medicacion', 'foto', 'piel']) {
+      expect(cuerpo, prohibida).not.toContain(prohibida);
+    }
+  });
+
+  it('va al mismo sitio y con EL MISMO ASUNTO: el asunto no distingue los dos casos', async () => {
+    const mandados: MailMessage[] = [];
+    const mail: MailPort = {
+      send: (mensaje) => {
+        mandados.push(mensaje);
+        return Promise.resolve();
+      },
+    };
+
+    await new PatientAccessMail(mail).sendLinkNotice(YA_TIENE);
+
+    expect(mandados[0]?.to).toBe('valeria.antelo@gmail.com');
+    // Dos asuntos distintos dirían en la pantalla bloqueada cuál de los dos casos es.
     expect(mandados[0]?.subject).toBe(ACCESS_SUBJECT);
     expect(Object.keys(mandados[0] ?? {}).sort()).toEqual(['subject', 'text', 'to']);
   });

@@ -83,6 +83,16 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   if (ctx.role === 'app_patient' && practiceId) {
     throw new Error('app_patient no fija practiceId: la paciente no pertenece a ningún inquilino.');
   }
+  // Y `app_platform` tampoco, que era la única puerta de esta casa sin cerradura. La
+  // consola NO es un inquilino: sus políticas son `current_user = 'app_platform'` y
+  // NINGUNA lee `medskin.practice_id`, así que un `practice_id` puesto aquí afirmaría una
+  // atribución que ninguna política comprueba. Cuando la consola necesita una consulta
+  // concreta, la pasa como ARGUMENTO explícito y la función la valida: es la forma de
+  // `medskin_create_practice_owner(p_practice_id, …)` y de
+  // `medskin_platform_practice_stats(p_practice_id)`, y las dos son así por esto.
+  if (ctx.role === 'app_platform' && practiceId) {
+    throw new Error('app_platform no fija practiceId: la consola no es un inquilino y ninguna de sus políticas lo lee.');
+  }
 
   return { role: ctx.role, practiceId: practiceId ?? '', accountId };
 }

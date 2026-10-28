@@ -7,6 +7,7 @@ import type { FastifyRequest } from 'fastify';
 
 import type { Caller, RecoveryCaller } from '../../modules/access/application/caller';
 import type { Device } from '../../modules/access/domain/ports';
+import type { PlatformCaller } from '../platform/platform-token';
 import type { RoutePolicy } from './route-policy';
 
 export type RequestContext = {
@@ -23,6 +24,15 @@ export type RequestContext = {
    * y no tiene rol que leer (`RecoveryCaller`). Exactamente uno de los dos es no nulo.
    */
   recovery: RecoveryCaller | null;
+  /**
+   * El tercero, y el único que no sale de ninguna cuenta de esta región: quien llama desde
+   * la consola interna con un token que firmó el servicio de plataforma
+   * (`plataforma-acceso.md`). No es un `Caller` porque no tiene cuenta, ni sesión, ni
+   * inquilino: lo que trae es `sub`, `etiqueta` y su lista cerrada de permisos.
+   *
+   * Como mucho uno de los tres es no nulo, y en las rutas anónimas ninguno.
+   */
+  platform: PlatformCaller | null;
 };
 
 /** El tipo que el guardia cuelga de la petición. No se escribe nada más en ella. */
@@ -52,7 +62,7 @@ function readAppHeader(value: string | null): {
 
 export function readRequest(
   req: FastifyRequest,
-): Omit<RequestContext, 'policy' | 'caller' | 'recovery'> {
+): Omit<RequestContext, 'policy' | 'caller' | 'recovery' | 'platform'> {
   const headers = req.headers;
   const { platform, appVersion } = readAppHeader(singleHeader(headers['x-medskin-app']));
   const id = randomUUID();

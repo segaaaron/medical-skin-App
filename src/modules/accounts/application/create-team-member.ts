@@ -21,6 +21,7 @@ import {
   FAILURE_PHRASES,
   ServiceFailure,
 } from '../../../shared/contract/error-catalog';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
 import type { PasswordHasher } from '../../access/domain/ports';
 // La MISMA comprobación de forma que usa recuperación, y por eso no se reescribe aquí: dice
@@ -28,7 +29,12 @@ import type { PasswordHasher } from '../../access/domain/ports';
 // recuperación porque allí nació; su sitio natural sería un dominio compartido.)
 import { readEmail } from '../../recovery/domain/code';
 import type { TeamDeliveryFacts } from '../domain/access-delivery';
-import type { AccountOwner, TeamAccessMailPort, TeamPort } from '../domain/ports';
+import type {
+  AccountOwner,
+  IdempotencyCompletionPort,
+  TeamAccessMailPort,
+  TeamPort,
+} from '../domain/ports';
 import { TEAM_PERMISSION, isAssignableTeamRole } from '../domain/team';
 import {
   mintTemporaryPassword,
@@ -60,9 +66,15 @@ export class CreateTeamMember {
     private readonly passwords: PasswordHasher,
     private readonly clock: DeliveryClock,
     private readonly mail: TeamAccessMailPort,
+    private readonly idempotency: IdempotencyCompletionPort,
   ) {}
 
-  async run(input: unknown, caller: Caller): Promise<TeamMemberResponse> {
+  async run(
+    input: unknown,
+    caller: Caller,
+    /** La clave de la petición. Obligatoria, como en el alta de una paciente. */
+    record: IdempotencyRecord,
+  ): Promise<TeamMemberResponse> {
     // Autorización por recurso y no solo por rol: el permiso sale de la lista resuelta que
     // viaja en el token (OWASP A01). Que además sea LA DUEÑA lo comprueba la base, que es
     // la única que conoce `practice.owner_account_id`.
@@ -73,8 +85,10 @@ export class CreateTeamMember {
     const expiresAt = temporaryPasswordExpiry(now);
     const temporary = mintTemporaryPassword();
 
+    const owner = ownerOf(caller);
     const created = await this.team.create({
-      owner: ownerOf(caller),
+      owner,
+      idempotency: record,
       email: body.email,
       firstName: body.firstName,
       lastName: body.lastName,
@@ -82,6 +96,12 @@ export class CreateTeamMember {
       hash: await this.passwords.hash(temporary),
       expiresAt,
     });
+
+    // La respuesta original de esta misma petición: no se creó una segunda cuenta y no salió un
+    // segundo correo. Lo decidió la misma transacción que habría creado.
+    if (created.verdict === 'replayed' && created.replay !== null) {
+      return created.replay.response as TeamMemberResponse;
+    }
 
     switch (created.verdict) {
       // La base valida el rol otra vez y ANTES de mirar el correo: un cuerpo mal formado no
@@ -91,7 +111,14 @@ export class CreateTeamMember {
       case 'not_owner':
         throw this.noPermission();
       case 'email_taken':
-        throw new ContractError('correo_no_disponible');
+        // La frase LITERAL de este endpoint. Se pasa explícita desde que el alta de una
+        // paciente comparte el código (0021): la genérica del catálogo —la de sin red— ya
+        // no puede nombrar al equipo, porque no sería verdadera en el otro endpoint.
+        throw new ContractError(
+          'correo_no_disponible',
+          undefined,
+          'Ese correo no se puede usar para el equipo. Dale de alta con otro correo suyo, o escríbenos a hola@medskin.app.',
+        );
       default:
         break;
     }
@@ -122,7 +149,7 @@ export class CreateTeamMember {
       created.accountId,
     );
 
-    return {
+    const response: TeamMemberResponse = {
       miembro_id: created.practitionerId,
       cuenta_id: created.accountId,
       nombre_completo: `${body.firstName} ${body.lastName}`,
@@ -139,6 +166,17 @@ export class CreateTeamMember {
         caduca_en_texto: expiryText,
       },
     };
+
+    // La clave se cierra con la respuesta ya verdadera. Si esto falla, la cuenta existe y el
+    // correo salió: el reintento NO puede volver a crearla —la reserva está escrita— y recibe
+    // esta misma frase, que manda a reenviarle el acceso.
+    try {
+      await this.idempotency.complete({ owner, record, status: 201, response });
+    } catch (cause) {
+      throw new ServiceFailure(FAILURE_PHRASES.createTeamMemberMail, cause);
+    }
+
+    return response;
   }
 
   /**

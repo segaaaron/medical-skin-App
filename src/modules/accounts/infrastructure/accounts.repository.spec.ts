@@ -133,6 +133,11 @@ async function sembrarFicha(
 }
 
 async function limpiar(): Promise<void> {
+  // Las claves de idempotencia también: este spec llama al repositorio directamente, así que
+  // deja RESERVAS sin cerrar —el caso de uso es quien las cierra—, y una reserva sin cerrar
+  // nunca se vuelve a ejecutar. Es la garantía nueva funcionando contra la base real; aquí lo
+  // que hace falta es que cada corrida empiece limpia.
+  await owner.query('delete from idempotency_key where key like $1', ['equipo-%']);
   await owner.query('delete from practice where id = any($1::uuid[])', [[CONSULTA, OTRA_CONSULTA]]);
   await owner.query('delete from access_audit where practice_id = any($1::uuid[])', [
     [CONSULTA, OTRA_CONSULTA],
@@ -240,6 +245,9 @@ describe('POST /v1/equipo contra la base', () => {
   it('la dueña crea recepción, y el nombre de la consulta sale de la misma transacción', async () => {
     const creada = await team.create({
       owner: comoDuena,
+      // Cada alta con SU clave, y distintas entre casos: la misma clave dos veces es una
+      // repetición a propósito, y eso se prueba en `patients.repository.spec.ts`.
+      idempotency: { key: 'equipo-recepcion', bodyHash: 'huella-recepcion' },
       email: CORREO_NUEVA,
       firstName: 'Rosa',
       lastName: 'Mamani',
@@ -276,6 +284,7 @@ describe('POST /v1/equipo contra la base', () => {
     // tiene cuenta, y el veredicto es el mismo que si ya estuviera en su equipo.
     const tomado = await team.create({
       owner: comoDuena,
+      idempotency: { key: 'equipo-correo-tomado', bodyHash: 'huella-tomado' },
       email: CORREO_PACIENTE,
       firstName: 'Carla',
       lastName: 'Rojas',
@@ -289,6 +298,9 @@ describe('POST /v1/equipo contra la base', () => {
       accountId: null,
       practitionerId: null,
       practiceName: null,
+      // Un veredicto que no creó nada tampoco guarda clave: el reintento tiene que poder
+      // volver a intentarlo de verdad.
+      replay: null,
     });
   });
 });

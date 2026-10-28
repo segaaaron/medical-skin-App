@@ -7,6 +7,7 @@ import { config } from './config/config';
 export class SystemClock {
   private readonly formatter: Intl.DateTimeFormat;
   private readonly longFormatter: Intl.DateTimeFormat;
+  private readonly dayFormatter: Intl.DateTimeFormat;
 
   constructor(timeZone: string = config().ZONA_HORARIA) {
     this.formatter = new Intl.DateTimeFormat('es-BO', {
@@ -22,6 +23,11 @@ export class SystemClock {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
+    });
+    this.dayFormatter = new Intl.DateTimeFormat('es-BO', {
+      timeZone,
+      day: 'numeric',
+      month: 'long',
     });
   }
 
@@ -44,5 +50,14 @@ export class SystemClock {
     const of = (type: Intl.DateTimeFormatPartTypes): string =>
       parts.find((part) => part.type === type)?.value ?? '';
     return `${of('weekday')} ${of('day')} a las ${of('hour')}:${of('minute')}`;
+  }
+
+  /**
+   * «3 de agosto», para la frase del duplicado del alta: «Ya tienes a Valeria Antelo con
+   * este correo, de alta el 3 de agosto». La escribe el servidor por lo mismo que las otras
+   * dos: una fecha formateada en dos apps acaba leyéndose de dos maneras.
+   */
+  localDay(moment: Date): string {
+    return this.dayFormatter.format(moment);
   }
 }

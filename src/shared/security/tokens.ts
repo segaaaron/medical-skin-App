@@ -62,19 +62,32 @@ export type VerifiedClaims = {
  * tokens que nadie más puede verificar (OWASP A02).
  */
 export async function ensureKeyPair(cfg: Config = config()): Promise<void> {
-  if (existsSync(cfg.JWT_PRIVATE_KEY_PATH) && existsSync(cfg.JWT_PUBLIC_KEY_PATH)) return;
-  if (cfg.NODE_ENV !== 'development') {
+  await ensureEd25519Pair(cfg.JWT_PRIVATE_KEY_PATH, cfg.JWT_PUBLIC_KEY_PATH, cfg.NODE_ENV);
+}
+
+/**
+ * El par de desarrollo, por rutas. Lo usan DOS pares con la misma regla y distinta llave: el
+ * de las sesiones y el del servicio de plataforma (`platform/platform-token.ts`), que en
+ * desarrollo tampoco existe porque el servicio que firma vive fuera de la región.
+ */
+export async function ensureEd25519Pair(
+  privateKeyPath: string,
+  publicKeyPath: string,
+  nodeEnv: Config['NODE_ENV'],
+): Promise<void> {
+  if (existsSync(privateKeyPath) && existsSync(publicKeyPath)) return;
+  if (nodeEnv !== 'development') {
     throw new Error(
-      `Faltan las llaves del token (${cfg.JWT_PRIVATE_KEY_PATH}, ${cfg.JWT_PUBLIC_KEY_PATH}) y fuera de development no se generan.`,
+      `Faltan las llaves del token (${privateKeyPath}, ${publicKeyPath}) y fuera de development no se generan.`,
     );
   }
 
   const { privateKey, publicKey } = await generateKeyPair(ALGORITHM, { extractable: true });
-  mkdirSync(dirname(cfg.JWT_PRIVATE_KEY_PATH), { recursive: true, mode: 0o700 });
-  mkdirSync(dirname(cfg.JWT_PUBLIC_KEY_PATH), { recursive: true, mode: 0o700 });
-  writeFileSync(cfg.JWT_PRIVATE_KEY_PATH, await exportPKCS8(privateKey), { mode: 0o600 });
-  writeFileSync(cfg.JWT_PUBLIC_KEY_PATH, await exportSPKI(publicKey), { mode: 0o644 });
-  chmodSync(cfg.JWT_PRIVATE_KEY_PATH, 0o600);
+  mkdirSync(dirname(privateKeyPath), { recursive: true, mode: 0o700 });
+  mkdirSync(dirname(publicKeyPath), { recursive: true, mode: 0o700 });
+  writeFileSync(privateKeyPath, await exportPKCS8(privateKey), { mode: 0o600 });
+  writeFileSync(publicKeyPath, await exportSPKI(publicKey), { mode: 0o644 });
+  chmodSync(privateKeyPath, 0o600);
 }
 
 export class Tokens {

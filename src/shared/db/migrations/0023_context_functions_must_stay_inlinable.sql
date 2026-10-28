@@ -1,0 +1,59 @@
+-- Tramo 1 · deshace la 0022, **con el plan medido delante**. La 0022 ya se aplicó y no se
+-- toca: si está mal, se escribe la siguiente (§3.4, regla 7 · §1.5 del napkin). Esta es la
+-- siguiente.
+--
+-- =======================================================================================
+-- QUÉ HIZO LA 0022, QUE PARECÍA GRATIS Y NO LO ERA
+--
+-- Le puso `SET search_path = pg_catalog, public` a `medskin_current_practice()` y a
+-- `medskin_current_account()` por consistencia: eran las dos únicas funciones del esquema
+-- sin él. **Y una función `LANGUAGE sql` con una cláusula `SET` deja de poder EMPOTRARSE**
+-- (`inlining`): Postgres no la puede desplegar dentro de la consulta porque tiene que
+-- aplicar la configuración al ejecutar el cuerpo. Las dos son el predicado de casi todas
+-- las políticas del sistema, así que dejaron de empotrarse en casi todas las consultas.
+--
+-- LO QUE SE MIDIÓ, el 28 oct, en PG 17.11, por `withTenantContext()` con `app_practitioner`
+-- y contexto de verdad, con 8 000 fichas en la consulta que pregunta y 8 000 en la de al
+-- lado, sobre la búsqueda por trigramas de `GET /v1/pacientes` —`select id from patient
+-- where search_text like '%4ca4238a%' limit 50`, con el `practice_id` puesto por la
+-- política y no escrito—:
+--
+--   CON la 0022 (sin empotrar):
+--     Limit (cost=0.54..2171.66 rows=1) (actual time=0.030..1.352 rows=1)
+--       -> Index Scan using patient_practice_status_idx on patient
+--            Index Cond: (practice_id = medskin_current_practice())
+--            Filter: (search_text ~~ '%4ca4238a%')
+--            Rows Removed by Filter: 8000
+--            Buffers: shared hit=482
+--
+--   SIN la 0022 (empotrada, que es como estaba y como vuelve a estar):
+--     entra por `patient_search_idx`, el GIN que empieza por el inquilino, y no recorre
+--     las 8 000 filas del inquilino para descartar 7 999.
+--
+-- O sea que la 0022 **tiró a la basura el GIN de la búsqueda**, que es el índice que la
+-- 0010 midió y que las migraciones 0011 y 0012 existen para defender. La aguja era de 8
+-- caracteres hexadecimales de una sola palabra, lo más selectivo que puede teclear alguien:
+-- no es un artefacto de la siembra. Lo cazó `isolation.spec.ts` · «la búsqueda por
+-- trigramas entra por el GIN que empieza por el inquilino», que es bloqueante en
+-- integración continua y que **hizo exactamente su trabajo**.
+--
+-- Y NO SE PERDÍA NADA DE SEGURIDAD AL QUITARLO, que es lo que cierra la decisión. Las dos
+-- funciones son `SECURITY INVOKER` y de `medskin_owner`, y sus cuerpos no tocan ninguna
+-- tabla: solo `current_setting(text, boolean)` de `pg_catalog`. Para que el `search_path`
+-- de la sesión importara, alguien tendría que poder plantar una función que la sombree, y
+-- **ningún rol de aplicación puede crear objetos en `public`**: el ACL del esquema da
+-- `USAGE` y nada más a `medskin`, `medskin_access` y los cinco `app_*`; `CREATE` lo tiene
+-- solo el dueño de la base. Se cambió un riesgo que no existe por un recorrido de 8 000
+-- filas en la pantalla que más se usa.
+--
+-- **Las dos funciones de contexto se quedan SIN `SET search_path`, y es deliberado.** Son
+-- las dos únicas del esquema así, y esta es la razón: tienen que poder empotrarse. Si
+-- alguien se lo vuelve a poner «por consistencia», lo que se cae es ese caso de
+-- `isolation.spec.ts`, y este comentario es la explicación que le va a faltar.
+--
+-- `RESET` y no `CREATE OR REPLACE`: no cambia ni la firma, ni el cuerpo, ni el dueño, ni la
+-- volatilidad. Y es idempotente: sobre una función que ya no lo tiene, no hace nada.
+-- =======================================================================================
+
+ALTER FUNCTION medskin_current_practice() RESET search_path;--> statement-breakpoint
+ALTER FUNCTION medskin_current_account() RESET search_path;--> statement-breakpoint

@@ -148,6 +148,41 @@
       "when": 1793210607903,
       "tag": "0020_resend_revokes_sessions_and_refresh_knows_the_life",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793215935549,
+      "tag": "0021_no_patient_account_over_a_practitioner",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793217825684,
+      "tag": "0022_search_path_on_the_two_context_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793218147096,
+      "tag": "0023_context_functions_must_stay_inlinable",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793220073427,
+      "tag": "0024_purge_idempotency_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793220194097,
+      "tag": "0025_purge_without_for_update",
+      "breakpoints": true
     }
   ]
 }

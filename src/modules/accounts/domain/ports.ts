@@ -1,7 +1,14 @@
 // Los puertos de las cuentas. Dominio: sin NestJS, sin Fastify, sin `pg`.
 
 import type { AccountRole, Region } from '../../../shared/contract/session';
-import type { DeliveryFacts, TeamDeliveryFacts } from './access-delivery';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
+import type {
+  DeliveryFacts,
+  LinkNoticeFacts,
+  PlatformDeliveryFacts,
+  TeamDeliveryFacts,
+} from './access-delivery';
+import type { HistoryDraft, HistoryField, PatientFicha } from './patient-registration';
 import type { AssignableTeamRole } from './team';
 
 /** Quién pregunta, siempre del token. Nunca un `cuenta_id` del cuerpo ni de la URL. */
@@ -218,7 +225,13 @@ export interface AccountDeletionPort {
 // es uno solo: dos serían el oráculo del padrón que §12.2.1 cierra.
 // ---------------------------------------------------------------------------------------
 
-export type TeamVerdict = 'created' | 'role_not_assignable' | 'not_owner' | 'email_taken';
+export type TeamVerdict =
+  | 'created'
+  | 'role_not_assignable'
+  | 'not_owner'
+  | 'email_taken'
+  /** Esta misma petición ya se atendió: su respuesta se repite tal como se guardó. */
+  | 'replayed';
 
 export type TeamMemberCreation = {
   verdict: TeamVerdict;
@@ -226,11 +239,15 @@ export type TeamMemberCreation = {
   practitionerId: string | null;
   /** El nombre de la consulta del contexto, que es lo que el correo del acceso dice. */
   practiceName: string | null;
+  /** Solo en `replayed`: la respuesta original, tal y como se guardó. */
+  replay: { status: number; response: unknown } | null;
 };
 
 export interface TeamPort {
   create(p: {
     owner: AccountOwner;
+    /** La clave de la petición, OBLIGATORIA: se comprueba y se reserva en la transacción. */
+    idempotency: IdempotencyRecord;
     email: string;
     firstName: string;
     lastName: string;
@@ -302,4 +319,210 @@ export interface TeamAccessPort {
  */
 export interface TeamAccessMailPort {
   sendTeamAccess(facts: TeamDeliveryFacts): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------------------
+// POST /v1/pacientes · el alta de una paciente. LA ÚNICA PUERTA DE UNA PACIENTE AL SISTEMA.
+//
+// Un solo verbo y UNA SOLA TRANSACCIÓN, y no es comodidad: el alta es «su ficha y su
+// cuenta, en un solo acto». Repartida en dos llamadas, un fallo entre ellas deja una cuenta
+// sin ficha —invisible para la doctora, que no tiene política de `SELECT` sobre `account`—
+// o una ficha sin vínculo, que es una paciente a la que nadie puede mandarle su acceso.
+//
+// La autorización no es un `if`: son las políticas de `patient`, `patient_link` y
+// `medical_history` sobre `practice_id`, más una función `SECURITY DEFINER` que NO recibe
+// `account_id` —con uno, una doctora podría acuñar una temporal sobre la cuenta de
+// cualquiera— y que saca el inquilino y la región del contexto.
+// ---------------------------------------------------------------------------------------
+
+/** Quién la refirió, su licencia, su plan y el duplicado: todo del inquilino del contexto. */
+export type PatientRegistrationVerdict =
+  | 'created'
+  | 'license_unverified'
+  | 'plan_limit'
+  | 'duplicate_email'
+  | 'referrer_not_found'
+  // La función se niega a reusar la cuenta de una practicante (migración 0021), y el
+  // veredicto es OPACO: si dijera el motivo, el alta sería un directorio del personal de
+  // MedSkin consultable de uno en uno.
+  | 'email_unavailable'
+  // Esta misma petición ya se atendió: su respuesta está en `idempotency_key` y se repite
+  // tal como se guardó. Lo decide la MISMA transacción que crearía, que es lo que impide que un
+  // reintento acabe en dos fichas de la misma persona.
+  | 'replayed';
+
+/** La ficha de esta consulta que ya tiene ese correo. La frase la nombra y la app la abre. */
+export type DuplicatePatient = {
+  patientId: string;
+  fullName: string;
+  /** Cuándo la dieron de alta. La frase dice «de alta el 3 de agosto». */
+  createdAt: Date;
+};
+
+export type PatientRegistration = {
+  verdict: PatientRegistrationVerdict;
+  patientId: string | null;
+  accountId: string | null;
+  /**
+   * «Si la cuenta ya existe en la región, el alta REUSA la cuenta»: no se le acuña ninguna
+   * temporal —ya tiene la suya— y la respuesta vale `via: "ya_tiene_cuenta"`. Es lo único
+   * que la respuesta revela de la existencia de una cuenta, y se lo revela a la doctora que
+   * acaba de escribir el correo de su propia paciente.
+   */
+  accountAlreadyExisted: boolean;
+  /** Solo en `plan_limit`: la frase lleva el número del plan dentro. */
+  patientLimit: number | null;
+  /** Solo en `duplicate_email`: lo que la frase interpola y lo que la app necesita abrir. */
+  duplicate: DuplicatePatient | null;
+  /** Solo en `created`: con qué nombre se presenta la doctora en el mensaje del acceso. */
+  practitionerName: string | null;
+  /** Solo en `replayed`: la respuesta original, tal y como se guardó. */
+  replay: { status: number; response: unknown } | null;
+};
+
+export interface PatientRegistrationPort {
+  /**
+   * La ficha, el vínculo, los antecedentes, la cuenta y su temporal, en una transacción.
+   * `hash` llega ya calculado y `expiresAt` también: la función exige Argon2id y 72 h.
+   */
+  register(p: {
+    owner: AccountOwner;
+    /**
+     * La clave de la petición, OBLIGATORIA. Se comprueba al abrir la transacción y se reserva
+     * al cerrarla, así que o la ficha y la clave existen las dos, o no existe ninguna.
+     */
+    idempotency: IdempotencyRecord;
+    ficha: PatientFicha;
+    history: HistoryDraft;
+    /** Los campos que la doctora contestó: cada uno guarda `fuente: doctora`. */
+    written: readonly HistoryField[];
+    hash: string;
+    expiresAt: Date;
+    confirmDuplicate: boolean;
+    /** `correo | whatsapp | ninguna`, solo para la línea de la bitácora. */
+    via: string;
+  }): Promise<PatientRegistration>;
+
+  /**
+   * La marca de envío de un vínculo RECIÉN CREADO, que es el único caso en que nulo es
+   * «nunca se le mandó» de verdad. Se escribe al entregar el correo y se deshace si el relé
+   * falla: `patient_link.access_sent_at` solo puede afirmar un envío que ocurrió, y es la
+   * columna que la consola lee para decidir si hay que reenviar.
+   */
+  markAccessSent(owner: AccountOwner, patientId: string, sentAt: Date | null): Promise<void>;
+
+}
+
+/**
+ * El cierre de la clave de idempotencia, cuando la respuesta ya es verdad. Puerto propio y de
+ * un solo verbo porque lo comparten dos altas que no se parecen en nada más —la de una
+ * paciente y la del equipo—, y porque el cierre no es parte de ninguna de las dos
+ * operaciones: es lo que las hace repetibles.
+ *
+ * Por qué no va dentro de la transacción de la operación: estos dos endpoints mandan un
+ * correo y `enviado` dice si el relé lo aceptó, así que la respuesta no es definitiva hasta
+ * después del `COMMIT`. Y el relé no puede correr dentro de la transacción sin pinchar una
+ * conexión del pooler mientras el SMTP piensa. Lo que sostiene la idempotencia es la RESERVA,
+ * que sí va dentro.
+ */
+export interface IdempotencyCompletionPort {
+  complete(p: {
+    owner: AccountOwner;
+    record: IdempotencyRecord;
+    status: number;
+    response: unknown;
+  }): Promise<void>;
+}
+
+/**
+ * El contador del `429 demasiadas_altas`: «más de 60 altas en una hora». Puerto propio y no
+ * un segundo verbo en el del reenvío: son dos límites que protegen cosas distintas —ese, que
+ * una doctora no acuñe temporales en bucle sobre la cuenta de su paciente; este, el ritmo de
+ * altas de una consulta— y el día que uno cambie, el otro no tiene por qué moverse.
+ */
+export interface PatientCreationLimitPort {
+  count(practiceId: string): Promise<{ tooMany: boolean }>;
+}
+
+/**
+ * EL AVISO A QUIEN YA TIENE CUENTA. Puerto propio y de un solo verbo, no un segundo verbo en
+ * el del acceso: quien manda un acceso con contraseña no manda este aviso, y al revés —de
+ * hecho el reenvío no puede mandarlo nunca—. Los implementa la misma clase, que es otra cosa
+ * (la I de SOLID: puertos pequeños, no clases pequeñas).
+ *
+ * Lanza si no se pudo entregar. Aquí no hay contraseña que perder, pero sí una persona que no
+ * se enteró de que la vincularon, y eso no se calla.
+ */
+export interface PatientLinkNoticeMailPort {
+  sendLinkNotice(facts: LinkNoticeFacts): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------------------
+// LA CONSOLA INTERNA · las dos acciones de `cuentas.md` · `Consola.dc.html` · 2, las dos
+// marcadas «Seguro» en la pantalla porque no tocan ningún dato clínico.
+//
+// QUIEN LLAMA NO TIENE CUENTA EN ESTA REGIÓN. No hay `AccountOwner` que construir: la
+// identidad de la plataforma vive fuera y lo único que llega del token es el `sub`, la
+// etiqueta y la región (`plataforma-acceso.md`). De ahí un actor propio y no un `Caller` con
+// nulos: un tipo que miente sobre lo que trae acaba leído como si trajera algo.
+//
+// El `cuenta_id` viene de la RUTA, y aquí no hay inquilino que lo acote: lo que lo acota es
+// que las dos operaciones devuelven el MISMO 404 para una cuenta que no existe, una borrada y
+// una de otra región, y que las dos dejan su línea en `access_audit` con quién las ejecutó.
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Quien ejecuta desde la consola. `subject` es un uuid y es lo único del token que entra en
+ * la base —a `medskin.account_id` y a `access_audit.actor_account_id`—; `label` es el nombre
+ * legible de esa persona y **no entra en ninguna comparación**: va a la bitácora y nada más.
+ */
+export type ConsoleActor = {
+  subject: string;
+  label: string;
+  region: Region;
+};
+
+export type PlatformResendOutcome = 'acceso_renovado' | 'cuenta_no_existe' | 'ya_eligio_su_contrasena';
+
+export interface PlatformAccessPort {
+  /**
+   * `medskin_platform_resend_access()`: acuña la temporal nueva, mata la anterior y revoca
+   * las sesiones de esa cuenta (0020). **Devuelve dos columnas y ninguna es la contraseña**,
+   * y eso no es una omisión: «Va a su propio correo. Soporte no la ve» tiene que ser verdad
+   * en la base y no en el controlador.
+   *
+   * `email` vuelve **solo** en `acceso_renovado` —es a dónde hay que escribir— y nulo en los
+   * otros dos: no se filtra el correo de nadie por un 404 ni por un 409.
+   */
+  resend(p: {
+    actor: ConsoleActor;
+    accountId: string;
+    hash: string;
+    expiresAt: Date;
+  }): Promise<{ outcome: PlatformResendOutcome; expiresAt: Date | null; email: string | null }>;
+
+  /**
+   * «Levantar la pausa por intentos · Vuelve a poder entrar. No cambia su contraseña.» Sin
+   * función `SECURITY DEFINER`: `app_platform` tiene el `GRANT UPDATE` de esas tres columnas
+   * y su política, así que es una sentencia y no hace falta más. **No toca `credential`**, que
+   * es lo que la pantalla promete y lo que este rol no puede tocar ni queriendo: esa tabla no
+   * tiene ninguna política para él.
+   *
+   * `false` cuando no hay fila que levantar, que es el `404` y es el mismo para una cuenta
+   * inventada, una borrada y una de otra región.
+   */
+  liftPause(actor: ConsoleActor, accountId: string): Promise<boolean>;
+}
+
+/**
+ * El correo del reenvío de la consola. Puerto propio y de un solo verbo: su plantilla no se
+ * presenta en nombre de ninguna doctora —soporte no puede leer quién es— y esta ruta sirve
+ * también a una cuenta de practicante.
+ *
+ * Lanza si no se pudo entregar: por aquí la contraseña NO viaja en la respuesta, así que un
+ * `void` silencioso dejaría a una persona con una temporal nueva que nadie recibió y con la
+ * anterior ya muerta.
+ */
+export interface PlatformAccessMailPort {
+  sendAccess(facts: PlatformDeliveryFacts): Promise<void>;
 }

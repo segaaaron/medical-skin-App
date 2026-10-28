@@ -14,6 +14,8 @@ import type { Pool, PoolClient } from 'pg';
 
 import { FAILURE_PHRASES, ServiceFailure } from '../../../shared/contract/error-catalog';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
+import { claim, release } from '../../../shared/idempotency/idempotency-rows';
 import type { AssignableTeamRole } from '../domain/team';
 import type {
   AccountOwner,
@@ -34,6 +36,7 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
 
   async create(p: {
     owner: AccountOwner;
+    idempotency: IdempotencyRecord;
     email: string;
     firstName: string;
     lastName: string;
@@ -42,6 +45,22 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
     expiresAt: Date;
   }): Promise<TeamMemberCreation> {
     return withTenantContext(this.pool, contextFor(p.owner), async (c) => {
+      // LO PRIMERO Y ANTES DE ESCRIBIR NADA: reclamar la clave. La clave primaria
+      // `(account_id, key)` serializa dos peticiones idénticas a la vez, así que la perdedora
+      // se entera aquí y repite la respuesta de la ganadora en vez de llamar a la función
+      // —que le daría `409 correo_no_disponible`, un error por una petición que salió bien—.
+      // Dentro de la transacción, que es lo único que hace que la clave y el alta se escriban
+      // juntas.
+      const replay = await claim<unknown>(c, {
+        record: p.idempotency,
+        accountId: p.owner.accountId,
+        practiceId: p.owner.practiceId,
+        unfinished: FAILURE_PHRASES.createTeamMemberMail,
+      });
+      if (replay !== null) {
+        return { verdict: 'replayed', accountId: null, practitionerId: null, practiceName: null, replay };
+      }
+
       // `$1::citext` y no `text`: con `text` la comparación contra la columna se resolvería
       // por `text = text` y pasaría a ser sensible a mayúsculas, en silencio (§1.10).
       const { rows } = await c.query<{
@@ -62,7 +81,10 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
       }
       const verdict = row.verdict as TeamVerdict;
       if (verdict !== 'created') {
-        return { verdict, accountId: null, practitionerId: null, practiceName: null };
+        // Un veredicto que no creó nada suelta la clave: el reintento tiene que poder volver
+        // a intentarlo de verdad con otro correo o con otro rol.
+        await release(c, { record: p.idempotency, accountId: p.owner.accountId });
+        return { verdict, accountId: null, practitionerId: null, practiceName: null, replay: null };
       }
 
       // El nombre de la consulta, para el correo del acceso. Sin `where`: la política
@@ -73,11 +95,14 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
 
       await this.audit(c, p.owner, row.account_id, p.role);
 
+      // La clave ya quedó reservada al principio de la transacción; su respuesta la escribe
+      // `complete()` cuando el correo haya salido.
       return {
         verdict,
         accountId: row.account_id,
         practitionerId: row.practitioner_id,
         practiceName: practice[0]?.name ?? null,
+        replay: null,
       };
     });
   }

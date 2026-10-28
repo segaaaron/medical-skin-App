@@ -41,6 +41,17 @@ const esquema = z.object({
   JWT_PRIVATE_KEY_PATH: z.string().min(1),
   JWT_PUBLIC_KEY_PATH: z.string().min(1),
 
+  // LA LLAVE DEL TOKEN DE PLATAFORMA, y es OTRA llave (`plataforma-acceso.md`): la consola
+  // entra con un token que firma el servicio de plataforma, fuera de la región, «con su
+  // propio `kid` y su propio par de llaves, distinto del de las sesiones de la app». Aquí
+  // solo vive la PÚBLICA: este proceso no puede firmar un token de consola ni por error.
+  //
+  // La privada es OPCIONAL y solo sirve en `development`, donde el servicio que firma no
+  // corre en la máquina de nadie y hace falta poder acuñar un token a mano. En producción no
+  // se pone, y nada la lee.
+  PLATFORM_JWT_PUBLIC_KEY_PATH: z.string().min(1),
+  PLATFORM_JWT_PRIVATE_KEY_PATH: z.string().min(1).optional(),
+
   // La llave del servicio con la que se calcula el HMAC de los correos de las claves de
   // Redis (_convenciones.md · «Los contadores», regla 2) y el resumen de los refrescos.
   // 32 bytes mínimo: con menos, el espacio enumerable de los correos se puede atacar.

@@ -823,8 +823,20 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     // hexadecimales justo para que sus trigramas no sean todos el mismo: con «Nombre1,
     // Nombre2, …» cada trigrama está en las 8 000 filas y el motor hace bien en no entrar
     // por el GIN, que es un artefacto de la siembra y no de los datos de una consulta.
+    //
+    // Y la aguja sale de una ficha DE LA SIEMBRA EN BLOQUE, no de cualquiera: sin ese
+    // filtro, `limit 1` sin `order by` devuelve la fila que esté físicamente primera, que
+    // puede ser la ficha a mano de «Valeria Antelo», y entonces la aguja es `aleria a` —con
+    // espacio y con una palabra de una sola letra—. pg_trgm parte por palabras, así que los
+    // trigramas de «a» están en casi todas las filas, la aguja deja de ser fina y el motor
+    // hace bien en entrar por el btree: medido el 28 oct, `Index Scan using
+    // patient_practice_status_idx` con `Rows Removed by Filter: 8000`. El plan era correcto
+    // y la prueba fallaba igual, y en qué fila cae el `limit 1` depende de cómo esté
+    // compactada la tabla ese día. Con el filtro, la aguja son 8 caracteres hexadecimales
+    // de UNA palabra, que es lo que esta prueba dice que mide.
     const { rows: needle } = await owner.query<{ needle: string }>(
-      'select substr(search_text, 2, 8) as needle from patient where practice_id = $1 limit 1',
+      `select substr(search_text, 2, 8) as needle from patient
+        where practice_id = $1 and email like 'ficha-%@prueba.local' limit 1`,
       [A.practice],
     );
     const used = await plan(ctxPractitionerA, `select id from patient where search_text like $1 limit 50`, [

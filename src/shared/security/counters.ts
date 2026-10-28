@@ -112,6 +112,14 @@ export const COUNTER_KEYS = {
   passwordChangeByAccount: (accountId: string) => `cuenta:contrasena:intentos:${accountId}`,
 
   /**
+   * `cuentas.md` · 429 `demasiadas_altas`: «más de 60 altas en una hora». No está en la
+   * tabla de `_convenciones.md` y el contrato lo exige. Va por CONSULTA y no por cuenta: lo
+   * que acota es el ritmo de altas de una consulta, que es la misma cuota la pida la doctora
+   * o su asistente. Anotado para `producto`: falta en esa tabla.
+   */
+  patientCreationsByPractice: (practiceId: string) => `pacientes:altas:${practiceId}`,
+
+  /**
    * La marca de «hay un código vivo para este correo», con la misma vida que el código.
    * No es un límite: es lo que permite que un correo SIN cuenta reciba los mismos dos 410
    * que uno con cuenta. Sin ella, el código de estado diría si el correo existe.

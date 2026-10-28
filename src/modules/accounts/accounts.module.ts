@@ -1,7 +1,8 @@
-// El cableado de las cuentas. Seis endpoints: el cambio de contraseña, el envío del acceso de
-// una paciente, `GET /v1/cuentas/mia`, su borrado, el alta del equipo y el reenvío del acceso
-// del equipo. Lo que falta de `cuentas.md` —el alta (`POST /v1/pacientes`) y las dos de la
-// consola— está dicho en la entrega.
+// El cableado de las cuentas. Nueve endpoints —con las dos de consola, el tramo 1 queda
+// cerrado—: el alta de una paciente
+// (`POST /v1/pacientes`), el cambio de contraseña, el envío del acceso de una paciente,
+// `GET /v1/cuentas/mia`, su borrado, el alta del equipo y el reenvío del acceso del equipo.
+// y las dos acciones de `Consola.dc.html` · 2 (reenviar el acceso y levantar la pausa).
 
 import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
@@ -19,13 +20,21 @@ import { CreateTeamMember } from './application/create-team-member';
 import { DeleteOwnAccount } from './application/delete-own-account';
 import { ReadOwnAccount } from './application/read-own-account';
 import { ResendTeamAccess } from './application/resend-team-access';
+import { LiftAccessPause } from './application/lift-access-pause';
+import { RegisterPatient } from './application/register-patient';
+import { ResendPlatformAccess } from './application/resend-platform-access';
 import { SendPatientAccess } from './application/send-patient-access';
 import { AccountsRepository } from './infrastructure/accounts.repository';
+import { ConsoleRepository } from './infrastructure/console.repository';
+import { PatientsRepository } from './infrastructure/patients.repository';
+import { PlatformAccessMail } from './infrastructure/platform-access-mail';
 import { PatientAccessMail } from './infrastructure/patient-access-mail';
 import { PatientAccessRepository } from './infrastructure/patient-access.repository';
-import { PasswordAttempts, ResendLimit } from './infrastructure/password-attempts';
+import { PatientCreationLimit, PasswordAttempts, ResendLimit } from './infrastructure/password-attempts';
 import { TeamAccessMail } from './infrastructure/team-access-mail';
 import { TeamRepository } from './infrastructure/team.repository';
+import { PatientsController } from './patients.controller';
+import { PlatformAccountsController } from './platform-accounts.controller';
 import { TeamController } from './team.controller';
 
 /**
@@ -40,7 +49,12 @@ import { TeamController } from './team.controller';
 const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
 
 @Module({
-  controllers: [AccountsController, TeamController],
+  controllers: [
+    AccountsController,
+    PatientsController,
+    PlatformAccountsController,
+    TeamController,
+  ],
   providers: [
     {
       provide: AccountsRepository,
@@ -102,6 +116,67 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
       ],
     },
     {
+      provide: PatientsRepository,
+      useFactory: (pool: Pool) => new PatientsRepository(pool),
+      inject: [POOL],
+    },
+    {
+      provide: PatientCreationLimit,
+      useFactory: (counters: Counters) => new PatientCreationLimit(counters),
+      inject: [Counters],
+    },
+    {
+      provide: RegisterPatient,
+      useFactory: (
+        repo: PatientsRepository,
+        passwords: Argon2Passwords,
+        limit: PatientCreationLimit,
+        // El cierre de la clave de idempotencia: lo implementa el MISMO repositorio, que es
+        // quien tiene el contexto de inquilino, y es un puerto aparte porque cerrar una
+        // clave no es parte del alta (la I de SOLID).
+        idempotency: PatientsRepository,
+        clock: SystemClock,
+        // El MISMO correo del acceso que usa el reenvío: una plantilla, un mecanismo. Si
+        // aquí se escribiera un segundo envío, la frase del acceso tendría dos versiones.
+        mail: PatientAccessMail,
+      ) => new RegisterPatient(repo, passwords, limit, idempotency, clock, mail),
+      inject: [
+        PatientsRepository,
+        Argon2Passwords,
+        PatientCreationLimit,
+        PatientsRepository,
+        SystemClock,
+        PatientAccessMail,
+      ],
+    },
+    {
+      provide: ConsoleRepository,
+      useFactory: (pool: Pool) => new ConsoleRepository(pool),
+      inject: [POOL],
+    },
+    {
+      provide: PlatformAccessMail,
+      useFactory: (mail: SmtpMail) => new PlatformAccessMail(mail),
+      inject: [SmtpMail],
+    },
+    {
+      provide: ResendPlatformAccess,
+      useFactory: (
+        repo: ConsoleRepository,
+        passwords: Argon2Passwords,
+        clock: SystemClock,
+        // Sin esto la consola acuñaría una temporal que nadie manda, y como la respuesta NO
+        // la lleva —«soporte no la ve»—, nadie podría entregarla: la cuenta quedaría fuera.
+        mail: PlatformAccessMail,
+      ) => new ResendPlatformAccess(repo, passwords, clock, mail),
+      inject: [ConsoleRepository, Argon2Passwords, SystemClock, PlatformAccessMail],
+    },
+    {
+      provide: LiftAccessPause,
+      useFactory: (repo: ConsoleRepository) => new LiftAccessPause(repo),
+      inject: [ConsoleRepository],
+    },
+    {
       provide: ReadOwnAccount,
       useFactory: (repo: AccountsRepository, facts: AccessRepository) =>
         new ReadOwnAccount(repo, facts),
@@ -134,8 +209,9 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         passwords: Argon2Passwords,
         clock: SystemClock,
         mail: TeamAccessMail,
-      ) => new CreateTeamMember(repo, passwords, clock, mail),
-      inject: [TeamRepository, Argon2Passwords, SystemClock, TeamAccessMail],
+        idempotency: PatientsRepository,
+      ) => new CreateTeamMember(repo, passwords, clock, mail, idempotency),
+      inject: [TeamRepository, Argon2Passwords, SystemClock, TeamAccessMail, PatientsRepository],
     },
     {
       provide: ResendTeamAccess,

@@ -1,65 +1,36 @@
 // POST /v1/equipo · solo HTTP. La autorización la hizo el guardia por lista blanca de rutas,
 // el permiso lo mira el caso de uso y que quien llama sea LA DUEÑA lo comprueba la base.
 //
-// AQUÍ VIVE LA IDEMPOTENCIA, y vive aquí porque es una cabecera: `Idempotency-Key` es
-// transporte, no negocio. `_convenciones.md`: `(Idempotency-Key, cuenta que llama, cuerpo
-// hasheado)` durante 24 h, la repetición devuelve la respuesta original y la misma clave con
-// otro cuerpo es `409 clave_idempotencia_reutilizada`.
+// LA CLAVE SE LEE AQUÍ —es una cabecera: transporte, no negocio— y se comprueba y se reserva
+// DENTRO de la transacción que crea, en `idempotency_key`. Antes vivía en Redis y se escribía
+// después del `COMMIT`: un parpadeo entre las dos dejaba un alta que ningún reintento podía
+// recuperar, porque el segundo intento recibe `409 correo_no_disponible`.
 //
-// La clave lleva la cuenta que llama, así que una clave de otra consulta no repite nada de
-// esta. Y sin cabecera el alta sigue siendo segura ante un reintento: el segundo intento con
-// el mismo correo encuentra la cuenta y devuelve `409 correo_no_disponible` en vez de crear
-// una segunda.
+// La cabecera es OBLIGATORIA (`_convenciones.md` · «todo `POST` que crea algo»): sin ella,
+// `400 clave_idempotencia_faltante` y no se ejecuta nada. Antes se apagaba en silencio.
 
 import { Controller, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
-import { IdempotencyStore } from '../../shared/idempotency/idempotency-store';
+import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
 import { UUID, callerOf } from './accounts.controller';
-import { CreateTeamMember, type TeamMemberResponse } from './application/create-team-member';
+import { CreateTeamMember } from './application/create-team-member';
 import { ResendTeamAccess } from './application/resend-team-access';
-
-/** Una cabecera es entrada del cliente: se acota antes de convertirla en clave (OWASP A03). */
-const KEY_MAX_LENGTH = 120;
 
 @Controller('v1/equipo')
 export class TeamController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
     @Inject(CreateTeamMember) private readonly createMember: CreateTeamMember,
-    @Inject(IdempotencyStore) private readonly idempotency: IdempotencyStore,
     @Inject(ResendTeamAccess) private readonly resendAccess: ResendTeamAccess,
   ) {}
 
   @Post()
   @HttpCode(201)
   async create(@Req() req: RequestWithContext): Promise<unknown> {
-    const caller = callerOf(req);
-    const key = readKey(req);
     const body: unknown = req.body;
-
-    if (key !== null) {
-      const replay = await this.idempotency.replay({ key, accountId: caller.accountId, body });
-      // La respuesta original, byte a byte. No se vuelve a crear nada y no se manda un
-      // segundo correo: el alta ya ocurrió y el acceso ya salió.
-      if (replay !== null) return replay.response;
-    }
-
-    const response: TeamMemberResponse = await this.createMember.run(body, caller);
-
-    // Solo se recuerda lo que salió bien: un `409` o un `500` no son una respuesta que
-    // repetir, y el reintento tiene que poder volver a intentarlo de verdad.
-    if (key !== null) {
-      await this.idempotency.remember({
-        key,
-        accountId: caller.accountId,
-        body,
-        status: 201,
-        response,
-      });
-    }
-    return response;
+    return this.createMember.run(body, callerOf(req), readIdempotencyKey(req, body));
   }
 
   /**
@@ -83,10 +54,3 @@ export class TeamController {
   }
 }
 
-function readKey(req: RequestWithContext): string | null {
-  const header = req.headers['idempotency-key'];
-  const value = Array.isArray(header) ? header[0] : header;
-  if (value === undefined) return null;
-  const key = value.trim().slice(0, KEY_MAX_LENGTH);
-  return key === '' ? null : key;
-}

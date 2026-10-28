@@ -17,7 +17,13 @@ import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Caller } from '../../access/application/caller';
 import type { PasswordHasher } from '../../access/domain/ports';
 import type { TeamDeliveryFacts } from '../domain/access-delivery';
-import type { TeamAccessMailPort, TeamMemberCreation, TeamPort } from '../domain/ports';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
+import type {
+  IdempotencyCompletionPort,
+  TeamAccessMailPort,
+  TeamMemberCreation,
+  TeamPort,
+} from '../domain/ports';
 import { TEAM_PERMISSION } from '../domain/team';
 import { CreateTeamMember } from './create-team-member';
 import type { DeliveryClock } from './send-patient-access';
@@ -35,11 +41,14 @@ const DUENA: Caller = {
   permissions: [TEAM_PERMISSION],
 };
 
+const CLAVE: IdempotencyRecord = { key: '7f8e9d10-2222-4222-8222-222222222222', bodyHash: 'huella' };
+
 const CREADA: TeamMemberCreation = {
   verdict: 'created',
   accountId: '44444444-4444-4444-8444-444444444444',
   practitionerId: '55555555-5555-4555-8555-555555555555',
   practiceName: 'Clínica Paz',
+  replay: null,
 };
 
 const CUERPO = {
@@ -51,6 +60,7 @@ const CUERPO = {
 
 function armar(opciones: { creacion?: TeamMemberCreation; releCaido?: boolean } = {}) {
   const pasos: string[] = [];
+  const cerradas: { status: number; response: unknown }[] = [];
   const enviados: TeamDeliveryFacts[] = [];
   let recibido: Record<string, unknown> | null = null;
 
@@ -87,10 +97,19 @@ function armar(opciones: { creacion?: TeamMemberCreation; releCaido?: boolean } 
     },
   };
 
+  const idempotency: IdempotencyCompletionPort = {
+    complete: (p) => {
+      pasos.push('clave:cerrar');
+      cerradas.push({ status: p.status, response: p.response });
+      return Promise.resolve();
+    },
+  };
+
   return {
-    caso: new CreateTeamMember(team, passwords, clock, mail),
+    caso: new CreateTeamMember(team, passwords, clock, mail, idempotency),
     pasos,
     enviados,
+    cerradas,
     recibido: () => recibido,
   };
 }
@@ -108,7 +127,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
 describe('POST /v1/equipo', () => {
   it('da de alta a recepción, le manda su acceso y no devuelve la contraseña', async () => {
     const { caso, pasos, enviados, recibido } = armar();
-    const respuesta = await caso.run(CUERPO, DUENA);
+    const respuesta = await caso.run(CUERPO, DUENA, CLAVE);
 
     expect(respuesta).toEqual({
       miembro_id: CREADA.practitionerId,
@@ -145,14 +164,31 @@ describe('POST /v1/equipo', () => {
     });
     expect(enviados[0]?.temporaryPassword).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
 
-    expect(pasos).toEqual(['argon2:hashear', 'base', 'correo']);
+    expect(pasos).toEqual(['argon2:hashear', 'base', 'correo', 'clave:cerrar']);
+  });
+
+  it('la repetición devuelve la respuesta guardada: ni segunda cuenta ni segundo correo', async () => {
+    const guardada = { miembro_id: 'prt', cuenta_id: 'cta', nombre_completo: 'Rosa Mamani' };
+    const { caso, pasos, enviados } = armar({
+      creacion: {
+        verdict: 'replayed',
+        accountId: null,
+        practitionerId: null,
+        practiceName: null,
+        replay: { status: 201, response: guardada },
+      },
+    });
+
+    expect(await caso.run(CUERPO, DUENA, CLAVE)).toEqual(guardada);
+    expect(enviados).toEqual([]);
+    expect(pasos).toEqual(['argon2:hashear', 'base']);
   });
 
   it('un correo tomado da un solo 409 y una frase que no dice por qué', async () => {
     const { caso } = armar({
-      creacion: { verdict: 'email_taken', accountId: null, practitionerId: null, practiceName: null },
+      creacion: { verdict: 'email_taken', accountId: null, practitionerId: null, practiceName: null, replay: null },
     });
-    const fallo = await errorDe(() => caso.run(CUERPO, DUENA));
+    const fallo = await errorDe(() => caso.run(CUERPO, DUENA, CLAVE));
 
     expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
       codigo: 'correo_no_disponible',
@@ -167,9 +203,9 @@ describe('POST /v1/equipo', () => {
 
   it('quien no es la dueña no da de alta a nadie, y lo dice la base', async () => {
     const { caso } = armar({
-      creacion: { verdict: 'not_owner', accountId: null, practitionerId: null, practiceName: null },
+      creacion: { verdict: 'not_owner', accountId: null, practitionerId: null, practiceName: null, replay: null },
     });
-    const fallo = await errorDe(() => caso.run(CUERPO, DUENA));
+    const fallo = await errorDe(() => caso.run(CUERPO, DUENA, CLAVE));
 
     expect({ codigo: fallo.code, estado: fallo.status }).toEqual({
       codigo: 'sin_permiso',
@@ -179,7 +215,7 @@ describe('POST /v1/equipo', () => {
 
   it('sin el permiso no se toca la base', async () => {
     const { caso, pasos } = armar();
-    const fallo = await errorDe(() => caso.run(CUERPO, { ...DUENA, permissions: [] }));
+    const fallo = await errorDe(() => caso.run(CUERPO, { ...DUENA, permissions: [] }, CLAVE));
 
     expect(fallo.code).toBe('sin_permiso');
     expect(pasos).toEqual([]);
@@ -188,7 +224,7 @@ describe('POST /v1/equipo', () => {
   it('un rol que no se asigna desde aquí es 400, y se comprueba antes del correo', async () => {
     const { caso, pasos } = armar();
     for (const rol of ['duena', 'paciente', 'doctora', undefined]) {
-      const fallo = await errorDe(() => caso.run({ ...CUERPO, rol, correo: 'no-es-un-correo' }, DUENA));
+      const fallo = await errorDe(() => caso.run({ ...CUERPO, rol, correo: 'no-es-un-correo' }, DUENA, CLAVE));
       expect({ rol, codigo: fallo.code, campo: fallo.field }).toEqual({
         rol,
         codigo: 'rol_no_asignable',
@@ -200,25 +236,25 @@ describe('POST /v1/equipo', () => {
 
   it('el nombre y el apellido son obligatorios, y el correo tiene la frase de este endpoint', async () => {
     const { caso } = armar();
-    const sinNombre = await errorDe(() => caso.run({ ...CUERPO, nombre: '  ' }, DUENA));
+    const sinNombre = await errorDe(() => caso.run({ ...CUERPO, nombre: '  ' }, DUENA, CLAVE));
     expect({ codigo: sinNombre.code, campo: sinNombre.field }).toEqual({
       codigo: 'nombre_vacio',
       campo: 'nombre',
     });
 
-    const sinCorreo = await errorDe(() => caso.run({ ...CUERPO, correo: '' }, DUENA));
+    const sinCorreo = await errorDe(() => caso.run({ ...CUERPO, correo: '' }, DUENA, CLAVE));
     expect({ codigo: sinCorreo.code, mensaje: sinCorreo.userMessage }).toEqual({
       codigo: 'correo_vacio',
       mensaje: 'Hace falta su correo: es por donde le llega su contraseña.',
     });
 
-    const malEscrito = await errorDe(() => caso.run({ ...CUERPO, correo: 'rosa@' }, DUENA));
+    const malEscrito = await errorDe(() => caso.run({ ...CUERPO, correo: 'rosa@' }, DUENA, CLAVE));
     expect(malEscrito.code).toBe('correo_mal_escrito');
   });
 
   it('el relé caído es un 500 que admite que la cuenta ya existe y manda a reenviar', async () => {
     const { caso } = armar({ releCaido: true });
-    const fallo = await errorDe(() => caso.run(CUERPO, DUENA));
+    const fallo = await errorDe(() => caso.run(CUERPO, DUENA, CLAVE));
 
     expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
       codigo: 'fallo_de_servicio',

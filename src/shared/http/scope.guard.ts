@@ -10,15 +10,33 @@
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 
 import type { Caller, RecoveryCaller } from '../../modules/access/application/caller';
-import { ContractError, FAILURE_PHRASES, ServiceFailure } from '../contract/error-catalog';
+import {
+  ContractError,
+  FAILURE_PHRASES,
+  ServiceFailure,
+  type ErrorCode,
+} from '../contract/error-catalog';
 import type { AccountRole, Scope } from '../contract/session';
+import {
+  PLATFORM_FORBIDDEN_MESSAGE,
+  type PlatformCaller,
+  type PlatformTokens,
+} from '../platform/platform-token';
 import { readRequest, registeredRoute, type RequestWithContext } from './request-context';
-import { policyFor } from './route-policy';
+import { policyFor, type RoutePolicy } from './route-policy';
 import type { Tokens, VerifiedClaims } from '../security/tokens';
 
 @Injectable()
 export class ScopeGuard implements CanActivate {
-  constructor(private readonly tokens: Tokens) {}
+  /**
+   * Dos verificadores porque hay DOS llaves: la de las sesiones de la app, que este servicio
+   * firma, y la pública del servicio de plataforma, que solo verifica. Ninguna de las dos
+   * sirve para lo de la otra, y eso es lo que separa la consola de la app.
+   */
+  constructor(
+    private readonly tokens: Tokens,
+    private readonly platformTokens: PlatformTokens,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<RequestWithContext>();
@@ -36,22 +54,71 @@ export class ScopeGuard implements CanActivate {
     const base = readRequest(req);
 
     if (policy.anonymous === true) {
-      req.medskin = { ...base, policy, caller: null, recovery: null };
+      req.medskin = { ...base, policy, caller: null, recovery: null, platform: null };
       return true;
     }
 
-    const claims = await this.tokens.verify(this.readBearer(req.headers.authorization));
+    // LA CONSOLA, antes que nada: su token es de otra llave y de otro servicio, así que no
+    // pasa por `this.tokens` ni por la comprobación de alcance. Un token de sesión en una
+    // ruta de plataforma no verifica —otra llave— y sale `401 token_de_plataforma_no_valido`;
+    // un token de plataforma en una ruta de la app, al revés, `401 token_no_valido`.
+    if (policy.platformPermission !== undefined) {
+      req.medskin = {
+        ...base,
+        policy,
+        caller: null,
+        recovery: null,
+        platform: await this.platformFrom(req, policy.platformPermission),
+      };
+      return true;
+    }
+
+    const claims = await this.tokens.verify(
+      this.readBearer(req.headers.authorization, 'token_no_valido'),
+    );
     this.checkScope(policy.scopes ?? [], claims.alcance);
 
     // Dos formas de token y dos formas de quien llama. El de recuperación no trae rol ni
     // sesión a propósito, así que no se le fabrica un `Caller` con nulos: tiene el suyo.
     if (claims.alcance === 'recuperacion') {
-      req.medskin = { ...base, policy, caller: null, recovery: this.recoveryFrom(claims) };
+      req.medskin = {
+        ...base,
+        policy,
+        caller: null,
+        recovery: this.recoveryFrom(claims),
+        platform: null,
+      };
       return true;
     }
 
-    req.medskin = { ...base, policy, caller: this.callerFrom(claims), recovery: null };
+    req.medskin = {
+      ...base,
+      policy,
+      caller: this.callerFrom(claims),
+      recovery: null,
+      platform: null,
+    };
     return true;
+  }
+
+  /**
+   * El permiso se comprueba contra el que la RUTA pide, y el que la ruta pide está en la
+   * tabla: ninguno viene del cliente. Los del token tampoco son del cliente —vienen firmados
+   * y validados contra la lista cerrada del contrato—, así que esto es lo último que queda:
+   * que el que trae sea el que hace falta. Si no, `403 sin_permiso` con la frase de la
+   * consola, que es otra que la de la doctora.
+   */
+  private async platformFrom(
+    req: RequestWithContext,
+    required: NonNullable<RoutePolicy['platformPermission']>,
+  ): Promise<PlatformCaller> {
+    const caller = await this.platformTokens.verify(
+      this.readBearer(req.headers.authorization, 'token_de_plataforma_no_valido'),
+    );
+    if (!caller.permissions.includes(required)) {
+      throw new ContractError('sin_permiso', undefined, PLATFORM_FORBIDDEN_MESSAGE);
+    }
+    return caller;
   }
 
   private checkScope(allowed: readonly Scope[], scope: Scope): void {
@@ -107,11 +174,16 @@ export class ScopeGuard implements CanActivate {
     };
   }
 
-  private readBearer(authorization: string | undefined): string {
-    if (authorization === undefined) throw new ContractError('token_no_valido');
+  /**
+   * El código va como parámetro porque la cabecera que falta significa lo mismo y se llama
+   * distinto según la puerta: `token_no_valido` en la app, `token_de_plataforma_no_valido` en
+   * la consola. Las dos frases están escritas en contratos distintos.
+   */
+  private readBearer(authorization: string | undefined, missing: ErrorCode): string {
+    if (authorization === undefined) throw new ContractError(missing);
     const [scheme, value] = authorization.split(' ');
     if (scheme?.toLowerCase() !== 'bearer' || value === undefined || value.trim() === '') {
-      throw new ContractError('token_no_valido');
+      throw new ContractError(missing);
     }
     return value.trim();
   }

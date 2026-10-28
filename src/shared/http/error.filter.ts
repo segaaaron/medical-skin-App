@@ -9,6 +9,7 @@
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
+import type { Caller } from '../../modules/access/application/caller';
 import {
   CATALOG,
   ContractError,
@@ -18,7 +19,8 @@ import {
   type ErrorBody,
 } from '../contract/error-catalog';
 import type { Region } from '../contract/session';
-import { FailureLog } from '../failures/service-failure';
+import { FailureLog, type FailureContext } from '../failures/service-failure';
+import type { PlatformCaller } from '../platform/platform-token';
 import { registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
 
@@ -85,6 +87,7 @@ export class ErrorFilter implements ExceptionFilter {
   private async record(req: RequestWithContext, code: string, cause: unknown): Promise<void> {
     const ctx = req.medskin;
     const caller = ctx?.caller ?? null;
+    const platform = ctx?.platform ?? null;
     await this.failures.record({
       service: 'api',
       operation: `${req.method} ${registeredRoute(req) ?? req.url}`,
@@ -95,18 +98,48 @@ export class ErrorFilter implements ExceptionFilter {
       requestId: ctx?.requestId ?? 'sin-peticion',
       appVersion: ctx?.device.appVersion ?? null,
       platform: ctx?.device.platform ?? null,
-      // La de la sesión si la hay, y la del proceso si no: las dos son la misma región.
+      // La de la sesión si la hay, y la del proceso si no: las dos son la misma región. La
+      // del token de PLATAFORMA no se usa aquí a propósito: para una audiencia de otra
+      // región ya hay un `403 region_no_corresponde`, así que lo único que un token de
+      // consola puede significar en esta tabla es «el despliegue que falló fue este».
       region: caller?.region ?? this.region,
-      context:
-        caller === null
-          ? null
-          : {
-              accountId: caller.accountId,
-              practiceId: caller.practiceId,
-              accountRole: caller.accountRole,
-            },
+      context: contextOf(caller, platform),
     });
   }
+}
+
+/**
+ * Quién pidió lo que falló, por los dos caminos que pueden traer identidad.
+ *
+ * `platform` ES EL CASO QUE IMPORTA MÁS, y el que faltaba: una ruta de consola nunca tiene
+ * `caller` —la persona de plataforma no tiene cuenta en esta región ni sesión que leer—, así
+ * que sus 500 entraban por el camino anónimo y la fila quedaba **sin actor**. Y es soporte
+ * actuando sobre la cuenta de una paciente: la bitácora de fallos es lo único que hace
+ * revisable lo que soporte hace, y un 500 sin quién lo pidió es justo el que alguien querría
+ * no dejar registrado.
+ *
+ * El `sub` del token entra en `actor_id` porque es un `uuid` (decisión del 28 de octubre) y
+ * porque esa columna no tiene clave foránea, igual que `license.reviewed_by`: fijarlo **no
+ * crea ninguna fila en `account`**.
+ *
+ * `practiceId` va nulo incluso cuando la ruta nombra un inquilino, y es deliberado: el fallo
+ * es de una petición de soporte, no de la consulta sobre la que miraba. Atribuirlo a esa
+ * consulta la haría aparecer en el panel de fallos de un inquilino que no hizo nada.
+ */
+function contextOf(caller: Caller | null, platform: PlatformCaller | null): FailureContext | null {
+  if (caller !== null) {
+    return {
+      accountId: caller.accountId,
+      practiceId: caller.practiceId,
+      accountRole: caller.accountRole,
+    };
+  }
+  if (platform !== null) {
+    return { accountId: platform.subject, practiceId: null, accountRole: 'plataforma' };
+  }
+  // Las rutas sin `Authorization`: cuando llega la petición no se sabe quién llama, y no se
+  // inventa un actor. Va por `medskin_record_anonymous_failure()`.
+  return null;
 }
 
 /**

@@ -1,0 +1,50 @@
+-- Tramo 1 · las dos únicas funciones del esquema sin `search_path` fijado. Lo levantó
+-- `revisor-senior` contra `pg_proc` y es verdad: de las 22 funciones `medskin_*`, 20 lo
+-- traen y estas dos no.
+--
+-- §3.4, regla 7 · §1.5 del napkin: versionada, y NUNCA editada después de aplicarse.
+--
+-- `ALTER FUNCTION` y no `CREATE OR REPLACE`: no cambia ni la firma ni el cuerpo ni el
+-- dueño, solo se le cuelga la configuración. Así no se repega un cuerpo de una línea con el
+-- riesgo de transcribirlo mal, y las dos siguen siendo `STABLE PARALLEL SAFE` y
+-- `SECURITY INVOKER` de `medskin_owner`, que es lo correcto para ellas: no leen ninguna
+-- tabla, solo `current_setting()`, así que no hay nada que un `SECURITY DEFINER` les
+-- añadiera más que superficie.
+--
+-- =======================================================================================
+-- QUÉ GANA ESTO DE VERDAD, Y QUÉ NO · porque el motivo que se dio no era el correcto
+--
+-- El motivo que venía en la revisión era que «los repositorios las llaman por nombre
+-- desnudo en su SQL y ahí resuelve por `search_path`». Eso es cierto, pero **`SET
+-- search_path` en una función NO cambia cómo se resuelve su NOMBRE**: la configuración se
+-- aplica al ejecutar el cuerpo, no al parsear la llamada. Si alguien pudiera plantar una
+-- `public.medskin_current_practice()`, esta migración no lo pararía. Queda escrito para que
+-- nadie crea que este `ALTER` cierra eso.
+--
+-- Lo que de verdad protege la resolución del nombre está ya puesto y se comprobó al
+-- escribir esta migración: **ningún rol de aplicación puede crear objetos en `public`**. El
+-- ACL del esquema da `USAGE` y nada más a `medskin`, `app_practitioner`, `app_patient`,
+-- `app_platform`, `app_anonymous`, `app_account` y `medskin_access`; `CREATE` lo tiene solo
+-- el dueño de la base. Sin `CREATE` no hay función que plantar, ni en `public` ni en ningún
+-- otro esquema del `search_path`.
+--
+-- Lo que sí gana el `ALTER`, y por eso se hace:
+--
+--   1. **Dentro del cuerpo**, `current_setting(text, boolean)` queda resuelta contra
+--      `pg_catalog` y no contra lo que tenga delante la sesión que llama. Es la misma
+--      defensa explícita que la 0008 dejó escrita para otro caso: «es verdad hoy, y es
+--      exactamente la clase de verdad que se cae el día que alguien cambie algo sin que
+--      ninguna prueba se queje».
+--   2. **Consistencia comprobable.** Que las 22 funciones lo traigan convierte «¿tiene
+--      `search_path`?» en una consulta de una línea sobre `pg_proc` con respuesta sí o no,
+--      en vez de una lista de dos excepciones que hay que recordar. Son además las dos
+--      funciones MÁS llamadas del sistema: están en el predicado de casi todas las
+--      políticas.
+--
+-- Dentro de una política no cambia nada: ahí Postgres guarda el OID y la resolución ya
+-- estaba cerrada. O sea que esto no arregla un fallo —no había ninguno— sino que quita la
+-- única excepción que quedaba.
+-- =======================================================================================
+
+ALTER FUNCTION medskin_current_practice() SET search_path = pg_catalog, public;--> statement-breakpoint
+ALTER FUNCTION medskin_current_account() SET search_path = pg_catalog, public;--> statement-breakpoint

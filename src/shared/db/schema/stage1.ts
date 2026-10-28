@@ -466,7 +466,7 @@ export const recoveryCode = pgTable(
 
 // ---------------------------------------------------------------------------------------
 // idempotency_key · (clave, cuenta que llama, cuerpo hasheado) 24 h, y repite la
-// respuesta original byte a byte (_convenciones.md).
+// la respuesta tal como se guardo (_convenciones.md).
 // El inquilino de la fila es «el de quien llama» (§3.3): practice_id para la doctora,
 // account_id para la paciente y para la plataforma.
 // ---------------------------------------------------------------------------------------

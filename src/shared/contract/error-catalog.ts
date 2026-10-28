@@ -64,10 +64,40 @@ export type ErrorCode =
   | 'correo_no_disponible'
   // POST /v1/equipo/{miembro_id}/acceso
   | 'miembro_no_existe'
+  // Las dos de consola de `cuentas.md`
+  | 'cuenta_no_existe'
+  // POST /v1/pacientes · `cuentas.md` (cuenta y acceso) + `pacientes.md` (el paso 3)
+  | 'nacimiento_no_valido'
+  | 'nacimiento_futuro'
+  | 'menor_de_edad'
+  | 'celular_mal_escrito'
+  | 'referida_sin_quien'
+  | 'referida_no_existe'
+  | 'correo_duplicado_en_la_consulta'
+  | 'licencia_sin_verificar'
+  | 'limite_del_plan'
+  | 'demasiadas_altas'
+  | 'alergias_sin_cuales'
+  | 'medicacion_sin_cuales'
+  | 'fototipo_fuera_de_escala'
+  | 'embarazo_valor_desconocido'
   // DELETE /v1/cuentas/mia
   | 'consulta_con_equipo'
   | 'consulta_con_pacientes'
   | 'suscripcion_activa'
+  // GET /v1/inquilinos/mio · `inquilinos.md`
+  | 'rol_no_corresponde'
+  // POST /v1/inquilinos/mio/licencia · `inquilinos.md`
+  | 'matricula_vacia'
+  | 'pais_sin_cobertura'
+  | 'especialidad_desconocida'
+  | 'declaracion_sin_aceptar'
+  | 'terminos_sin_aceptar'
+  | 'credencial_sin_subir'
+  | 'credencial_no_valida'
+  | 'licencia_en_revision'
+  | 'licencia_ya_verificada'
+  | 'demasiados_envios'
   // los seis del transporte (_convenciones.md · «Los errores del transporte»)
   | 'ruta_no_existe'
   | 'cuerpo_no_valido'
@@ -75,7 +105,22 @@ export type ErrorCode =
   | 'formato_no_admitido'
   | 'demasiadas_peticiones'
   // transversales
+  | 'clave_idempotencia_faltante'
   | 'clave_idempotencia_reutilizada'
+  // los tres de la consola interna (`plataforma-acceso.md` · Errores). `sin_permiso` ya está
+  // arriba y es el mismo código con otra frase, como en el reenvío de la doctora.
+  | 'token_de_plataforma_no_valido'
+  | 'token_de_plataforma_caducado'
+  | 'region_no_corresponde'
+  // Los tres endpoints de consola de `inquilinos.md`
+  | 'region_desconocida'
+  | 'plan_desconocido'
+  | 'correo_ya_tiene_cuenta'
+  | 'inquilino_no_existe'
+  | 'licencia_no_existe'
+  | 'licencia_ya_decidida'
+  | 'licencia_sin_enviar'
+  | 'motivo_rechazo_vacio'
   | 'fallo_de_servicio';
 
 type Entry = {
@@ -293,10 +338,15 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // sería el oráculo del padrón que §12.2.1 cierra: la dueña escribiría correos ajenos de
   // uno en uno y el segundo código le diría cuáles son pacientes de MedSkin, que es dato
   // de salud. El precio es una frase con menos filo, y se paga a propósito.
+  // Y DESDE EL 28 DE OCTUBRE LO USAN DOS ENDPOINTS: el alta de equipo y el alta de una
+  // paciente, que desde la 0021 también lo da cuando el correo es de una practicante. La
+  // genérica dejó de nombrar al equipo porque «tiene que ser verdadera en todos los casos»
+  // (_convenciones.md) y sin red se muestra esta: «para el equipo» era falso después de un
+  // alta de paciente. Con red, cada endpoint manda la suya, que nombra el suyo.
   correo_no_disponible: {
     status: 409,
     message:
-      'Ese correo no se puede usar para el equipo. Dale de alta con otro correo suyo, o escríbenos a hola@medskin.app.',
+      'Ese correo no se puede usar aquí. Dale de alta con otro correo suyo, o escríbenos a hola@medskin.app.',
     field: 'correo',
   },
 
@@ -334,6 +384,184 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: null,
   },
 
+  // ---------------------------------------------------------------------------------
+  // LA CONSOLA INTERNA · `POST /v1/plataforma/cuentas/{id}/acceso/reenviar` y
+  // `DELETE /v1/plataforma/cuentas/{id}/pausa`.
+  //
+  // UN SOLO 404 PARA TRES SITUACIONES —no existe, está borrada, o es de otra región— e
+  // indistinguible de un identificador inventado. Soporte no tiene por qué poder
+  // averiguar en qué región vive una cuenta preguntando de una en una.
+  //
+  // El `409 ya_eligio_su_contrasena` de estas rutas es el del catálogo tal cual: su frase
+  // no lleva nombre porque soporte no puede leer el nombre de nadie.
+  // ---------------------------------------------------------------------------------
+  cuenta_no_existe: { status: 404, message: 'No encontramos esa cuenta.', field: null },
+
+  // ---------------------------------------------------------------------------------
+  // POST /v1/pacientes · el alta. Lo contratan dos archivos: `cuentas.md` pone la cuenta
+  // y el acceso, `pacientes.md` pone los cuatro últimos, que son del paso 3.
+  //
+  // `nombre_vacio`, `correo_vacio`, `correo_mal_escrito`, `celular_necesario_para_whatsapp`,
+  // `via_no_valida`, `sin_permiso`, `clave_idempotencia_reutilizada` y el 500 son los de
+  // arriba: un `codigo` no se duplica por endpoint, y la frase específica la pasa quien
+  // lanza (_convenciones.md · «Un `codigo` que se usa en varios endpoints»).
+  // ---------------------------------------------------------------------------------
+  // UN SOLO CÓDIGO PARA «FALTA» Y PARA «MAL ESCRITA», y el nombre no afirma ninguna de las
+  // dos: `nacimiento_vacio` era levemente falso con un `18/04/1992` o un 31 de febrero, que
+  // no es una fecha vacía. Mismo criterio que `correo_ya_en_el_equipo` →
+  // `correo_no_disponible`: el nombre de un código no puede afirmar algo que no pasó
+  // (decidido el 28 de octubre de 2026 al construir el alta). La frase vale para los dos.
+  nacimiento_no_valido: {
+    status: 400,
+    message: 'Revisa su fecha de nacimiento: falta o no está bien escrita.',
+    field: 'nacimiento',
+  },
+  nacimiento_futuro: { status: 400, message: 'Esa fecha todavía no llegó.', field: 'nacimiento' },
+  // La única frase del tramo que manda a atender en papel, y es la verdad: el
+  // consentimiento de un tutor no existe en el producto y fingir que sí sería peor.
+  menor_de_edad: {
+    status: 400,
+    message:
+      'Es menor de edad. Necesitas el consentimiento de su tutor y eso todavía no está en MedSkin: atiéndela en papel.',
+    field: 'nacimiento',
+  },
+  // El contrato escribe «Ese número no parece un celular de Bolivia.» y la validación es
+  // E.164, que no es por país: no hay en ningún sitio la regla de marcación de cada país,
+  // y una frase que nombra Bolivia sería falsa en el primer inquilino de otro. La genérica
+  // tiene que ser verdadera en todos los casos, así que nombra el formato. Anotado para
+  // `producto`: si la frase con el país importa, hace falta la regla por país de donde
+  // sacarla.
+  celular_mal_escrito: {
+    status: 400,
+    message: 'Ese número no parece un celular. Escríbelo con el código del país: +59177124408.',
+    field: 'celular',
+  },
+  referida_sin_quien: {
+    status: 400,
+    message: 'Dinos quién la refirió, o cambia cómo llegó.',
+    field: 'referida_por',
+  },
+  // El mismo 404 para «no es de esta consulta» y para un identificador inventado: no se
+  // distingue una cosa de la otra, que es la regla de `paciente_no_existe` (§12.2.1).
+  referida_no_existe: {
+    status: 404,
+    message: 'Esa paciente no está en tu lista.',
+    field: 'referida_por',
+  },
+  // «EL DUPLICADO NO ES UN MURO»: aviso ámbar sobre el campo, no alerta, con dos salidas
+  // —«Ver su ficha» y «Es otra persona»—. La frase con el nombre y la fecha la pone quien
+  // lanza, y `datos` lleva `{ paciente_id, nombre_completo, alta_en }` para que la app
+  // pueda escribirla y abrir esa ficha. Y es POR CONSULTA, nunca global: que ese correo
+  // tenga ficha en otra clínica no es cosa de esta doctora ni se le dice.
+  correo_duplicado_en_la_consulta: {
+    status: 409,
+    message: 'Ya tienes una paciente con este correo. Revisa antes de crear otra ficha.',
+    field: 'correo',
+  },
+  licencia_sin_verificar: {
+    status: 409,
+    message:
+      'Todavía no puedes invitar pacientes: tu licencia está en revisión. Te avisamos en cuanto se apruebe.',
+    field: null,
+  },
+  // La frase lleva el número del plan y la pone quien lanza, con `patient_limit`.
+  limite_del_plan: {
+    status: 409,
+    message: 'Llegaste al límite de pacientes de tu plan. Amplíalo para dar de alta más.',
+    field: null,
+  },
+  demasiadas_altas: {
+    status: 429,
+    message: 'Llevas muchas altas en poco tiempo. Espera unos minutos.',
+    field: null,
+  },
+
+  // Los cuatro del paso 3 (`pacientes.md`). `null` y `false` no son lo mismo y estos
+  // errores son lo que lo sostiene: una lista vacía con `tiene: true` es una pregunta a
+  // medio contestar, no un «no tiene».
+  alergias_sin_cuales: {
+    status: 400,
+    message: 'Dinos a qué es alérgica, o marca que no tiene alergias.',
+    field: 'alergias',
+  },
+  medicacion_sin_cuales: {
+    status: 400,
+    message: 'Dinos qué medicación toma.',
+    field: 'medicacion',
+  },
+  fototipo_fuera_de_escala: {
+    status: 400,
+    message: 'El fototipo va del 1 al 6.',
+    field: 'fototipo',
+  },
+  embarazo_valor_desconocido: {
+    status: 400,
+    message: 'Elige una opción de la lista.',
+    field: 'embarazo_o_lactancia',
+  },
+
+  // ---------------------------------------------------------------------------------
+  // `inquilinos.md` · los dos endpoints de la doctora. Las frases son las de su tabla de
+  // errores, palabra por palabra.
+  //
+  // `403 sin_permiso` NO se repite aquí: es el mismo `codigo` del catálogo con la frase de
+  // ESTE endpoint —«Solo la dueña de la consulta puede enviar la licencia.»— que pasa quien
+  // lanza, igual que ya hace el alta del equipo. Un `codigo` es contrato y no se duplica
+  // por una frase.
+  // ---------------------------------------------------------------------------------
+  rol_no_corresponde: {
+    status: 403,
+    message: 'Esta pantalla no es de tu cuenta.',
+    field: null,
+  },
+
+  matricula_vacia: {
+    status: 400,
+    message: 'Escribe tu matrícula profesional.',
+    field: 'matricula',
+  },
+  pais_sin_cobertura: {
+    status: 400,
+    message: 'Todavía no operamos en ese país. Escríbenos a hola@medskin.app.',
+    field: 'pais_ejercicio',
+  },
+  especialidad_desconocida: {
+    status: 400,
+    message: 'Elige una especialidad de la lista.',
+    field: 'especialidad',
+  },
+  declaracion_sin_aceptar: {
+    status: 400,
+    message: 'Tienes que declarar que la credencial es tuya y está vigente.',
+    field: 'declaracion_aceptada',
+  },
+  terminos_sin_aceptar: {
+    status: 400,
+    message: 'Tienes que aceptar los términos y el tratamiento de datos.',
+    field: 'terminos_aceptados',
+  },
+  credencial_sin_subir: {
+    status: 400,
+    message: 'Falta la foto o el PDF de tu credencial.',
+    field: 'credencial_clave',
+  },
+  credencial_no_valida: {
+    status: 400,
+    message: 'Ese archivo no nos sirve. Tiene que ser JPG, PNG o PDF, y pesar menos de 10 MB.',
+    field: 'credencial_clave',
+  },
+  licencia_en_revision: {
+    status: 409,
+    message: 'Tu licencia ya está en revisión. Te avisamos en cuanto haya respuesta.',
+    field: null,
+  },
+  licencia_ya_verificada: { status: 409, message: 'Tu licencia ya está verificada.', field: null },
+  demasiados_envios: {
+    status: 429,
+    message: 'Ya enviaste tu licencia varias veces hoy. Espera a que la revisemos.',
+    field: null,
+  },
+
   // Los del transporte (_convenciones.md · «Los errores del transporte», 27 de octubre).
   // No son de ningún endpoint: los devuelve el borde antes de llegar a uno. Dos no le
   // dicen nada al usuario —`mensaje` vacío— porque son errores de programación del
@@ -362,6 +590,13 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: null,
   },
 
+  // LA CABECERA QUE FALTA, con `mensaje` vacío como los otros dos errores de programación
+  // del cliente (`ruta_no_existe`, `formato_no_admitido`): no hay nada que contarle a una
+  // persona que no puede hacer nada al respecto. Y TIENE código, para que la app lo registre.
+  // `_convenciones.md` la exige en «todo `POST` que crea algo» y `cuentas.md` dice por qué:
+  // «es obligatorio: la pantalla es una carga que bloquea».
+  clave_idempotencia_faltante: { status: 400, message: '', field: null },
+
   clave_idempotencia_reutilizada: {
     status: 409,
     message: 'Esa clave ya se usó con otra petición. Usa una nueva.',
@@ -371,6 +606,70 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // La frase completa la pone quien lanza: es obligatoria y cambia por endpoint
   // (_convenciones.md · «El 500, en todas partes»). Esta es la parte que no cambia.
   fallo_de_servicio: { status: 500, message: 'El servidor no respondió.', field: null },
+
+  // ---------------------------------------------------------------------------------
+  // La consola interna · `plataforma-acceso.md`. Quien los lee es una persona de MedSkin
+  // en una pantalla interna, así que la frase puede ser técnica: «aquí no hay nada que
+  // proteger de quien pregunta». Es la única familia del catálogo donde eso vale.
+  //
+  // `token_de_plataforma_caducado` va con `mensaje` VACÍO y es lo que dice el contrato
+  // —«Nada. La consola pide otro token y repite la petición»—, igual que los tres del
+  // refresco: no hay refresco en la región y la pantalla no muestra texto.
+  //
+  // `region_no_corresponde` lleva la región de destino dentro de la frase y la pone quien
+  // lanza, con `datos.region`. Decir a qué región ir es correcto AQUÍ: es información
+  // interna para una persona de MedSkin, no un oráculo sobre una paciente.
+  // ---------------------------------------------------------------------------------
+  token_de_plataforma_no_valido: {
+    status: 401,
+    message: 'Tu sesión de consola no es válida. Vuelve a entrar.',
+    field: null,
+  },
+  token_de_plataforma_caducado: { status: 401, message: '', field: null },
+  region_no_corresponde: {
+    status: 403,
+    message: 'Ese token es de otra región. Abre la consola de {region}.',
+    field: null,
+  },
+
+  // ---------------------------------------------------------------------------------
+  // `inquilinos.md` · los tres de la consola. Las frases son las de sus tablas, palabra
+  // por palabra.
+  //
+  // `409 correo_ya_tiene_cuenta` SÍ revela que el correo existe, y está bien: «aquí quien
+  // llama es MedSkin sobre su propio padrón, no un desconocido sobre el de una clínica de
+  // estética. La regla de la respuesta idéntica protege a la paciente de un tercero, no a
+  // la plataforma de sí misma.»
+  //
+  // `409 licencia_sin_enviar` es el código del 28 de octubre: la base distingue TRES casos
+  // —sin fila, `sin_enviar`, ya decidida— y el contrato nombraba dos. Mandar `sin_enviar`
+  // al `licencia_ya_decidida` le diría a soporte que algo se decidió cuando no se decidió
+  // nada, y quien lee esa pantalla iría a buscar una decisión que no existe.
+  // ---------------------------------------------------------------------------------
+  region_desconocida: { status: 400, message: 'Esa región no existe todavía.', field: 'region' },
+  plan_desconocido: { status: 400, message: 'Ese plan no existe.', field: 'plan' },
+  correo_ya_tiene_cuenta: {
+    status: 409,
+    message: 'Ese correo ya tiene una cuenta en MedSkin. Busca la consulta antes de crear otra.',
+    field: 'doctora.correo',
+  },
+  inquilino_no_existe: { status: 404, message: 'No encontramos esa consulta.', field: null },
+  licencia_no_existe: {
+    status: 404,
+    message: 'Esa consulta no tiene ninguna licencia en revisión.',
+    field: null,
+  },
+  licencia_ya_decidida: { status: 409, message: 'Esta licencia ya se decidió.', field: null },
+  licencia_sin_enviar: {
+    status: 409,
+    message: 'Esa consulta todavía no mandó su licencia. No hay nada que decidir.',
+    field: null,
+  },
+  motivo_rechazo_vacio: {
+    status: 400,
+    message: 'Escribe el motivo del rechazo: la doctora lo va a leer.',
+    field: 'motivo_rechazo',
+  },
 };
 
 /** El cuerpo exacto de _convenciones.md. Nada más y nada menos. */
@@ -515,6 +814,34 @@ export const FAILURE_PHRASES = {
     'No pudimos mandarle el acceso. Su contraseña anterior ya no vale: vuelve a mandárselo.',
 
   /**
+   * `POST /v1/pacientes`, literal de `cuentas.md` y de `pacientes.md`, que escriben la
+   * misma segunda frase: lo que la doctora llenó está en el teléfono y el alta se puede
+   * repetir con la misma `Idempotency-Key`.
+   */
+  createPatient:
+    'No pudimos crear la ficha. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+  /**
+   * El 500 del envío del acceso del alta, que es OTRO caso y por eso otra frase: aquí la
+   * ficha, la cuenta y la temporal YA existen y lo que falló fue el relé, así que «puedes
+   * volver a intentarlo» mandaría a crear una segunda ficha de la misma persona —el alta no
+   * da `409` por el correo, da el aviso del duplicado— y «lo que llenaste está guardado» ya
+   * no es lo que hace falta. La salida es la que existe: volver a mandarle el acceso con
+   * `POST /v1/cuentas/{cuenta_id}/acceso`. Es la misma clase de frase que la del alta de
+   * equipo, y por el mismo motivo (28 de octubre de 2026; anotado para `producto`).
+   */
+  createPatientMail:
+    'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+  /**
+   * Y la del aviso a quien YA TENÍA CUENTA, que es un tercer caso: no se acuñó ninguna
+   * temporal, así que no hay contraseña perdida ni acceso que volver a mandar —el reenvío le
+   * daría `409 ya_eligio_su_contrasena` si ya eligió la suya—. Lo que se perdió es el aviso,
+   * y su camino a la app sigue intacto: la pantalla «¿Es esta tu doctora?». La frase dice las
+   * dos cosas y no promete un reintento que no existe.
+   */
+  createPatientNotice:
+    'No pudimos avisarle por correo. Su ficha ya está creada, así que no la vuelvas a dar de alta: ella ya tiene su cuenta y va a ver tu invitación cuando abra la app.',
+
+  /**
    * Las dos de `sesion.md`, y las dos prometen lo mismo: **el 500 de la sesión NO
    * expulsa.** «Un fallo al comprobar la sesión no es una sesión inválida»: si la app
    * mandara a la doctora al login cada vez que el servidor tose, le borraría la cola de
@@ -524,11 +851,39 @@ export const FAILURE_PHRASES = {
   refreshSession: 'No pudimos renovar tu sesión. Puedes seguir con lo último guardado.',
 
   /**
+   * `inquilinos.md` · los dos de la doctora, literales de su tabla.
+   *
+   * La de la lectura **no es alerta**: es el estado «sin conexión» de
+   * `Plataforma.dc.html` · 4, con lo último guardado y su fecha. La del envío promete «lo
+   * que llenaste está guardado en este teléfono» porque `Licencia.dc.html` · 1 dibuja
+   * «Guardar y salir»: si el contrato no lo garantizara, la pantalla miente.
+   */
+  readOwnPractice:
+    'No pudimos cargar tu consulta. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+  submitLicense:
+    'No pudimos enviar tu licencia. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+
+  /**
    * La frase del 500 cuando el fallo ocurre ANTES de saber a qué ruta iba
    * (_convenciones.md · «El 500, en todas partes», decisión 24 del 27 de octubre).
    */
   fallback:
     'No pudimos completar lo que pediste. El servidor no respondió: puedes volver a intentarlo.',
+
+  // ---------------------------------------------------------------------------------
+  // Los cinco de la consola interna, literales de `inquilinos.md` y de `cuentas.md` ·
+  // «Consola interna». Viven aquí y no en el módulo porque la tabla de rutas las necesita
+  // ANTES de que exista el controlador: una ruta sin su frase es un 500 sin segunda frase.
+  // ---------------------------------------------------------------------------------
+  createTenant:
+    'No pudimos crear la consulta. El servidor no respondió. No se creó nada: puedes volver a intentarlo.',
+  readTenant: 'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
+  decideLicense:
+    'No pudimos guardar la decisión. El servidor no respondió. La licencia sigue en revisión: puedes volver a intentarlo.',
+  resendPlatformAccess:
+    'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
+  liftAccessPause:
+    'No pudimos levantar la pausa. El servidor no respondió: puedes volver a intentarlo.',
 } as const;
 
 /**

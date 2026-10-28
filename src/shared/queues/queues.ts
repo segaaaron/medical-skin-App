@@ -19,6 +19,11 @@ import type { Redis } from 'ioredis';
 export const QUEUE_NAMES = {
   /** El correo del código de recuperación. Lleva a quién escribirle, no qué escribirle. */
   recoveryMail: 'recuperacion-correo',
+  /**
+   * El barrido de `idempotency_key`, cada hora. No lleva datos: la función de la base sabe
+   * qué borrar («lo caducado») y el trabajo solo decide cuándo y cuántas veces.
+   */
+  idempotencySweep: 'idempotencia-barrido',
 } as const;
 
 /**

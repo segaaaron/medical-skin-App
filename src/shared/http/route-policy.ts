@@ -11,12 +11,25 @@
 
 import { FAILURE_PHRASES } from '../contract/error-catalog';
 import type { Scope } from '../contract/session';
+import type { PlatformPermission } from '../platform/platform-token';
 
+/**
+ * Las rutas son de TRES tipos, y exactamente uno de los tres campos abre cada una. No es una
+ * variante más de lo mismo: el token de la consola lo firma otro servicio con otra llave, no
+ * trae `alcance` y no viene de ninguna cuenta de esta región (`plataforma-acceso.md`). Un
+ * cuarto estado —dos campos a la vez, o ninguno— no abre nada: el guardia deniega.
+ */
 export type RoutePolicy = {
   /** `true` solo para los tres endpoints sin `Authorization` del tramo. */
   anonymous?: true;
   /** Los alcances que esta ruta autoriza. Cualquier otro se deniega. */
   scopes?: readonly Scope[];
+  /**
+   * El permiso de plataforma que esta ruta exige, uno y solo uno. Su presencia es lo que
+   * convierte la ruta en ruta de consola: el guardia verifica el token de plataforma en vez
+   * del de sesión, y no deja `caller` sino `platform`.
+   */
+  platformPermission?: PlatformPermission;
   /** La frase completa del `500 fallo_de_servicio` de este endpoint, literal. */
   failurePhrase: string;
 };
@@ -83,11 +96,25 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     failurePhrase: FAILURE_PHRASES.refreshSession,
   },
 
-  // `cuentas.md` · «cualquiera con sesión, incluida la restringida». Es el único endpoint
-  // que una sesión con la contraseña todavía temporal puede llamar aparte de
-  // `POST /v1/acceso/contrasena-nueva`, y por el mismo motivo que `GET /v1/sesion`: de aquí
-  // sale qué pantalla toca. `recuperacion` NO entra: su token no trae `rol` ni `sid`, así
-  // que no hay `Caller` que servir.
+  // `cuentas.md` · POST /v1/pacientes, el alta. Solo `completo`: dar de alta a una paciente no
+  // es una pantalla a la que se llegue con la contraseña todavía temporal.
+  'POST /v1/pacientes': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.createPatient,
+  },
+
+  // `inquilinos.md` · los dos de la doctora. Solo `completo`: el contrato da
+  // `403 contrasena_temporal_pendiente` para estas pantallas, que es exactamente lo que el
+  // guardia devuelve cuando el alcance restringido no está en la lista.
+  'GET /v1/inquilinos/mio': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readOwnPractice,
+  },
+  'POST /v1/inquilinos/mio/licencia': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.submitLicense,
+  },
+
   'GET /v1/cuentas/mia': {
     scopes: ['contrasena_temporal', 'segundo_factor', 'completo'],
     failurePhrase: FAILURE_PHRASES.readOwnAccount,
@@ -137,6 +164,40 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   'POST /v1/cuentas/:cuenta_id/acceso': {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.sendPatientAccess,
+  },
+
+  // ---------------------------------------------------------------------------------
+  // LA CONSOLA INTERNA · `plataforma-acceso.md`. Las cinco rutas que abre el token de
+  // plataforma, con el permiso que cada una pide, copiado de la tabla del contrato.
+  //
+  // Están aquí ANTES de que existan sus controladores a propósito: una ruta registrada sin
+  // política es un `500` que ninguna prueba de unidad ve, y quien escriba el controlador no
+  // tiene que acordarse de esto. Una política sin ruta registrada, en cambio, no hace nada:
+  // Fastify responde `404 ruta_no_existe` hasta que el controlador exista.
+  //
+  // `POST /v1/sesion/suplantacion` NO está, y es la línea que no se cruza: su permiso
+  // (`plataforma:suplantar`) está en `propuesto` y sin entrada aquí la ruta no se puede
+  // servir ni por descuido.
+  // ---------------------------------------------------------------------------------
+  'POST /v1/plataforma/inquilinos': {
+    platformPermission: 'plataforma:inquilinos:crear',
+    failurePhrase: FAILURE_PHRASES.createTenant,
+  },
+  'GET /v1/plataforma/inquilinos/:id': {
+    platformPermission: 'plataforma:inquilinos:leer',
+    failurePhrase: FAILURE_PHRASES.readTenant,
+  },
+  'POST /v1/plataforma/inquilinos/:id/licencia/decision': {
+    platformPermission: 'plataforma:licencias:decidir',
+    failurePhrase: FAILURE_PHRASES.decideLicense,
+  },
+  'POST /v1/plataforma/cuentas/:cuenta_id/acceso/reenviar': {
+    platformPermission: 'plataforma:acceso:reenviar',
+    failurePhrase: FAILURE_PHRASES.resendPlatformAccess,
+  },
+  'DELETE /v1/plataforma/cuentas/:cuenta_id/pausa': {
+    platformPermission: 'plataforma:pausa:levantar',
+    failurePhrase: FAILURE_PHRASES.liftAccessPause,
   },
 };
 

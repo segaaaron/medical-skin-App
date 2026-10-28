@@ -101,6 +101,67 @@ export function accessMailBody(facts: DeliveryFacts): string {
   return whatsappText(facts);
 }
 
+/**
+ * Lo que necesita el AVISO de quien ya tiene cuenta: a quién se le escribe y quién la dio de
+ * alta. Sin contraseña, porque no se le acuña ninguna, y sin un dato clínico.
+ */
+export type LinkNoticeFacts = {
+  patientEmail: string;
+  patientFirstName: string;
+  practitionerName: string;
+};
+
+/**
+ * EL CORREO DE QUIEN YA TIENE CUENTA · `POST /v1/pacientes` con `via: "correo"` cuando el
+ * correo ya tenía cuenta en la región.
+ *
+ * Existe porque esa persona TIENE QUE ENTERARSE de que una consulta la dio de alta: es su
+ * identidad la que queda vinculada, y enterarse es lo único que le permite reaccionar
+ * (decisión del dueño, 28 de octubre de 2026). Antes no se le mandaba nada y lo único que lo
+ * delataba era la pantalla «¿Es esta tu doctora?» la próxima vez que abriera la app.
+ *
+ * Reutiliza el texto de WhatsApp de ese mismo caso en vez de copiarlo: son los mismos hechos
+ * para la misma persona, y ninguno de los dos nombra una contraseña, porque no hay ninguna.
+ */
+export function linkNoticeMailBody(facts: LinkNoticeFacts): string {
+  return whatsappTextForExistingAccount(facts);
+}
+
+/**
+ * Lo que el correo de la CONSOLA puede decir, que es menos que todo lo demás y no por
+ * prudencia: `app_platform` lee de `account` cuatro columnas —«correo, rol, estado y pausa»,
+ * literal— y el nombre no está entre ellas. Así que este correo no saluda por el nombre,
+ * porque soporte no lo puede leer. Lo que no se puede leer no se filtra.
+ */
+export type PlatformDeliveryFacts = {
+  email: string;
+  temporaryPassword: string;
+  expiryText: string;
+};
+
+/**
+ * EL CORREO DEL REENVÍO DE LA CONSOLA · `POST /v1/plataforma/cuentas/{id}/acceso/reenviar`.
+ *
+ * «Va a su propio correo. Soporte no la ve», y es literal: la contraseña está en este cuerpo
+ * y NO en la respuesta del endpoint. Plantilla propia y no la de la paciente por dos razones
+ * que se tocan: la de la paciente se presenta en nombre de su doctora —«soy la Dra. Andrea
+ * Paz»— y soporte no puede leer quién es su doctora ni a qué consulta pertenece, y esta misma
+ * ruta sirve también a una cuenta de practicante, donde esa frase sería falsa.
+ *
+ * Ni un dato clínico, ni el nombre de una clínica, ni quién pidió el reenvío.
+ */
+export function platformAccessMailBody(facts: PlatformDeliveryFacts): string {
+  return [
+    'Hola, te mandamos una contraseña temporal para entrar a MedSkin.',
+    '',
+    `Entra con ${facts.email} y esta contraseña:`,
+    facts.temporaryPassword,
+    '',
+    'Caduca en 72 horas y al entrar eliges la tuya.',
+    'medskin.app/entrar',
+  ].join('\n');
+}
+
 /** Lo que la frase del equipo necesita. Ni un dato clínico, igual que la de la paciente. */
 export type TeamDeliveryFacts = {
   firstName: string;

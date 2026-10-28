@@ -13,7 +13,19 @@ import { withTenantContext, type TenantContext } from '../db/tenant-context';
 export type FailureContext = {
   accountId: string;
   practiceId: string | null;
-  accountRole: AccountRole;
+  /**
+   * `plataforma` es el TERCER actor y no un `AccountRole`: quien llama desde la consola no
+   * tiene fila en `account` —su identidad vive fuera de la región— y su `accountId` es el
+   * `sub` del token, que es un `uuid` (decisión del 28 de octubre). Cabe en
+   * `service_failure.actor_id` por lo mismo que en `license.reviewed_by` y en
+   * `access_audit.actor_account_id`: esas columnas no tienen clave foránea, a propósito.
+   *
+   * Existe porque **un 500 de la consola tiene que decir quién lo pidió**: es soporte
+   * actuando sobre la cuenta de una paciente, y la bitácora es lo único que hace revisable
+   * lo que soporte hace. Sin esto el fallo entraba por el camino anónimo y la fila quedaba
+   * sin actor, que es justamente el caso que alguien querría no dejar registrado.
+   */
+  accountRole: AccountRole | 'plataforma';
 };
 
 export type Failure = {
@@ -46,6 +58,25 @@ export type Failure = {
 const EMAIL_PATTERN = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
 const EMAIL_MASK = '[correo]';
 
+/**
+ * El rol de base con el que se escribe la fila, y es el de quien llama: cada uno entra por
+ * su propia política y ninguno adopta el rol de otro para registrar un fallo. La consola es
+ * `app_platform`, cuya política de `service_failure` es `FOR ALL` desde la 0001; la paciente
+ * no fija inquilino porque no pertenece a ninguno.
+ */
+function roleOf(where: FailureContext): TenantContext {
+  if (where.accountRole === 'plataforma') {
+    // Sin `practiceId`: la consola cruza inquilinos y sus políticas no son por inquilino. La
+    // columna `practice_id` de la fila queda nula, que es la verdad — el fallo es de una
+    // petición de soporte, no de la consulta sobre la que miraba.
+    return { role: 'app_platform', accountId: where.accountId };
+  }
+  if (where.accountRole === 'paciente') {
+    return { role: 'app_patient', accountId: where.accountId };
+  }
+  return { role: 'app_practitioner', accountId: where.accountId, practiceId: where.practiceId };
+}
+
 type CauseLink = { name: string; message: string };
 
 function causeChain(cause: unknown): CauseLink[] {
@@ -53,11 +84,26 @@ function causeChain(cause: unknown): CauseLink[] {
   let current: unknown = cause;
   // Tope de cinco: una cadena circular no cuelga el registro del fallo.
   for (let i = 0; i < 5 && current instanceof Error; i += 1) {
-    chain.push({ name: current.name, message: current.message });
+    chain.push({ name: current.name, message: messageOf(current) });
     current = current.cause;
   }
   if (chain.length === 0) chain.push({ name: 'Desconocido', message: String(cause) });
   return chain;
+}
+
+/**
+ * UN `Error` CON MENSAJE VACÍO EXISTE, y hacía invisible el fallo entero: `AggregateError`
+ * —el que lanza Node cuando fallan todas las direcciones de una conexión, así que el que da
+ * un Postgres o un Redis caídos— trae `message: ''`, y
+ * `medskin_record_anonymous_failure()` rechaza la causa vacía («operacion, codigo, causa y
+ * traza son obligatorios»). Resultado: la fila no se escribía y el fallo salía solo por la
+ * salida de error. Encontrado el 28 de octubre probando el barrido contra un puerto muerto.
+ *
+ * El nombre no es gran cosa, pero es verdad y es suficiente para que la fila exista: la pila
+ * y el resto de la cadena viajan igual.
+ */
+function messageOf(error: Error): string {
+  return error.message === '' ? error.name : error.message;
 }
 
 export class FailureLog {
@@ -84,14 +130,7 @@ export class FailureLog {
     }
 
     const where = failure.context;
-    const ctx: TenantContext =
-      where.accountRole === 'paciente'
-        ? { role: 'app_patient', accountId: where.accountId }
-        : {
-            role: 'app_practitioner',
-            accountId: where.accountId,
-            practiceId: where.practiceId,
-          };
+    const ctx: TenantContext = roleOf(where);
 
     try {
       await withTenantContext(this.pool, ctx, (c) =>

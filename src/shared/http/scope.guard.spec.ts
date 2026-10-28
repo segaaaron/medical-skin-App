@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig, type Config } from '../config/config';
 import { ContractError } from '../contract/error-catalog';
 import type { Claims, Scope } from '../contract/session';
+import { PlatformTokens } from '../platform/platform-token';
 import { Tokens } from '../security/tokens';
 import { ROUTE_POLICIES, policyFor } from './route-policy';
 import { ScopeGuard } from './scope.guard';
@@ -26,6 +27,11 @@ const cfg: Config = loadConfig({
   NODE_ENV: 'development',
   JWT_PRIVATE_KEY_PATH: join(carpeta, 'jwt.key'),
   JWT_PUBLIC_KEY_PATH: join(carpeta, 'jwt.pub'),
+  // El par del servicio de plataforma, que es OTRA llave: aquí solo hace falta para
+  // construir el guardia. Las rutas de consola se prueban en
+  // `platform/platform-token.spec.ts`, que es donde vive la privada con la que se acuñan.
+  PLATFORM_JWT_PRIVATE_KEY_PATH: join(carpeta, 'plataforma.key'),
+  PLATFORM_JWT_PUBLIC_KEY_PATH: join(carpeta, 'plataforma.pub'),
 });
 
 const CUENTA = '11111111-1111-4111-8111-111111111111';
@@ -37,7 +43,7 @@ let guardia: ScopeGuard;
 
 beforeAll(async () => {
   tokens = await Tokens.fromFiles(cfg);
-  guardia = new ScopeGuard(tokens);
+  guardia = new ScopeGuard(tokens, await PlatformTokens.fromFiles(cfg));
 });
 
 afterAll(() => rmSync(carpeta, { recursive: true, force: true }));
@@ -129,11 +135,18 @@ describe('GuardiaDeAlcance · la lista blanca', () => {
     expect(error.status).toBe(500);
   });
 
-  it('cada ruta de la tabla declara alcances o es anónima, y su frase de 500', () => {
+  it('cada ruta de la tabla se abre por UNA de las tres formas, y declara su frase de 500', () => {
     for (const [ruta, politica] of Object.entries(ROUTE_POLICIES)) {
       expect(politica.failurePhrase.length, ruta).toBeGreaterThan(20);
-      const abierta = politica.anonymous === true || (politica.scopes ?? []).length > 0;
-      expect(abierta, ruta).toBe(true);
+      // Las tres, y exactamente una: anónima, por alcance de sesión, o por permiso de
+      // plataforma (`plataforma-acceso.md`). Dos a la vez sería una ruta que abre el token
+      // de la app y el de la consola, que es justo lo que la frontera no admite.
+      const formas = [
+        politica.anonymous === true,
+        (politica.scopes ?? []).length > 0,
+        politica.platformPermission !== undefined,
+      ].filter(Boolean);
+      expect(formas.length, ruta).toBe(1);
     }
   });
 

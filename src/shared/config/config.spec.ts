@@ -21,6 +21,10 @@ const COMPLETO = {
   CONSERVACION_ANOS: '7',
   JWT_PRIVATE_KEY_PATH: './.secrets/jwt.key',
   JWT_PUBLIC_KEY_PATH: './.secrets/jwt.pub',
+  // La pública del servicio de plataforma, que es otra llave y otro `kid`
+  // (`plataforma-acceso.md`). Obligatoria: sin ella la consola no tiene puerta, y un
+  // despliegue que arranca sin saberlo descubre el hueco con la primera petición.
+  PLATFORM_JWT_PUBLIC_KEY_PATH: './.secrets/plataforma.pub',
   SERVICE_HMAC_KEY: 'x'.repeat(32),
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',

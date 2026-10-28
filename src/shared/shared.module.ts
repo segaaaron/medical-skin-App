@@ -3,13 +3,14 @@
 // fallos. Lo usan los 23 endpoints del tramo, así que se construye una vez.
 
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
+import type { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 
 import { SystemClock } from './clock';
 import { config, type Config } from './config/config';
 import { FailureLog } from './failures/service-failure';
-import { IdempotencyStore } from './idempotency/idempotency-store';
+import { IdempotencySweep, startIdempotencySweep } from './idempotency/idempotency-sweep';
 import { SmtpMail } from './mail/mailer';
 import { Counters } from './security/counters';
 import { Argon2Passwords } from './security/passwords';
@@ -18,6 +19,13 @@ import { Tokens } from './security/tokens';
 export const CONFIG = Symbol('CONFIG');
 export const POOL = Symbol('POOL');
 export const REDIS = Symbol('REDIS');
+
+/**
+ * EL BARRIDO DE `idempotency_key`, cada hora. Vive aquí y no en un módulo de recurso porque
+ * la tabla no es de ninguno: la usan los cinco `POST` que crean algo. Se arranca al construir
+ * el módulo y se cierra en el apagado, igual que el trabajador de recuperación.
+ */
+const IDEMPOTENCY_SWEEP = Symbol('IDEMPOTENCY_SWEEP');
 
 @Global()
 @Module({
@@ -61,13 +69,14 @@ export const REDIS = Symbol('REDIS');
       useFactory: (redis: Redis, cfg: Config) => new Counters(redis, cfg.SERVICE_HMAC_KEY),
       inject: [REDIS, CONFIG],
     },
-    {
-      provide: IdempotencyStore,
-      useFactory: (redis: Redis) => new IdempotencyStore(redis),
-      inject: [REDIS],
-    },
     { provide: SmtpMail, useFactory: (cfg: Config) => new SmtpMail(cfg), inject: [CONFIG] },
     { provide: FailureLog, useFactory: (pool: Pool) => new FailureLog(pool), inject: [POOL] },
+    {
+      provide: IDEMPOTENCY_SWEEP,
+      useFactory: (pool: Pool, redis: Redis, failures: FailureLog) =>
+        startIdempotencySweep(redis, new IdempotencySweep(pool), failures),
+      inject: [POOL, REDIS, FailureLog],
+    },
   ],
   exports: [
     CONFIG,
@@ -77,7 +86,6 @@ export const REDIS = Symbol('REDIS');
     SystemClock,
     Argon2Passwords,
     Counters,
-    IdempotencyStore,
     SmtpMail,
     FailureLog,
   ],
@@ -86,9 +94,16 @@ export class SharedModule implements OnApplicationShutdown {
   constructor(
     @Inject(POOL) private readonly pool: Pool,
     @Inject(REDIS) private readonly redis: Redis,
+    @Inject(IDEMPOTENCY_SWEEP) private readonly sweep: { queue: Queue; worker: Worker },
   ) {}
 
+  /**
+   * El trabajador y su cola PRIMERO, y después el pool y Redis: cerrarlos al revés deja al
+   * trabajador leyendo de una conexión que ya no está y convierte un apagado limpio en un
+   * fallo registrado.
+   */
   async onApplicationShutdown(): Promise<void> {
+    await Promise.allSettled([this.sweep.worker.close(), this.sweep.queue.close()]);
     await Promise.allSettled([this.pool.end(), this.redis.quit()]);
   }
 }
