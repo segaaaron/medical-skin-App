@@ -71,6 +71,20 @@
       "when": 1793155247857,
       "tag": "0009_index_order_matches_order_by",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793156400000,
+      "tag": "0010_search_index_measured",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793157000000,
+      "tag": "0011_indexes_measured_under_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -12,9 +12,13 @@
 import { Queue, Worker, type ConnectionOptions, type JobsOptions, type Processor } from 'bullmq';
 import type { Redis } from 'ioredis';
 
+// Con guion y no con dos puntos: BullMQ rechaza el `:` en el nombre de una cola, porque lo
+// usa él para componer sus propias claves de Redis («Queue name cannot contain :»). Las
+// claves de los CONTADORES sí llevan `:`, que es la forma que fija `_convenciones.md`, y
+// son otras claves.
 export const QUEUE_NAMES = {
   /** El correo del código de recuperación. Lleva a quién escribirle, no qué escribirle. */
-  recoveryMail: 'recuperacion:correo',
+  recoveryMail: 'recuperacion-correo',
 } as const;
 
 /**

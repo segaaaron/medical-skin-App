@@ -12,6 +12,7 @@ import type {
   AccessCredential,
   ClockPort,
   CredentialPort,
+  Device,
   PasswordHasher,
   SavePasswordVerdict,
   SessionPort,
@@ -47,10 +48,23 @@ const PACIENTE: Caller = {
   permissions: [],
 };
 
+const CONSULTA = '22222222-2222-4222-8222-222222222222';
+
+/** Las cabeceras de `_convenciones.md`, con el modelo y el sistema, que son opcionales. */
+const DISPOSITIVO: Device = {
+  deviceId: '44444444-4444-4444-8444-444444444444',
+  model: 'iPhone 15 Pro',
+  os: 'iOS 18.2',
+  appVersion: '2.4.1',
+  platform: 'ios',
+  city: null,
+};
+
 function armar(opciones: {
   actual?: AccessCredential | null;
   esLaTemporal?: boolean;
   veredicto?: SavePasswordVerdict;
+  guardadoComo?: { accountRole: 'practitioner' | 'paciente'; practiceId: string | null };
 }) {
   const pasos: string[] = [];
 
@@ -65,8 +79,8 @@ function armar(opciones: {
       pasos.push(`guardar:${p.via}:${p.currentSessionId}:${p.refreshDigest}`);
       return Promise.resolve({
         verdict: opciones.veredicto ?? ('saved' as const),
-        accountRole: 'paciente' as const,
-        practiceId: null,
+        accountRole: opciones.guardadoComo?.accountRole ?? ('paciente' as const),
+        practiceId: opciones.guardadoComo?.practiceId ?? null,
         permissions: null,
       });
     },
@@ -84,14 +98,17 @@ function armar(opciones: {
   };
 
   const sessions: SessionPort = {
-    open: () =>
-      Promise.resolve({
+    open: () => {
+      pasos.push('sesion:abrir');
+      return Promise.resolve({
         sessionId: 'x',
-        licenseStatus: null,
+        licenseStatus: opciones.guardadoComo === undefined ? null : 'sin_enviar',
         firstDayDone: true,
-        practitionerRole: null,
+        practitionerRole:
+          opciones.guardadoComo?.accountRole === 'practitioner' ? ('doctora' as const) : null,
         permissions: null,
-      }),
+      });
+    },
     nextStepFacts: () => {
       pasos.push('paso:estado');
       return Promise.resolve({
@@ -201,18 +218,48 @@ describe('POST /v1/acceso/contrasena-nueva · el guardado', () => {
     );
   });
 
-  it('guarda con la vía del alcance del token y NO con un campo del cuerpo', async () => {
-    const porRecuperacion = armar({ actual: null });
-    await porRecuperacion.caso.run({ nueva: 'tejado-nuevo-07' }, {
-      ...PACIENTE,
-      scope: 'recuperacion',
-    });
+  it('la vía sale de la ENTRADA, no de un campo del cuerpo', async () => {
+    const porTemporal = armar({});
+    await porTemporal.caso.run({ nueva: 'tejado-nuevo-07', via: 'recuperacion' }, PACIENTE);
 
-    expect(
-      porRecuperacion.pasos.some((p) => p.startsWith('guardar:recuperacion:')),
-    ).toBe(true);
-    // Por recuperación no hay temporal que comparar: no se pide la credencial actual.
-    expect(porRecuperacion.pasos).not.toContain('credencial:mia');
+    // El `via` del cuerpo se ignora: por la entrada de la temporal la vía es `temporal`,
+    // y es lo que decide la condición que la base comprueba.
+    expect(porTemporal.pasos.some((p) => p.startsWith('guardar:temporal:'))).toBe(true);
+  });
+
+  it('por recuperación: guarda con `recuperacion`, sin sesión que ascender y sin pedir la temporal', async () => {
+    const { caso, pasos } = armar({});
+    const respuesta = await caso.runFromRecovery(
+      { nueva: 'tejado-nuevo-07' },
+      { via: 'recuperacion', accountId: PACIENTE.accountId, region: 'latam' },
+      DISPOSITIVO,
+    );
+
+    // `guardar:recuperacion:null` — el `null` es el `currentSessionId`: por aquí no hay
+    // sesión que ascender, porque el token de recuperación no lleva `sid`.
+    expect(pasos).toContain('guardar:recuperacion:null:null');
+    // Y por aquí no hay temporal que comparar: no se pide la credencial actual.
+    expect(pasos).not.toContain('credencial:mia');
+    // La sesión se ABRE, que es el mismo acto que una entrada por POST /v1/acceso.
+    expect(pasos).toContain('sesion:abrir');
+    expect(respuesta.sesion_id).toBe('x');
+    expect(respuesta.refresco).toBe('rfr_nuevo');
+  });
+
+  it('por recuperación, el rol lo devuelve la BASE y no el token', async () => {
+    const { caso } = armar({ guardadoComo: { accountRole: 'practitioner', practiceId: CONSULTA } });
+    const respuesta = await caso.runFromRecovery(
+      { nueva: 'tejado-nuevo-07' },
+      { via: 'recuperacion', accountId: PACIENTE.accountId, region: 'latam' },
+      DISPOSITIVO,
+    );
+
+    // `practitionerRole: 'doctora'` sale de la fila de `practitioner` que se lee con el
+    // inquilino puesto, y de ahí el `siguiente_paso` de una doctora.
+    expect(respuesta.siguiente_paso).toBe('licencia');
+    expect(respuesta.refresco_caduca_en).toBe(
+      new Date(AHORA.getTime() + 12 * 60 * 60 * 1000).toISOString(),
+    );
   });
 
   it('el veredicto `already_chosen` es 409 contrasena_ya_elegida', async () => {

@@ -70,6 +70,16 @@ async function comoPaciente(alcance: Scope): Promise<string> {
   return `Bearer ${(await tokens.sign(claims)).token}`;
 }
 
+/** El token de recuperación, que NO lleva rol, ni sesión, ni inquilino. */
+async function conCodigo(): Promise<string> {
+  const { token } = await tokens.signRecovery({
+    sub: CUENTA,
+    alcance: 'recuperacion',
+    region: 'latam',
+  });
+  return `Bearer ${token}`;
+}
+
 async function comoDoctora(alcance: Scope, conConsulta = true): Promise<string> {
   const claims: Claims = {
     sub: CUENTA,
@@ -98,10 +108,13 @@ async function denegar(
 }
 
 describe('GuardiaDeAlcance · la lista blanca', () => {
-  it('POST /v1/acceso pasa sin `Authorization` y deja `caller` en nulo', async () => {
-    const req = peticion('POST', '/v1/acceso');
-    expect(await guardia.canActivate(contexto(req))).toBe(true);
-    expect(req.medskin?.caller).toBeNull();
+  it('los tres sin `Authorization` pasan y dejan `caller` en nulo', async () => {
+    for (const ruta of ['/v1/acceso', '/v1/recuperacion', '/v1/recuperacion/codigo']) {
+      const req = peticion('POST', ruta);
+      expect(await guardia.canActivate(contexto(req)), ruta).toBe(true);
+      expect(req.medskin?.caller, ruta).toBeNull();
+      expect(req.medskin?.recovery, ruta).toBeNull();
+    }
   });
 
   it('una ruta NO listada se deniega aunque el token sea perfecto', async () => {
@@ -151,13 +164,38 @@ describe('GuardiaDeAlcance · el alcance restringido', () => {
     expect(req.medskin?.caller?.scope).toBe('contrasena_temporal');
   });
 
-  it('`recuperacion` abre contrasena-nueva y nada más', async () => {
-    const autorizacion = await comoPaciente('recuperacion');
+  it('`recuperacion` abre contrasena-nueva, y además DELETE /v1/acceso, y nada más', async () => {
+    const autorizacion = await conCodigo();
+
     const req = peticion('POST', '/v1/acceso/contrasena-nueva', autorizacion);
     expect(await guardia.canActivate(contexto(req))).toBe(true);
+    // No deja `caller`: no hay sesión ni rol que colgar. Deja `recovery`.
+    expect(req.medskin?.caller).toBeNull();
+    expect(req.medskin?.recovery).toEqual({
+      via: 'recuperacion',
+      accountId: CUENTA,
+      region: 'latam',
+    });
+
+    // `sesion.md`, 27 de octubre: cerrar la propia sesión lo abre cualquier alcance,
+    // porque es la única salida de «Crea tu contraseña», que no tiene atrás.
+    const salir = peticion('DELETE', '/v1/acceso', autorizacion);
+    expect(await guardia.canActivate(contexto(salir))).toBe(true);
 
     const error = await denegar('GET', '/v1/acceso/sesiones', autorizacion);
     expect(error.code).toBe('token_sin_alcance');
+  });
+
+  it('un token de recuperación CON rol no se atiende: esa forma no existe', async () => {
+    // El contrato es explícito —«el token no lleva rol»— porque el cuerpo de un JWT lo lee
+    // el cliente: un `rol` aquí le diría a quien acertó seis dígitos si la cuenta es de
+    // doctora o de paciente, y sería un oráculo mejor que el que el acceso cierra.
+    const error = await denegar(
+      'POST',
+      '/v1/acceso/contrasena-nueva',
+      await comoPaciente('recuperacion'),
+    );
+    expect(error.code).toBe('token_no_valido');
   });
 
   it('un token `completo` en contrasena-nueva es 401 token_sin_alcance', async () => {
@@ -170,10 +208,12 @@ describe('GuardiaDeAlcance · el alcance restringido', () => {
   });
 
   it('DELETE /v1/acceso lo abre cualquier alcance: nadie se queda dentro contra su voluntad', async () => {
-    for (const alcance of ['contrasena_temporal', 'recuperacion', 'completo'] as Scope[]) {
+    for (const alcance of ['contrasena_temporal', 'completo'] as Scope[]) {
       const req = peticion('DELETE', '/v1/acceso', await comoPaciente(alcance));
       expect(await guardia.canActivate(contexto(req)), alcance).toBe(true);
     }
+    const conRecuperacion = peticion('DELETE', '/v1/acceso', await conCodigo());
+    expect(await guardia.canActivate(contexto(conRecuperacion))).toBe(true);
   });
 });
 

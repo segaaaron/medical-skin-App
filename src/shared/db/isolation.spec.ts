@@ -718,9 +718,15 @@ describe('los planes de las rutas calientes del tramo 2', () => {
        select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctora', now()
          from patient p where p.email like 'ficha-%@prueba.local'`,
     );
-    await owner.query('analyze patient');
-    await owner.query('analyze patient_link');
-    await owner.query('analyze medical_history');
+    // `VACUUM` y no solo `ANALYZE`, y esto es un hallazgo que vale para producción: un GIN
+    // recién cargado en bloque tiene TODAS sus entradas en la lista pendiente, y el coste
+    // de la lista pendiente entra en el cálculo del planificador, así que mientras no se
+    // vacíe el motor prefiere el recorrido completo. En producción lo hace el autovacuum
+    // solo; aquí hay que pedirlo, o esta suite mediría el plan de una tabla que acaba de
+    // nacer y no el de una tabla viva.
+    await owner.query('vacuum analyze patient');
+    await owner.query('vacuum analyze patient_link');
+    await owner.query('vacuum analyze medical_history');
   }, 120_000);
 
   afterAll(async () => {
@@ -781,21 +787,19 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     const used = await plan(ctxPractitionerA, 'select exists (select 1 from patient_link where account_id = $1)', [
       PATIENT.account,
     ]);
-    // Entra por índice, y el motor elige entre los dos que empiezan por una de las dos
-    // columnas: con un `account_id` concreto gana `patient_link_account_idx`, que resuelve
-    // en una fila, y el inquilino se comprueba en el filtro de la política. El compuesto
-    // que empieza por el inquilino es el que sirve las consultas que SALEN del inquilino
-    // (la lista filtrada por vínculo). Lo que la regla 5 prohíbe es el recorrido completo,
-    // y aquí no hay ninguno.
-    expect(used).toMatch(/Index Scan using patient_link_(practice_)?account_idx/);
+    // `Index ONLY Scan` sobre el compuesto: las dos columnas del predicado están en el
+    // índice —la del inquilino la pone la política, la de la cuenta la pone el contrato—,
+    // así que la autorización se resuelve sin tocar la tabla. 3 bloques, 0,04 ms.
+    expect(used).toMatch(/Index Only Scan using patient_link_practice_account_idx/);
     expect(used).not.toContain('Seq Scan on patient_link');
   });
 
   it('los antecedentes de la paciente no recorren la tabla de nadie', async () => {
     const used = await plan(ctxPatient, 'select has_allergies from medical_history where patient_id = $1', [A.patient]);
     expect(used).toContain('medical_history_patient_uq');
-    // Y el `EXISTS` de su política tampoco: una fila por `patient_link_patient_uq`.
-    expect(used).toContain('patient_link_patient_uq');
+    // Y el `EXISTS` de su política tampoco recorre nada: el motor lo convierte en un
+    // subplan por `patient_link_account_idx`, que es el índice de SU cara de la política.
+    expect(used).toContain('patient_link_account_idx');
     expect(used).not.toContain('Seq Scan');
   });
 });
