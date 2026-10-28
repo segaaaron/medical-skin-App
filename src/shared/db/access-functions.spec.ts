@@ -15,6 +15,7 @@
 import { Pool, type QueryResultRow } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { ARGON2_COST } from '../security/passwords';
 import { withTenantContext, type TenantContext } from './tenant-context';
 
 const ownerUrl =
@@ -60,6 +61,15 @@ const PATIENT = {
   email: 'paciente@funciones.local',
 };
 const PLATFORM = { account: 'eeeeeeee-0000-4000-8000-00000000000d' };
+// La paciente del reenvío, aparte de `PATIENT` a propósito: las pruebas de
+// `contrasena-nueva` consumen la temporal de aquella, y el reenvío necesita una sin
+// consumir para poder distinguir sus tres veredictos.
+const RESEND = {
+  account: 'eeeeeeee-0000-4000-8000-00000000000e',
+  patient: 'eeeeeeee-0000-4000-8000-00000000001e',
+  link: 'eeeeeeee-0000-4000-8000-00000000002e',
+  email: 'reenvio@funciones.local',
+};
 const EMAIL_THAT_DOES_NOT_EXIST = 'nadie.en.absoluto@funciones.local';
 const NEW_EMAIL = 'valeria.nueva@funciones.local';
 const OWNER_EMAIL = 'andrea.nueva@funciones.local';
@@ -166,12 +176,37 @@ async function seed() {
      values ($1, $2, $3, now() + interval '10 minutes')`,
     [PATIENT.code, PATIENT.account, HASH],
   );
+
+  // La paciente del reenvío: su cuenta, su temporal SIN consumir, su ficha en A y su
+  // vínculo. El vínculo es la autorización literal de `POST /v1/cuentas/{cuenta_id}/acceso`;
+  // en B no hay ninguna ficha, y eso es la otra mitad de la prueba.
+  await owner.query(
+    `insert into account (id, email, role, region, first_name, last_name)
+     values ($1, $2, 'paciente', 'latam', 'Rocio', 'Vargas')`,
+    [RESEND.account, RESEND.email],
+  );
+  await owner.query(
+    `insert into credential (account_id, hash, is_temporary, temp_expires_at)
+     values ($1, $2, true, now() + interval '72 hours')`,
+    [RESEND.account, HASH],
+  );
+  await owner.query(
+    `insert into patient (id, practice_id, first_name, last_name, birth_date, email, phone, how_arrived)
+     values ($1, $2, 'Rocio', 'Vargas', '1990-02-02', $3, '+59177124409', 'instagram')`,
+    [RESEND.patient, A.practice, RESEND.email],
+  );
+  await owner.query(
+    `insert into patient_link (id, practice_id, patient_id, account_id, email, practice_name,
+                               practitioner_name, city)
+     values ($1, $2, $3, $4, $5, 'Consulta A de funciones', 'Dra. Andrea Paz', 'Santa Cruz')`,
+    [RESEND.link, A.practice, RESEND.patient, RESEND.account, RESEND.email],
+  );
 }
 
 async function clean() {
   await owner.query('delete from practice where id = any($1::uuid[])', [[A.practice, B.practice]]);
   await owner.query('delete from account where email = any($1::citext[])', [
-    [A.email, A.teamEmail, B.email, PATIENT.email, NEW_EMAIL, OWNER_EMAIL],
+    [A.email, A.teamEmail, B.email, PATIENT.email, RESEND.email, NEW_EMAIL, OWNER_EMAIL],
   ]);
   await owner.query('delete from access_audit where practice_id = any($1::uuid[])', [[A.practice, B.practice]]);
 }
@@ -1027,5 +1062,370 @@ describe('la recuperación · un código vivo por cuenta', () => {
     // Un correo sin código no tiene nada que contar: el número que ve quien no tiene cuenta
     // sale del contador por correo de Redis.
     expect((await miss(EMAIL_THAT_DOES_NOT_EXIST))[0]).toEqual({ attempts_left: null, voided: false });
+  });
+});
+
+// =========================================================================================
+// LA PREGUNTA 18 · el 500 de una petición SIN SESIÓN tiene que llegar a `service_failure`
+//
+// Y la mitad que de verdad importa: con la escritura concedida, `app_anonymous` SIGUE SIN
+// LEER una sola fila. Un rol que escribe no es un rol que lee.
+// =========================================================================================
+describe('el registro de fallos del rol sin sesión (0004 y 0005)', () => {
+  const TRACE = 'trace-de-la-prueba-18';
+  const EMAIL_IN_THE_MESSAGE = 'valeria.antelo@gmail.com';
+
+  afterAll(async () => {
+    await owner.query('delete from service_failure where trace_id = $1', [TRACE]);
+  });
+
+  it('escribe la fila con la causa real del motor, y sin nada que identifique a nadie', async () => {
+    const [row] = await read<{ id: string }>(
+      app,
+      ctxAnonymous,
+      `select medskin_record_anonymous_failure($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9) as id`,
+      [
+        'acceso.entrar',
+        'fallo_de_servicio',
+        // La causa textual de PostgreSQL, que es lo que §10.3 exige entera... y que puede
+        // traer el correo dentro, porque el motor lo pone en el DETAIL.
+        `duplicate key value violates unique constraint "account_email_uq" DETAIL: Key (email)=(${EMAIL_IN_THE_MESSAGE}) already exists`,
+        TRACE,
+        JSON.stringify([`timeout al escribir a ${EMAIL_IN_THE_MESSAGE}`]),
+        `at Object.entrar (/app/acceso.ts:1) ${EMAIL_IN_THE_MESSAGE}`,
+        'req-de-la-prueba',
+        'ios',
+        'latam',
+      ],
+    );
+    expect(Number(row?.id)).toBeGreaterThan(0);
+
+    // Se lee por la consola, que es quien mira el panel de fallos (§10.4). La doctora no:
+    // su política es por inquilino y esta fila no tiene inquilino.
+    const [written] = await read<Record<string, string | null>>(
+      app,
+      ctxPlatform,
+      `select service, operation, severity, error_code, error_message, cause_chain::text as cause_chain,
+              stack, request_id, platform, region, attempt::text as attempt, will_retry::text as will_retry,
+              practice_id, actor_id, subject_type, subject_id, input_digest
+         from service_failure where trace_id = $1`,
+      [TRACE],
+    );
+
+    expect(written).toEqual({
+      service: 'api',
+      operation: 'acceso.entrar',
+      severity: 'error',
+      error_code: 'fallo_de_servicio',
+      // La causa, completa y textual... con la dirección tapada. Regla 1 de §10.3 («nada
+      // de dato personal en esta tabla») por delante de la regla 2 («sin reemplazar»): lo
+      // que se tapa es una dirección, no la causa.
+      error_message:
+        'duplicate key value violates unique constraint "account_email_uq" DETAIL: Key (email)=([correo]) already exists',
+      cause_chain: '["timeout al escribir a [correo]"]',
+      stack: 'at Object.entrar (/app/acceso.ts:1) [correo]',
+      request_id: 'req-de-la-prueba',
+      platform: 'ios',
+      region: 'latam',
+      attempt: '1',
+      will_retry: 'false',
+      // Las cinco columnas que identificarían a alguien, y ninguna es argumento de la
+      // función: no hay forma de nombrarlas desde fuera. `input_digest` es la que decide,
+      // porque en una petición de acceso sería el hash del correo.
+      practice_id: null,
+      actor_id: null,
+      subject_type: null,
+      subject_id: null,
+      input_digest: null,
+    });
+
+    // Y el correo no está en NINGÚN sitio de la fila, ni completo ni en trozos.
+    const [sweep] = await read<{ leaked: string }>(
+      app,
+      ctxPlatform,
+      `select (count(*) > 0)::text as leaked from service_failure
+        where trace_id = $1
+          and (error_message like '%' || $2 || '%' or stack like '%' || $2 || '%'
+               or cause_chain::text like '%' || $2 || '%')`,
+      [TRACE, EMAIL_IN_THE_MESSAGE],
+    );
+    expect(sweep?.leaked).toBe('false');
+  });
+
+  it('con la escritura concedida, el rol sin sesión sigue sin leer ni una fila', async () => {
+    expect({
+      all: await whatItSees(app, ctxAnonymous, 'select id from service_failure'),
+      own: await whatItSees(app, ctxAnonymous, 'select error_message from service_failure where trace_id = $1', [
+        TRACE,
+      ]),
+      count: await whatItSees(app, ctxAnonymous, 'select count(*) from service_failure'),
+      // Ni escribir directo: la función es la única puerta, y por eso no puede elegir
+      // columnas que la función no tiene.
+      direct: await whatItSees(
+        app,
+        ctxAnonymous,
+        `insert into service_failure (service, operation, severity, error_code, error_message,
+                                      trace_id, will_retry, practice_id)
+         values ('api', 'acceso.entrar', 'error', 'x', 'y', 'z', false, $1)`,
+        [A.practice],
+      ),
+      update: await whatItSees(app, ctxAnonymous, `update service_failure set resolution = 'inventada'`),
+    }).toEqual({
+      all: 'permiso denegado',
+      own: 'permiso denegado',
+      count: 'permiso denegado',
+      direct: 'permiso denegado',
+      update: 'permiso denegado',
+    });
+  });
+
+  it('valida sus argumentos y no la ejecuta nadie más', async () => {
+    const fails = async (ctx: TenantContext, params: unknown[]) => {
+      try {
+        await read(app, ctx, 'select medskin_record_anonymous_failure($1, $2, $3, $4, null, null, null, $5, $6)', params);
+        return 'ejecuta';
+      } catch (failure) {
+        const { code } = failure as { code?: string };
+        return code === '42501' ? 'permiso denegado' : code === '22023' ? 'argumento invalido' : `otro: ${code}`;
+      }
+    };
+    const ok = ['acceso.entrar', 'fallo_de_servicio', 'causa', 'traza', null, null];
+
+    expect({
+      sinCausa: await fails(ctxAnonymous, ['acceso.entrar', 'fallo_de_servicio', '   ', 'traza', null, null]),
+      sinTraza: await fails(ctxAnonymous, ['acceso.entrar', 'fallo_de_servicio', 'causa', null, null, null]),
+      // Las dos etiquetas son de lista cerrada: no son texto libre del cliente.
+      plataformaInventada: await fails(ctxAnonymous, [...ok.slice(0, 4), 'windows-phone', null]),
+      regionInventada: await fails(ctxAnonymous, [...ok.slice(0, 4), null, 'bo']),
+      // Y los otros tres roles no la necesitan: escriben la fila completa, con su
+      // inquilino y su actor, bajo su propia política.
+      comoDoctora: await fails(ctxPractitionerA, ok),
+      comoPaciente: await fails(ctxPatient, ok),
+      comoPlataforma: await fails(ctxPlatform, ok),
+    }).toEqual({
+      sinCausa: 'argumento invalido',
+      sinTraza: 'argumento invalido',
+      plataformaInventada: 'argumento invalido',
+      regionInventada: 'argumento invalido',
+      comoDoctora: 'permiso denegado',
+      comoPaciente: 'permiso denegado',
+      comoPlataforma: 'permiso denegado',
+    });
+  });
+});
+
+// =========================================================================================
+// EL SEÑUELO Y SU COSTE (0007) · el oráculo del reloj, cerrado
+// =========================================================================================
+describe('los parámetros del señuelo del acceso (0007)', () => {
+  it('el señuelo está sembrado con los MISMOS parámetros con los que hashea la aplicación', async () => {
+    // Esta es la prueba que faltaba el día que la 0002 sembró el señuelo con los valores
+    // por defecto de la librería: `m=65536,t=3,p=4` contra los `m=19456,t=2,p=1` reales.
+    // Verificar contra uno costaba 15,4 ms y contra el otro 28,2 ms, y esa diferencia es un
+    // oráculo de enumeración de cuentas con un cronómetro y una sola petición por correo.
+    //
+    // Los parámetros viajan DENTRO del hash codificado, así que el coste lo fija la fila de
+    // la base y no la configuración del proceso: comparar las dos cosas es la única forma
+    // de que no se vuelvan a desincronizar en silencio. `ARGON2_COST` se importa a
+    // propósito —no se copian los números— para que cambiarlo sin resembrar rompa aquí.
+    const [params] = await read<Record<string, string>>(
+      app,
+      ctxAnonymous,
+      'select algorithm, memory_cost::text as memory_cost, time_cost::text as time_cost, parallelism::text as parallelism from medskin_access_decoy_params()',
+    );
+    expect(params).toMatchObject({
+      algorithm: 'argon2id',
+      memory_cost: String(ARGON2_COST.memoryCost),
+      time_cost: String(ARGON2_COST.timeCost),
+      parallelism: String(ARGON2_COST.parallelism),
+    });
+  });
+
+  it('los parámetros se pueden leer y el hash sigue sin poder leerse', async () => {
+    expect({
+      // El señuelo no se lee desde ningún rol de aplicación: es la otra mitad de la
+      // promesa del «mismo tiempo», y lo que no se lee no se compara.
+      anonimo: await whatItSees(app, ctxAnonymous, 'select hash from access_decoy'),
+      doctora: await whatItSees(app, ctxPractitionerA, 'select hash from access_decoy'),
+      plataforma: await whatItSees(app, ctxPlatform, 'select hash from access_decoy'),
+      // Y la función de los parámetros es solo del rol cuyo reloj está en juego.
+      paramsComoDoctora: await whatItSees(app, ctxPractitionerA, 'select * from medskin_access_decoy_params()'),
+    }).toEqual({
+      anonimo: 'permiso denegado',
+      doctora: 'permiso denegado',
+      plataforma: 'permiso denegado',
+      paramsComoDoctora: 'permiso denegado',
+    });
+  });
+
+  it('la fila no acepta un hash que no sea un Argon2id codificado de verdad', async () => {
+    // La cadena de la 0002 llevaba los parámetros en un orden que la librería no emite.
+    // Con esta restricción, una cadena escrita a mano ya no entra, así que la comprobación
+    // de arranque siempre tiene tres números que parsear.
+    await expect(
+      owner.query(`update access_decoy set hash = '$argon2id$v=19$m=65536,p=4,t=3$sal$hash' where only_row`),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      owner.query(`update access_decoy set hash = 'no soy un hash' where only_row`),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+});
+
+// =========================================================================================
+// LAS DOS FUNCIONES QUE `patient_link` HACE POSIBLES (0006)
+// `POST /v1/cuentas/{cuenta_id}/acceso` y el `ya_eligio_contrasena` de la ficha.
+// =========================================================================================
+describe('el reenvío del acceso de la doctora (0006)', () => {
+  const NEW_TEMP = '$argon2id$v=19$m=19456,p=1,t=2$c2FsdGVhZG9kZXBydWViYQ$4+9Luamu4CrTRSqz7rWxCJY49vSQUkKTBlaiJPvmXcs';
+  const expiry = `now() + interval '72 hours'`;
+
+  it('el estado del acceso de SU paciente, y nada de la cuenta de nadie más', async () => {
+    const [mine] = await read<Record<string, string>>(
+      app,
+      ctxPractitionerA,
+      'select linked::text, password_chosen::text, (temp_expires_at is not null)::text as has_expiry from medskin_patient_access_state($1)',
+      [RESEND.account],
+    );
+    expect(mine).toEqual({ linked: 'true', password_chosen: 'false', has_expiry: 'true' });
+
+    // La misma cuenta preguntada desde B: no hay vínculo, así que no hay nada que contar.
+    // No se distingue «no es tuya» de «no existe», que es el `404` del contrato.
+    const [notMine] = await read<Record<string, string | null>>(
+      app,
+      ctxPractitionerB,
+      'select linked::text, password_chosen::text, temp_expires_at from medskin_patient_access_state($1)',
+      [RESEND.account],
+    );
+    expect(notMine).toEqual({ linked: 'false', password_chosen: null, temp_expires_at: null });
+
+    // Y una cuenta que no existe responde igual que una que no es suya.
+    const [nobody] = await read<Record<string, string | null>>(
+      app,
+      ctxPractitionerA,
+      'select linked::text, password_chosen::text, temp_expires_at from medskin_patient_access_state($1)',
+      ['eeeeeeee-0000-4000-8000-0000000000ff'],
+    );
+    expect(nobody).toEqual(notMine);
+  });
+
+  it('acuña una temporal nueva, mata la anterior y marca cuándo se mandó', async () => {
+    const before = await owner.query<{ hash: string; sent: string | null }>(
+      `select c.hash, l.access_sent_at as sent from credential c
+         join patient_link l on l.account_id = c.account_id
+        where c.account_id = $1`,
+      [RESEND.account],
+    );
+    expect(before.rows[0]?.sent).toBeNull();
+
+    const [out] = await read<Record<string, string>>(
+      app,
+      ctxPractitionerA,
+      `select outcome, (expires_at is not null)::text as has_expiry
+         from medskin_resend_patient_access($1, $2, ${expiry})`,
+      [RESEND.account, NEW_TEMP],
+    );
+    expect(out).toEqual({ outcome: 'acceso_renovado', has_expiry: 'true' });
+
+    const after = await owner.query<{ hash: string; temporary: boolean; first: string | null; sent: string | null }>(
+      `select c.hash, c.is_temporary as temporary, c.temp_first_used_at as first, l.access_sent_at as sent
+         from credential c join patient_link l on l.account_id = c.account_id
+        where c.account_id = $1`,
+      [RESEND.account],
+    );
+    expect(after.rows[0]?.hash).toBe(NEW_TEMP);
+    expect(after.rows[0]?.temporary).toBe(true);
+    // La temporal nueva no se ha estrenado: la marca de la anterior se borra.
+    expect(after.rows[0]?.first).toBeNull();
+    expect(after.rows[0]?.sent).not.toBeNull();
+  });
+
+  it('una cuenta sin vínculo en esta consulta es «paciente_no_existe», no un acceso nuevo', async () => {
+    // Si esto devolviera otra cosa, una doctora podría acuñar una temporal sobre la cuenta
+    // de cualquiera y entrar con ella. Es el agujero que `patient_link` cierra.
+    const probes = await Promise.all(
+      [
+        [ctxPractitionerB, RESEND.account],
+        [ctxPractitionerA, PATIENT.account],
+        [ctxPractitionerA, B.account],
+      ].map(async ([ctx, account]) => {
+        const [row] = await read<{ outcome: string }>(
+          app,
+          ctx as TenantContext,
+          `select outcome from medskin_resend_patient_access($1, $2, ${expiry})`,
+          [account, NEW_TEMP],
+        );
+        return row?.outcome;
+      }),
+    );
+    expect(probes).toEqual(['paciente_no_existe', 'paciente_no_existe', 'paciente_no_existe']);
+
+    // Y la credencial de la otra cuenta no se tocó.
+    const { rows } = await owner.query<{ hash: string }>('select hash from credential where account_id = $1', [
+      PATIENT.account,
+    ]);
+    expect(rows[0]?.hash).not.toBe(NEW_TEMP);
+  });
+
+  it('una paciente que ya eligió su contraseña no se la puede resetear su doctora', async () => {
+    await owner.query(
+      `update credential set is_temporary = false, temp_used_at = now(), set_at = now() where account_id = $1`,
+      [RESEND.account],
+    );
+    const [out] = await read<{ outcome: string }>(
+      app,
+      ctxPractitionerA,
+      `select outcome from medskin_resend_patient_access($1, $2, ${expiry})`,
+      [RESEND.account, HASH],
+    );
+    expect(out?.outcome).toBe('ya_eligio_su_contrasena');
+
+    // El hash no cambió: «si pudiera, la doctora sería dueña del acceso al expediente de
+    // una persona adulta» (cuentas.md).
+    const { rows } = await owner.query<{ hash: string }>('select hash from credential where account_id = $1', [
+      RESEND.account,
+    ]);
+    expect(rows[0]?.hash).toBe(NEW_TEMP);
+
+    // Y la ficha lo dice, que es para lo que existe la otra función: el botón sale apagado
+    // en vez de fallar al pulsarlo.
+    const [state] = await read<{ password_chosen: string }>(
+      app,
+      ctxPractitionerA,
+      'select password_chosen::text from medskin_patient_access_state($1)',
+      [RESEND.account],
+    );
+    expect(state?.password_chosen).toBe('true');
+  });
+
+  it('las dos funciones exigen contexto de inquilino y no las ejecuta nadie más', async () => {
+    const canRun = async (ctx: TenantContext, sql: string, params: unknown[] = []) => {
+      try {
+        await read(app, ctx, sql, params);
+        return 'ejecuta';
+      } catch (failure) {
+        const { code } = failure as { code?: string };
+        return code === '42501' ? 'permiso denegado' : code === '22023' ? 'sin contexto' : `otro: ${code}`;
+      }
+    };
+    const state = 'select * from medskin_patient_access_state($1)';
+    const resend = `select * from medskin_resend_patient_access($1, $2, ${expiry})`;
+
+    expect({
+      estadoComoPaciente: await canRun(ctxPatient, state, [RESEND.account]),
+      estadoComoAnonimo: await canRun(ctxAnonymous, state, [RESEND.account]),
+      estadoComoPlataforma: await canRun(ctxPlatform, state, [RESEND.account]),
+      reenvioComoPaciente: await canRun(ctxPatient, resend, [RESEND.account, HASH]),
+      reenvioComoAnonimo: await canRun(ctxAnonymous, resend, [RESEND.account, HASH]),
+      // Y la temporal tiene que venir hasheada con Argon2id: un `hash` en claro aquí sería
+      // una contraseña guardada en claro.
+      sinHashear: await canRun(ctxPractitionerA, resend, [RESEND.account, 'tejado-lila-07']),
+    }).toEqual({
+      estadoComoPaciente: 'permiso denegado',
+      estadoComoAnonimo: 'permiso denegado',
+      estadoComoPlataforma: 'permiso denegado',
+      reenvioComoPaciente: 'permiso denegado',
+      reenvioComoAnonimo: 'permiso denegado',
+      sinHashear: 'sin contexto',
+    });
   });
 });

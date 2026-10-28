@@ -57,28 +57,14 @@ export class FailureLog {
     const first = chain[0] ?? { name: 'Desconocido', message: 'sin causa' };
 
     if (failure.context === null) {
-      // LÍMITE CONOCIDO: `app_anonymous` no tiene `INSERT` sobre `service_failure` —su
-      // único privilegio es `EXECUTE` de las funciones del acceso— y `withTenantContext()`
-      // exige `accountId` para los otros tres roles. Así que un 500 de una petición SIN
-      // sesión (`POST /v1/acceso`, los dos de recuperación, el refresco) no tiene fila
-      // donde ir todavía. Va a la salida de error del proceso, que es lo que el recolector
-      // de registros del despliegue ya lee, y queda reportado a `datos-senior`: hace falta
-      // un `GRANT INSERT ON service_failure TO app_anonymous` con su política, o una
-      // función `SECURITY DEFINER` que escriba la fila. No se inventa un `account_id`
-      // falso para colarla.
-      process.stderr.write(
-        `${JSON.stringify({
-          nivel: failure.severity,
-          service: failure.service,
-          operation: failure.operation,
-          error_code: failure.errorCode,
-          error_message: first.message,
-          cause_chain: chain,
-          trace_id: failure.traceId,
-          request_id: failure.requestId,
-          sin_contexto: 'app_anonymous no puede escribir en service_failure',
-        })}\n`,
-      );
+      // Un 500 de una petición SIN sesión —`POST /v1/acceso`, los dos de recuperación, el
+      // refresco— no tiene inquilino ni actor que escribir, y `app_anonymous` no tiene
+      // `INSERT` sobre `service_failure`. Va por `medskin_record_anonymous_failure()`,
+      // que es `SECURITY DEFINER`, escribe las doce columnas que no necesitan contexto y
+      // TAPA LA DIRECCIÓN DE CORREO del mensaje del motor: «Key (email)=(…) already
+      // exists» es el único dato personal que una petición sin sesión tiene en la mano.
+      // Cierra la pregunta 18 de `preguntas-abiertas.md` (migraciones 0004 y 0005).
+      await this.recordAnonymous(failure, chain, first);
       return;
     }
 
@@ -118,16 +104,60 @@ export class FailureLog {
         ),
       );
     } catch (whileRecording) {
-      process.stderr.write(
-        `${JSON.stringify({
-          nivel: 'critical',
-          mensaje: 'no se pudo registrar el fallo en service_failure',
-          error_message: first.message,
-          al_registrar:
-            whileRecording instanceof Error ? whileRecording.message : String(whileRecording),
-          trace_id: failure.traceId,
-        })}\n`,
-      );
+      this.toStderr(failure, first, whileRecording);
     }
+  }
+
+  /**
+   * El fallo de una petición sin sesión. `app_anonymous` NO fija ningún contexto —cuando
+   * llega la petición no hay sesión— y su único privilegio es `EXECUTE`: aquí, de esta
+   * función y nada más.
+   */
+  private async recordAnonymous(
+    failure: Failure,
+    chain: CauseLink[],
+    first: CauseLink,
+  ): Promise<void> {
+    try {
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, (c) =>
+        c.query(
+          'select medskin_record_anonymous_failure($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+          [
+            failure.operation,
+            failure.errorCode,
+            first.message,
+            failure.traceId,
+            JSON.stringify(chain),
+            failure.cause instanceof Error ? (failure.cause.stack ?? null) : null,
+            failure.requestId,
+            failure.platform,
+            failure.region,
+          ],
+        ),
+      );
+    } catch (whileRecording) {
+      this.toStderr(failure, first, whileRecording);
+    }
+  }
+
+  /**
+   * La última red: si ni la tabla ni la función se pueden escribir, el fallo sale por la
+   * salida de error del proceso, que es lo que el recolector de registros del despliegue
+   * ya lee. Nunca se traga (§10.3, regla 5) y nunca lanza (regla 6): un fallo al registrar
+   * un fallo no convierte un 500 en dos.
+   */
+  private toStderr(failure: Failure, first: CauseLink, whileRecording: unknown): void {
+    process.stderr.write(
+      `${JSON.stringify({
+        nivel: 'critical',
+        mensaje: 'no se pudo registrar el fallo en service_failure',
+        operation: failure.operation,
+        error_code: failure.errorCode,
+        error_message: first.message,
+        al_registrar:
+          whileRecording instanceof Error ? whileRecording.message : String(whileRecording),
+        trace_id: failure.traceId,
+      })}\n`,
+    );
   }
 }
