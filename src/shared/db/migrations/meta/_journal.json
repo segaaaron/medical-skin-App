@@ -29,6 +29,13 @@
       "when": 1793146200000,
       "tag": "0003_console_session_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793146800000,
+      "tag": "0004_anonymous_failure_log",
+      "breakpoints": true
     }
   ]
 }

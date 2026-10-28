@@ -10,35 +10,16 @@ import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '
 import type { FastifyReply } from 'fastify';
 
 import {
+  CATALOG,
   ContractError,
   FAILURE_PHRASES,
   ServiceFailure,
+  TRANSPORT_CODE_BY_STATUS,
   type ErrorBody,
 } from '../contract/error-catalog';
 import { FailureLog } from '../failures/service-failure';
 import { registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
-
-/**
- * Lo que HTTP produce antes de llegar a un controlador: una ruta que no existe, un cuerpo
- * que no es JSON, un cuerpo que pasa del límite. NINGUNO de estos códigos está en
- * `_convenciones.md`, y se dicen aquí porque callarlos sería devolver un «error
- * inesperado». Anotado para `producto`: hacen falta en el catálogo del contrato.
- */
-const TRANSPORT_ERRORS: Record<number, { codigo: string; mensaje: string }> = {
-  400: { codigo: 'cuerpo_no_valido', mensaje: 'No entendimos lo que mandaste. Revísalo.' },
-  404: { codigo: 'ruta_no_existe', mensaje: 'Esa dirección no existe en MedSkin.' },
-  405: { codigo: 'metodo_no_permitido', mensaje: 'Esa dirección no acepta esa operación.' },
-  413: {
-    codigo: 'cuerpo_demasiado_grande',
-    mensaje: 'Eso es demasiado grande para mandarlo así.',
-  },
-  415: { codigo: 'formato_no_admitido', mensaje: 'Manda el cuerpo en JSON.' },
-  429: {
-    codigo: 'demasiadas_peticiones',
-    mensaje: 'Demasiadas peticiones seguidas. Espera un momento.',
-  },
-};
 
 @Catch()
 export class ErrorFilter implements ExceptionFilter {
@@ -55,13 +36,18 @@ export class ErrorFilter implements ExceptionFilter {
       return;
     }
 
+    // Lo que HTTP produce ANTES de llegar a un controlador: una ruta que no existe, un
+    // cuerpo que no es JSON, un cuerpo que pasa del límite. Son los seis de
+    // _convenciones.md · «Los errores del transporte», y salen del catálogo como los
+    // demás: tres de ellos no le dicen nada al usuario —`mensaje` vacío— porque son
+    // errores de programación del cliente, pero TIENEN código y la app los registra.
     if (thrown instanceof HttpException) {
       const status = thrown.getStatus();
-      const known = TRANSPORT_ERRORS[status];
-      if (known !== undefined && status < 500) {
+      const code = TRANSPORT_CODE_BY_STATUS[status];
+      if (code !== undefined && status < 500) {
         this.reply(res, status, {
-          error: { codigo: known.codigo, mensaje: known.mensaje, campo: null },
-        } as unknown as ErrorBody);
+          error: { codigo: code, mensaje: CATALOG[code].message, campo: null },
+        });
         return;
       }
     }
