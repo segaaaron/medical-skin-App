@@ -21,6 +21,7 @@ import type {
   NextStepFacts,
   OpenedSession,
   OwnerOfSessions,
+  SavedPassword,
   SavePasswordVerdict,
   SessionOpening,
   SessionPort,
@@ -46,8 +47,20 @@ type CredentialRow = {
  * exige `practiceId` porque sus políticas se leen por inquilino, y `app_patient` no lo
  * fija nunca porque la paciente no pertenece a ningún inquilino (§12.2.1).
  */
-function contextFor(owner: OwnerOfSessions): TenantContext {
-  if (owner.accountRole === 'paciente') {
+function contextFor(owner: {
+  accountId: string;
+  practiceId: string | null;
+  accountRole: AccountRole | null;
+}): TenantContext {
+  // `accountRole` nulo es la entrada por recuperación: su token no lleva rol a propósito,
+  // así que no se puede adoptar `app_practitioner` —que exige inquilino— y se adopta el
+  // único rol cuyas políticas se leen por `cuenta_id` sin inquilino. Lo que esta
+  // transacción puede tocar es exactamente la fila de quien pregunta: `credential` y
+  // `session` tienen política sobre `account_id`, y `medskin_set_final_password()` es
+  // `SECURITY DEFINER` y se autoriza por `medskin.account_id`, nunca por un argumento.
+  // Anotado para `datos-senior`: el nombre del rol dice «paciente» y aquí puede ser una
+  // doctora; lo que corresponde es un rol de cuenta sin inquilino, o renombrarlo.
+  if (owner.accountRole === null || owner.accountRole === 'paciente') {
     return { role: 'app_patient', accountId: owner.accountId };
   }
   return {
@@ -135,19 +148,25 @@ export class AccessRepository implements CredentialPort, SessionPort {
   async saveFinalPassword(p: {
     accountId: string;
     practiceId: string | null;
-    accountRole: AccountRole;
+    accountRole: AccountRole | null;
     hash: string;
     via: 'temporal' | 'recuperacion';
-    currentSessionId: string;
-    refreshDigest: string;
-    refreshExpiresAt: Date;
-  }): Promise<{ verdict: SavePasswordVerdict; permissions: readonly string[] | null }> {
+    currentSessionId: string | null;
+    refreshDigest: string | null;
+    refreshExpiresAt: Date | null;
+  }): Promise<SavedPassword> {
     const ctx = contextFor(p);
     return withTenantContext(this.pool, ctx, async (c) => {
-      const { rows } = await c.query<{ verdict: string; permissions: string[] | null }>(
-        'select * from medskin_set_final_password($1, $2, $3)',
-        [p.hash, p.via, p.currentSessionId],
-      );
+      const { rows } = await c.query<{
+        verdict: string;
+        role: string | null;
+        practice_id: string | null;
+        permissions: string[] | null;
+      }>('select * from medskin_set_final_password($1, $2, $3)', [
+        p.hash,
+        p.via,
+        p.currentSessionId,
+      ]);
       const row = rows[0];
       if (row === undefined) {
         throw new ServiceFailure(
@@ -156,38 +175,55 @@ export class AccessRepository implements CredentialPort, SessionPort {
         );
       }
       if (row.verdict !== 'saved') {
-        return { verdict: row.verdict as SavePasswordVerdict, permissions: null };
+        return {
+          verdict: row.verdict as SavePasswordVerdict,
+          accountRole: null,
+          practiceId: null,
+          permissions: null,
+        };
       }
+
+      const saved: SavedPassword = {
+        verdict: 'saved',
+        accountRole: row.role as AccountRole | null,
+        practiceId: row.practice_id,
+        permissions: row.permissions,
+      };
 
       // El ascenso de esta sesión, en la MISMA transacción: de alcance restringido a
       // `completo` y con el refresco que no tenía. `session_scope_without_refresh_ck`
       // obliga a que las dos cosas pasen juntas, y está bien que obligue.
-      const promoted = await c.query(
-        `update session
-            set scope = 'completo',
-                refresh_hash = $1,
-                refresh_expires_at = $2,
-                refresh_rotated_at = now(),
-                previous_refresh_hash = null,
-                last_seen_at = now()
-          where id = $3 and account_id = $4 and revoked_at is null`,
-        [p.refreshDigest, p.refreshExpiresAt, p.currentSessionId, p.accountId],
-      );
-      if (promoted.rowCount !== 1) {
-        throw new ServiceFailure(
-          FAILURE_PHRASES.savePassword,
-          new Error(`la sesión ${p.currentSessionId} no se pudo ascender a alcance completo`),
+      //
+      // Por recuperación no hay sesión que ascender —el token no lleva `sid`—, así que la
+      // sesión se abre después con `open()`, que es el mismo acto que una entrada normal.
+      if (p.currentSessionId !== null) {
+        const promoted = await c.query(
+          `update session
+              set scope = 'completo',
+                  refresh_hash = $1,
+                  refresh_expires_at = $2,
+                  refresh_rotated_at = now(),
+                  previous_refresh_hash = null,
+                  last_seen_at = now()
+            where id = $3 and account_id = $4 and revoked_at is null`,
+          [p.refreshDigest, p.refreshExpiresAt, p.currentSessionId, p.accountId],
         );
+        if (promoted.rowCount !== 1) {
+          throw new ServiceFailure(
+            FAILURE_PHRASES.savePassword,
+            new Error(`la sesión ${p.currentSessionId} no se pudo ascender a alcance completo`),
+          );
+        }
       }
 
       await this.audit(c, {
-        practiceId: p.practiceId,
+        practiceId: p.practiceId ?? saved.practiceId,
         accountId: p.accountId,
         action: 'acceso.contrasena_elegida',
         data: { via: p.via },
       });
 
-      return { verdict: 'saved', permissions: row.permissions };
+      return saved;
     });
   }
 
@@ -310,26 +346,42 @@ export class AccessRepository implements CredentialPort, SessionPort {
     c: PoolClient,
     accountRole: AccountRole,
   ): Promise<NextStepFacts> {
-    if (accountRole === 'paciente') return { licenseStatus: null, firstDayDone: true };
+    const sinConsulta: NextStepFacts = {
+      licenseStatus: null,
+      firstDayDone: true,
+      practitionerRole: null,
+      permissions: null,
+    };
+    if (accountRole === 'paciente') return sinConsulta;
 
-    // Las dos filas son del inquilino del contexto y las políticas las acotan a él: por eso
-    // no hay `where practice_id = …` escrito a mano con un valor del cliente.
+    // Las tres filas son del inquilino del contexto y las políticas las acotan a él: por
+    // eso no hay `where practice_id = …` escrito a mano con un valor del cliente. La de
+    // `practitioner` sí lleva filtro, y no es por inquilino: dentro de una consulta hay
+    // varias, y la que se quiere es la de QUIEN PREGUNTA, que sale de
+    // `medskin_current_account()` y nunca del cuerpo ni de la URL (OWASP A01).
     const { rows } = await c.query<{
       status: string | null;
       first_day_practice_data: boolean;
       first_day_schedule: boolean;
       first_day_first_treatment: boolean;
       first_day_dismissed: boolean;
+      practitioner_role: string | null;
+      permissions: string[] | null;
     }>(
       `select l.status,
               p.first_day_practice_data, p.first_day_schedule,
-              p.first_day_first_treatment, p.first_day_dismissed
+              p.first_day_first_treatment, p.first_day_dismissed,
+              pr.role as practitioner_role, pr.permissions
          from practice p
          left join license l on l.practice_id = p.id
+         left join practitioner pr
+                on pr.practice_id = p.id
+               and pr.account_id = medskin_current_account()
+               and pr.status = 'activa'
         limit 1`,
     );
     const row = rows[0];
-    if (row === undefined) return { licenseStatus: null, firstDayDone: true };
+    if (row === undefined) return sinConsulta;
     return {
       licenseStatus: row.status,
       firstDayDone:
@@ -337,6 +389,8 @@ export class AccessRepository implements CredentialPort, SessionPort {
         (row.first_day_practice_data &&
           row.first_day_schedule &&
           row.first_day_first_treatment),
+      practitionerRole: row.practitioner_role as PractitionerRole | null,
+      permissions: row.permissions,
     };
   }
 

@@ -76,4 +76,21 @@ export class Counters {
 export const COUNTER_KEYS = {
   signInByEmail: (fingerprint: string) => `acceso:intentos:${fingerprint}`,
   signInByIp: (ip: string) => `acceso:intentos:ip:${ip}`,
+
+  // Los dos de `recuperacion.md` que la tabla escribe.
+  recoveryRequestsByEmail: (fingerprint: string) => `recuperacion:pedidos:${fingerprint}`,
+  recoveryAttemptsByEmail: (fingerprint: string) => `recuperacion:intentos:${fingerprint}`,
+
+  // Los dos por IP de `recuperacion.md`. La tabla de `_convenciones.md` no los nombra,
+  // pero los dos endpoints los exigen por texto: «más de 20 por IP» en el 429
+  // `demasiados_codigos` y «más de 20 intentos por IP en 10 min» en el 429
+  // `demasiados_intentos`. El nombre sigue la forma del acceso (`…:ip:<ip>`) para que no
+  // haya dos convenciones de clave. Anotado para `producto`: faltan en esa tabla.
+  recoveryRequestsByIp: (ip: string) => `recuperacion:pedidos:ip:${ip}`,
+  recoveryAttemptsByIp: (ip: string) => `recuperacion:intentos:ip:${ip}`,
+
+  // El de `PATCH /v1/cuentas/mia/contrasena`: «5 fallos de `actual` en 15 min». No está
+  // en la tabla de `_convenciones.md` y el contrato lo exige. Va por `cuenta_id` y no por
+  // correo porque aquí quien llama ya está dentro: hay fila de cuenta segura que contar.
+  passwordChangeByAccount: (accountId: string) => `cuenta:contrasena:intentos:${accountId}`,
 } as const;

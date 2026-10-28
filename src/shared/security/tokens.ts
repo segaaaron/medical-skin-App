@@ -27,12 +27,34 @@ import {
 
 import { config, type Config } from '../config/config';
 import { ContractError } from '../contract/error-catalog';
-import type { Claims } from '../contract/session';
+import type { Scope } from '../contract/session';
+import type { Claims, RecoveryClaims, Region, Role } from '../contract/session';
 
 const ALGORITHM = 'Ed25519';
 export const TOKEN_LIFETIME_SECONDS = 15 * 60;
 
-export type VerifiedClaims = Claims & { iat: number; exp: number };
+/**
+ * `recuperacion.md`: el token de alcance `recuperacion` «vive 5 minutos». Es el único del
+ * tramo que no vive 15: no acompaña a una sesión, solo autoriza una pantalla.
+ */
+export const RECOVERY_TOKEN_LIFETIME_SECONDS = 5 * 60;
+
+/**
+ * Lo que sale de `verify()`. `sid`, `rol` y `practice` son OPCIONALES porque el token de
+ * recuperación no los lleva (`RecoveryClaims`), y quien llama decide qué exige: el guardia
+ * los pide para todo alcance que no sea `recuperacion`, y los prohíbe para ese.
+ */
+export type VerifiedClaims = {
+  sub: string;
+  alcance: Scope;
+  region: Region;
+  permisos: readonly string[];
+  iat: number;
+  exp: number;
+  sid?: string;
+  rol?: Role;
+  practice?: string;
+};
 
 /**
  * Genera el par de desarrollo si no existe. Solo en `development`: en producción las
@@ -93,6 +115,24 @@ export class Tokens {
   }
 
   /**
+   * El token de recuperación: `sub`, `alcance` y `region`, y NADA MÁS. Sin `rol`, sin
+   * `sid`, sin `practice` y con `permisos` vacío — ver `RecoveryClaims`. Firmarlo aparte y
+   * no con un `sign()` de reclamaciones parciales es lo que hace imposible colarle un rol
+   * por descuido: la firma no tiene por dónde recibirlo.
+   */
+  async signRecovery(claims: RecoveryClaims): Promise<{ token: string; expiresAt: Date }> {
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const expiresAt = issuedAt + RECOVERY_TOKEN_LIFETIME_SECONDS;
+    const token = await new SignJWT({ alcance: claims.alcance, region: claims.region, permisos: [] })
+      .setProtectedHeader({ alg: 'EdDSA', kid: this.kid })
+      .setSubject(claims.sub)
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(expiresAt)
+      .sign(this.privateKey);
+    return { token, expiresAt: new Date(expiresAt * 1000) };
+  }
+
+  /**
    * Verifica la firma primero y las reclamaciones después, que es el orden de `jose`. De
    * ahí sale una distinción que los contratos necesitan: cuando el token está CADUCADO la
    * firma ya se comprobó, así que su contenido es auténtico y se puede usar para elegir
@@ -138,10 +178,10 @@ export class Tokens {
     const { sub, sid, rol, alcance, region, practice, permisos, iat, exp } = payload as JWTPayload &
       Partial<Claims>;
 
+    // Lo que TODO token lleva. `sid` y `rol` no están aquí: el de recuperación no los
+    // trae, y es el guardia el que decide qué exige por alcance.
     if (
       typeof sub !== 'string' ||
-      typeof sid !== 'string' ||
-      typeof rol !== 'string' ||
       typeof alcance !== 'string' ||
       typeof region !== 'string' ||
       typeof iat !== 'number' ||
@@ -153,10 +193,10 @@ export class Tokens {
 
     return {
       sub,
-      sid,
-      rol,
       alcance,
       region,
+      ...(typeof sid === 'string' ? { sid } : {}),
+      ...(typeof rol === 'string' ? { rol } : {}),
       ...(typeof practice === 'string' ? { practice } : {}),
       permisos: permisos.filter((p): p is string => typeof p === 'string'),
       iat,

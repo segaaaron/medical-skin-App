@@ -86,7 +86,13 @@ function armar(opciones: {
       return Promise.resolve();
     },
     readMine: () => Promise.resolve(null),
-    saveFinalPassword: () => Promise.resolve({ verdict: 'saved' as const, permissions: null }),
+    saveFinalPassword: () =>
+      Promise.resolve({
+        verdict: 'saved' as const,
+        accountRole: 'paciente' as const,
+        practiceId: null,
+        permissions: null,
+      }),
   };
 
   const passwords: PasswordHasher = {
@@ -121,9 +127,17 @@ function armar(opciones: {
         sessionId: SESION,
         licenseStatus: 'aprobada',
         firstDayDone: true,
+        practitionerRole: 'doctora' as const,
+        permissions: null,
       });
     },
-    nextStepFacts: () => Promise.resolve({ licenseStatus: 'aprobada', firstDayDone: true }),
+    nextStepFacts: () =>
+      Promise.resolve({
+        licenseStatus: 'aprobada',
+        firstDayDone: true,
+        practitionerRole: 'doctora' as const,
+        permissions: null,
+      }),
     list: () => Promise.resolve([]),
     revokeOne: () => Promise.resolve(true),
     revokeOthers: () => Promise.resolve(0),

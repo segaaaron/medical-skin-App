@@ -10,10 +10,9 @@
 // pausa escribiendo esas columnas (`cuentas.md`) y lo que tiene que borrar es TAMBIÉN la
 // clave de Redis: por eso las claves viven en `COUNTER_KEYS` y no aquí dentro.
 //
-// El límite por IP no está fijado en `acceso.md`, que solo dice «el contador es por cuenta
-// y por IP». Se usa 20, que es el número que `recuperacion.md` escribe para su contador por
-// IP: un número que el contrato no fija no se inventa dos veces distinto. Anotado para
-// `producto`.
+// El límite por IP es **20 en 15 minutos** (decisión 21, 27 de octubre de 2026): el mismo
+// número que `recuperacion.md` escribe para su contador por IP, para no tener dos cifras
+// que nadie recuerda.
 
 import { FAILURE_PHRASES, ServiceFailure } from '../../../shared/contract/error-catalog';
 import { COUNTER_KEYS, type Count, type Counters } from '../../../shared/security/counters';

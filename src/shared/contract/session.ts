@@ -49,3 +49,24 @@ export type Claims = {
   practice?: string;
   permisos: readonly string[];
 };
+
+/**
+ * El token de `recuperacion.md` · `POST /v1/recuperacion/codigo`, y es OTRA forma: **no
+ * lleva `rol`, no lleva `sid` y no lleva `practice`.**
+ *
+ * No es una omisión por pereza. El cuerpo de un JWT lo lee el cliente, así que una
+ * reclamación `rol` aquí diría «esta cuenta es de doctora» a quien acertó un código de
+ * seis dígitos, y el contrato lo prohíbe con nombre y apellido: «El código va **antes** de
+ * saber el rol. Si esta respuesta trajera el rol, el flujo de recuperación sería el
+ * oráculo que el flujo de acceso cierra — y encima un oráculo mejor, porque diría *qué* es
+ * la persona, no solo que existe». `practice` lo diría igual de claro.
+ *
+ * Y sin `sid` porque no hay sesión todavía: la sesión se abre al guardar la contraseña, en
+ * la misma transacción. Un `sid` inventado aquí sería un identificador que no apunta a
+ * ninguna fila.
+ */
+export type RecoveryClaims = {
+  sub: string;
+  alcance: 'recuperacion';
+  region: Region;
+};

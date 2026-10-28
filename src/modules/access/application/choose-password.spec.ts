@@ -65,6 +65,8 @@ function armar(opciones: {
       pasos.push(`guardar:${p.via}:${p.currentSessionId}:${p.refreshDigest}`);
       return Promise.resolve({
         verdict: opciones.veredicto ?? ('saved' as const),
+        accountRole: 'paciente' as const,
+        practiceId: null,
         permissions: null,
       });
     },
@@ -82,10 +84,22 @@ function armar(opciones: {
   };
 
   const sessions: SessionPort = {
-    open: () => Promise.resolve({ sessionId: 'x', licenseStatus: null, firstDayDone: true }),
+    open: () =>
+      Promise.resolve({
+        sessionId: 'x',
+        licenseStatus: null,
+        firstDayDone: true,
+        practitionerRole: null,
+        permissions: null,
+      }),
     nextStepFacts: () => {
       pasos.push('paso:estado');
-      return Promise.resolve({ licenseStatus: 'sin_enviar', firstDayDone: false });
+      return Promise.resolve({
+        licenseStatus: 'sin_enviar',
+        firstDayDone: false,
+        practitionerRole: null,
+        permissions: null,
+      });
     },
     list: () => Promise.resolve([]),
     revokeOne: () => Promise.resolve(true),

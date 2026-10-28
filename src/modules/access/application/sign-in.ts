@@ -8,7 +8,7 @@
 //   2. la PAUSA, antes de verificar nada y exista o no la cuenta
 //   3. el verificado de Argon2id SIEMPRE: contra el hash real, o contra el señuelo
 //   4. si no coincide → 401 `acceso_no_coincide`, y AQUÍ TERMINA
-//   5. solo si coincide → suspensión, temporal caducada, temporal ya gastada, y el 200
+//   5. solo si coincide → suspensión, temporal caducada, y el 200
 //
 // Hecho al revés, una petición con la contraseña inventada distingue un correo con cuenta
 // de uno sin cuenta, y eso es dato de salud. `sign-in.spec.ts` fija el orden.
@@ -110,12 +110,12 @@ export class SignIn {
           caduco_en: expires.toISOString(),
         });
       }
-      // «Con esa contraseña ya elegiste la tuya»: la temporal se consume AL GUARDAR la
-      // definitiva (decisión del 27 de octubre), así que esto solo puede estar marcado si
-      // la credencial siguió siendo temporal después del consumo.
-      if (credential.tempUsedAt !== null) {
-        throw new ContractError('contrasena_temporal_ya_usada');
-      }
+      // No hay comprobación de «temporal ya usada», y es la decisión 27 del 27 de
+      // octubre: `medskin_set_final_password()` pone `is_temporary = false` en la misma
+      // sentencia que marca `temp_used_at`, así que entrar con la temporal vieja no
+      // coincide con el hash y cae en `acceso_no_coincide` dos pasos más arriba. El
+      // código salió del catálogo en vez de conservar el hash de la temporal 72 h para
+      // mejorar una frase: eso es guardar una credencial muerta.
     }
 
     const role = resolveRole(credential.accountRole, credential.practitionerRole);
@@ -206,6 +206,9 @@ export class SignIn {
     // y concordar el singular es interpolar bien, no cambiar la frase.
     const intentos = attemptsLeft === 1 ? '1 intento' : `${attemptsLeft} intentos`;
     return new ContractError('acceso_no_coincide', {
+      // Decisión 19: los dos campos que se encienden viajan en `datos.campos`, porque
+      // `campo` es uno y este es el único error del tramo con dos.
+      campos: ['correo', 'contrasena'],
       intentos_restantes: attemptsLeft,
       pausa_minutos: PAUSE_MINUTES,
       aviso: `Te quedan ${intentos} antes de una pausa de ${PAUSE_MINUTES} minutos.`,

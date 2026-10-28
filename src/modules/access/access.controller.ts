@@ -54,9 +54,16 @@ export class AccessController {
     return this.signIn.run({ body: req.body, ip: ctx.ip, device: ctx.device });
   }
 
+  // Un flujo, dos entradas, y el `if` está aquí y no en el caso de uso porque la entrada
+  // la decide el TOKEN, que es cosa del borde: con sesión restringida se asciende esa
+  // sesión; con token de recuperación no hay sesión ni rol que leer y se abre una nueva.
   @Post('contrasena-nueva')
   @HttpCode(200)
   async newPassword(@Req() req: RequestWithContext) {
+    const ctx = contextOf(req);
+    if (ctx.recovery !== null) {
+      return this.choosePassword.runFromRecovery(req.body, ctx.recovery, ctx.device);
+    }
     return this.choosePassword.run(req.body, callerOf(req));
   }
 

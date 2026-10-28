@@ -36,6 +36,20 @@
       "when": 1793146800000,
       "tag": "0004_anonymous_failure_log",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793147400000,
+      "tag": "0005_anonymous_failure_log_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793154507396,
+      "tag": "0006_tramo2_patient_link_history",
+      "breakpoints": true
     }
   ]
 }

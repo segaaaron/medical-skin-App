@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { FastifyRequest } from 'fastify';
 
-import type { Caller } from '../../modules/access/application/caller';
+import type { Caller, RecoveryCaller } from '../../modules/access/application/caller';
 import type { Device } from '../../modules/access/domain/ports';
 import type { RoutePolicy } from './route-policy';
 
@@ -17,6 +17,12 @@ export type RequestContext = {
   policy: RoutePolicy;
   /** Nulo en las rutas sin `Authorization`. Lo pone el guardia, del token y de nada más. */
   caller: Caller | null;
+  /**
+   * El otro de los dos que puede llegar con token: quien acertó un código de
+   * recuperación. Es su propio campo y no un `Caller` con nulos porque no es una sesión
+   * y no tiene rol que leer (`RecoveryCaller`). Exactamente uno de los dos es no nulo.
+   */
+  recovery: RecoveryCaller | null;
 };
 
 /** El tipo que el guardia cuelga de la petición. No se escribe nada más en ella. */
@@ -44,7 +50,9 @@ function readAppHeader(value: string | null): {
   return { platform, appVersion: version ?? null };
 }
 
-export function readRequest(req: FastifyRequest): Omit<RequestContext, 'policy' | 'caller'> {
+export function readRequest(
+  req: FastifyRequest,
+): Omit<RequestContext, 'policy' | 'caller' | 'recovery'> {
   const headers = req.headers;
   const { platform, appVersion } = readAppHeader(singleHeader(headers['x-medskin-app']));
   const id = randomUUID();
@@ -57,16 +65,15 @@ export function readRequest(req: FastifyRequest): Omit<RequestContext, 'policy' 
     ip: req.ip,
     device: {
       deviceId: singleHeader(headers['x-medskin-dispositivo']) ?? 'sin-dispositivo',
-      // `_convenciones.md` no define cabecera para el modelo ni para el sistema, y
-      // `GET /v1/acceso/sesiones` devuelve los dos («iPhone 15 Pro», «iOS 18.2»). Se leen
-      // de estas dos, que es la extensión natural de la que sí está definida, y queda
-      // anotado para `producto`: sin ellas la lista de sesiones sale con nulos.
+      // `X-MedSkin-Modelo` y `X-MedSkin-Sistema` son oficiales desde el 27 de octubre
+      // (decisión 23) y son OPCIONALES: un cliente que no las manda pierde una etiqueta
+      // —la lista de sesiones dice «Dispositivo desconocido»—, no el acceso.
       model: singleHeader(headers['x-medskin-modelo']),
       os: singleHeader(headers['x-medskin-sistema']),
       appVersion,
       platform,
-      // `ciudad` se resuelve de la IP y aquí no hay resolvedor: el tramo no trae base
-      // geográfica. Queda nula y la lista de sesiones la devuelve nula, que es verdad.
+      // `ciudad` admite nulo y HOY ES NULA SIEMPRE (decisión 23): no se añade un
+      // resolvedor geográfico por una línea de una lista.
       city: null,
     },
   };

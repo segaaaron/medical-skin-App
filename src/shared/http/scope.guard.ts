@@ -9,12 +9,12 @@
 
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 
-import type { Caller } from '../../modules/access/application/caller';
+import type { Caller, RecoveryCaller } from '../../modules/access/application/caller';
 import { ContractError, FAILURE_PHRASES, ServiceFailure } from '../contract/error-catalog';
-import type { AccountRole } from '../contract/session';
+import type { AccountRole, Scope } from '../contract/session';
 import { readRequest, registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
-import type { Tokens } from '../security/tokens';
+import type { Tokens, VerifiedClaims } from '../security/tokens';
 
 @Injectable()
 export class ScopeGuard implements CanActivate {
@@ -36,27 +36,50 @@ export class ScopeGuard implements CanActivate {
     const base = readRequest(req);
 
     if (policy.anonymous === true) {
-      req.medskin = { ...base, policy, caller: null };
+      req.medskin = { ...base, policy, caller: null, recovery: null };
       return true;
     }
 
-    const caller = await this.callerFrom(req.headers.authorization);
+    const claims = await this.tokens.verify(this.readBearer(req.headers.authorization));
+    this.checkScope(policy.scopes ?? [], claims.alcance);
 
-    if (!(policy.scopes ?? []).includes(caller.scope)) {
-      // La sesión restringida tiene su propia respuesta y su propia navegación: la app no
-      // muestra nada, va a «Crea tu contraseña».
-      if (caller.scope === 'contrasena_temporal') {
-        throw new ContractError('contrasena_temporal_pendiente');
-      }
-      throw new ContractError('token_sin_alcance');
+    // Dos formas de token y dos formas de quien llama. El de recuperación no trae rol ni
+    // sesión a propósito, así que no se le fabrica un `Caller` con nulos: tiene el suyo.
+    if (claims.alcance === 'recuperacion') {
+      req.medskin = { ...base, policy, caller: null, recovery: this.recoveryFrom(claims) };
+      return true;
     }
 
-    req.medskin = { ...base, policy, caller };
+    req.medskin = { ...base, policy, caller: this.callerFrom(claims), recovery: null };
     return true;
   }
 
-  private async callerFrom(authorization: string | undefined): Promise<Caller> {
-    const claims = await this.tokens.verify(this.readBearer(authorization));
+  private checkScope(allowed: readonly Scope[], scope: Scope): void {
+    if (allowed.includes(scope)) return;
+    // La sesión restringida tiene su propia respuesta y su propia navegación: la app no
+    // muestra nada, va a «Crea tu contraseña».
+    if (scope === 'contrasena_temporal') throw new ContractError('contrasena_temporal_pendiente');
+    throw new ContractError('token_sin_alcance');
+  }
+
+  /**
+   * Las tres reclamaciones que el token de recuperación NO puede traer se rechazan en vez
+   * de ignorarse: un token de recuperación con `rol` es un token que alguien firmó de otra
+   * manera, y atenderlo sería atender una forma que el contrato no admite.
+   */
+  private recoveryFrom(claims: VerifiedClaims): RecoveryCaller {
+    if (claims.rol !== undefined || claims.sid !== undefined || claims.practice !== undefined) {
+      throw new ContractError('token_no_valido');
+    }
+    return { via: 'recuperacion', accountId: claims.sub, region: claims.region };
+  }
+
+  private callerFrom(claims: VerifiedClaims): Caller {
+    // Un token de sesión SIN `sid` ni `rol` no se puede atender: la fila de sesión y el
+    // rol son lo que la autorización de todos los demás endpoints lee.
+    if (claims.sid === undefined || claims.rol === undefined) {
+      throw new ContractError('token_no_valido');
+    }
 
     // `practitioner` no es un valor de `rol` que viaje al cliente, así que el rol de cuenta
     // se deriva del que sí viaja: `paciente` o cualquiera de los tres de la consulta.

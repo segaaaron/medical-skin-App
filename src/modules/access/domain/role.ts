@@ -22,20 +22,60 @@ export function resolveRole(
 
 /**
  * Los permisos por rol, para cuando `practitioner.permissions` es nulo — que es el 100 %
- * de las filas de la primera entrega (decisión 11 de `preguntas-abiertas.md`).
+ * de las filas de la primera entrega.
  *
- * ATENCIÓN: de esta tabla los contratos solo escriben DOS cosas:
- *   · la lista exacta de `doctora`, que es el ejemplo de `GET /v1/sesion` (`sesion.md`);
- *   · que `pacientes:crear` es «doctora y asistente clínico · Recepción **no**»
- *     (`cuentas.md` · `POST /v1/pacientes`).
- * El resto de las dos listas no está fijado en ningún contrato. Queda anotado para
- * `producto`: una lista de permisos que el servidor inventa es una autorización que nadie
- * revisó (OWASP A01).
+ * ESTA ES LA TABLA DE `_convenciones.md` · «Los permisos de cada rol», copiada fila por
+ * fila (decisión 22, 27 de octubre de 2026). No se edita aquí: se edita allí y se copia.
+ * El criterio que la ordena: recepción **no abre historias y no registra tratamientos**;
+ * el asistente clínico sí, porque está en la sala, pero no toca precios ni dinero ni
+ * informes; y lo de la consulta como negocio —catálogo, márgenes, equipo, licencia— es de
+ * la doctora.
+ *
+ * `inquilino:licencia:enviar` es «solo la dueña» y por eso NO está aquí: la dueña es la
+ * `doctora` cuya cuenta está en `practice.owner_account_id`, que es una fila y no una
+ * cadena, así que ese permiso no sale de una tabla por rol. Lo resuelve quien conozca esa
+ * fila, y hoy no lo resuelve nadie: `inquilinos.md` es de otro encargo.
  */
 export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly string[]>> = {
-  doctora: ['pacientes:crear', 'pacientes:leer', 'sesiones:registrar', 'catalogo:editar'],
-  asistente_clinico: ['pacientes:crear', 'pacientes:leer', 'sesiones:registrar'],
-  recepcion: ['pacientes:leer'],
+  doctora: [
+    'pacientes:leer',
+    'pacientes:crear',
+    'pacientes:acceso:enviar',
+    'agenda:leer',
+    'citas:crear',
+    'citas:cancelar',
+    'sesiones:registrar',
+    'historia:leer',
+    'catalogo:editar',
+    'precios:editar',
+    'promociones:editar',
+    'horarios:definir',
+    'cobros:registrar',
+    'inventario:editar',
+    'informes:leer',
+    'margenes:leer',
+    'equipo:crear',
+    'equipo:permisos',
+  ],
+  asistente_clinico: [
+    'pacientes:leer',
+    'pacientes:crear',
+    'pacientes:acceso:enviar',
+    'agenda:leer',
+    'citas:crear',
+    'citas:cancelar',
+    'sesiones:registrar',
+    'historia:leer',
+    'inventario:editar',
+  ],
+  recepcion: [
+    'pacientes:leer',
+    'agenda:leer',
+    'citas:crear',
+    'citas:cancelar',
+    'horarios:definir',
+    'cobros:registrar',
+  ],
 };
 
 /**

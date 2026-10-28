@@ -29,6 +29,10 @@ const A = {
   practitioner: 'aaaaaaaa-0000-4000-8000-000000000003',
   account: 'aaaaaaaa-0000-4000-8000-000000000004',
   session: 'aaaaaaaa-0000-4000-8000-000000000005',
+  // Tramo 2: la ficha, su vínculo y sus antecedentes.
+  patient: 'aaaaaaaa-0000-4000-8000-000000000006',
+  link: 'aaaaaaaa-0000-4000-8000-000000000007',
+  history: 'aaaaaaaa-0000-4000-8000-000000000008',
 };
 const B = {
   practice: 'bbbbbbbb-0000-4000-8000-000000000001',
@@ -36,6 +40,9 @@ const B = {
   practitioner: 'bbbbbbbb-0000-4000-8000-000000000003',
   account: 'bbbbbbbb-0000-4000-8000-000000000004',
   session: 'bbbbbbbb-0000-4000-8000-000000000005',
+  patient: 'bbbbbbbb-0000-4000-8000-000000000006',
+  link: 'bbbbbbbb-0000-4000-8000-000000000007',
+  history: 'bbbbbbbb-0000-4000-8000-000000000008',
 };
 const PATIENT = {
   account: 'cccccccc-0000-4000-8000-000000000001',
@@ -107,6 +114,22 @@ async function seed() {
        values ($1, $2, 'Andrea Paz', 'license.to_review')`,
       [t.practice, t.account],
     );
+    // La ficha de la paciente en esta consulta, y sus antecedentes. Dos fichas distintas
+    // de la misma persona que no comparten nada (§12.2.1): es el caso que importa.
+    await owner.query(
+      `insert into patient (id, practice_id, first_name, last_name, birth_date, email, phone, how_arrived)
+       values ($1, $2, 'Valeria', 'Antelo', '1992-04-18', 'paciente@prueba.local', '+59177124408', 'referida')`,
+      [t.patient, t.practice],
+    );
+    await owner.query(
+      `insert into medical_history (id, practice_id, patient_id, has_allergies, allergies,
+                                    allergies_source, allergies_source_at, phototype,
+                                    phototype_source, phototype_source_at, notes, notes_source,
+                                    notes_source_at)
+       values ($1, $2, $3, true, array['lidocaína'], 'doctora', now(), 3, 'doctora', now(),
+               'Pide empezar por la zona periocular.', 'doctora', now())`,
+      [t.history, t.practice, t.patient],
+    );
   };
 
   await side(A, 'Clinica A', 'doctora.a@prueba.local');
@@ -131,6 +154,21 @@ async function seed() {
      values ($1, $2, 'argon2id$codigo', now() + interval '10 minutes')`,
     [PATIENT.code, PATIENT.account],
   );
+
+  // Los dos vínculos de LA MISMA cuenta con DOS inquilinos distintos. Va después de la
+  // cuenta porque `patient_link.account_id` la referencia, y es el único sitio del esquema
+  // donde una fila legible cruza inquilinos: la cara por `account_id` de la política.
+  // A está aceptado y B todavía invitado: así se prueba que los antecedentes se abren con
+  // el vínculo aceptado y no con el otro.
+  const link = (t: typeof A, status: string, practiceName: string, city: string) =>
+    owner.query(
+      `insert into patient_link (id, practice_id, patient_id, account_id, status, email,
+                                 access_sent_at, practice_name, practitioner_name, city)
+       values ($1, $2, $3, $4, $5, 'paciente@prueba.local', now(), $6, 'Dra. Andrea Paz', $7)`,
+      [t.link, t.practice, t.patient, PATIENT.account, status, practiceName, city],
+    );
+  await link(A, 'vinculada', 'Clinica A', 'Santa Cruz');
+  await link(B, 'invitada', 'Clinica B', 'La Paz');
 }
 
 async function clean() {

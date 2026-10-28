@@ -72,9 +72,8 @@ export class ListSessions {
 export class CloseSession {
   constructor(private readonly sessions: SessionPort) {}
 
-  // El contrato no fija el cuerpo del 200 de este endpoint; sí el de su hermano
-  // (`{ "cerradas": 3 }`). Se devuelve la misma forma para que la app lleve un solo
-  // decodificador. Anotado para `producto`.
+  // `{ "cerradas": 1 }`, el mismo cuerpo que su hermano sin `id` (decisión 25, 27 de
+  // octubre de 2026): un solo decodificador en la app para los dos endpoints.
   async run(sessionId: string, caller: Caller): Promise<{ cerradas: number }> {
     if (sessionId === caller.sessionId) throw new ContractError('es_esta_sesion');
     // Un id que no es un uuid no es de esta cuenta, así que responde lo mismo que uno

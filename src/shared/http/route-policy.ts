@@ -35,6 +35,17 @@ const ALL_SCOPES: readonly Scope[] = [
 export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   'POST /v1/acceso': { anonymous: true, failurePhrase: FAILURE_PHRASES.signIn },
 
+  // Los dos de recuperación, sin `Authorization` como el acceso: cuando llegan no hay
+  // sesión que leer y por eso corren con `app_anonymous` (`recuperacion.md`).
+  'POST /v1/recuperacion': {
+    anonymous: true,
+    failurePhrase: FAILURE_PHRASES.requestRecoveryCode,
+  },
+  'POST /v1/recuperacion/codigo': {
+    anonymous: true,
+    failurePhrase: FAILURE_PHRASES.checkRecoveryCode,
+  },
+
   // Los dos alcances que existen para llegar a esta pantalla, y ningún otro: un token
   // `completo` aquí es `401 token_sin_alcance`, «Esta pantalla ya no corresponde».
   'POST /v1/acceso/contrasena-nueva': {
@@ -57,6 +68,14 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   'DELETE /v1/acceso/sesiones/:sesion_id': {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.closeSession,
+  },
+
+  // `cuentas.md`. Solo `completo`: cambiar la contraseña sabiendo la actual no es una
+  // pantalla a la que se llegue con un alcance restringido, y la que sí lo es
+  // —`contrasena-nueva`— es otra ruta.
+  'PATCH /v1/cuentas/mia/contrasena': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.changePassword,
   },
 };
 

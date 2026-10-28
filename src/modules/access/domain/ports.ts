@@ -45,18 +45,32 @@ export interface CredentialPort {
    * las demás sesiones y convertir esta en una de alcance `completo` con su refresco.
    * Las cinco cosas o ninguna: repartidas, un fallo entre dos deja a alguien fuera de su
    * propia cuenta sin salida, que es lo que el 500 de este endpoint promete que no pasa.
+   *
+   * Los tres nulos son la entrada por RECUPERACIÓN, no un descuido: su token no lleva rol
+   * ni sesión (`RecoveryClaims`), así que no hay sesión que ascender —se abre después, con
+   * el rol que esta misma llamada devuelve— y el rol de cuenta todavía no se conoce.
    */
   saveFinalPassword(p: {
     accountId: string;
     practiceId: string | null;
-    accountRole: AccountRole;
+    /** Nulo si se llegó por recuperación: lo devuelve la base. */
+    accountRole: AccountRole | null;
     hash: string;
     via: 'temporal' | 'recuperacion';
-    currentSessionId: string;
-    refreshDigest: string;
-    refreshExpiresAt: Date;
-  }): Promise<{ verdict: SavePasswordVerdict; permissions: readonly string[] | null }>;
+    /** Nulo si se llegó por recuperación: no hay sesión todavía. */
+    currentSessionId: string | null;
+    refreshDigest: string | null;
+    refreshExpiresAt: Date | null;
+  }): Promise<SavedPassword>;
 }
+
+export type SavedPassword = {
+  verdict: SavePasswordVerdict;
+  /** Lo lee la base de `account.role`. Es lo que decide el rol de base de lo que viene. */
+  accountRole: AccountRole | null;
+  practiceId: string | null;
+  permissions: readonly string[] | null;
+};
 
 // ---------------------------------------------------------------------------------------
 // Contraseñas · Argon2id en Node. El MISMO coste en los dos caminos, el real y el señuelo:
@@ -122,7 +136,21 @@ export type SessionOpening = {
   actorLabel: string | null;
 };
 
-export type NextStepFacts = { licenseStatus: string | null; firstDayDone: boolean };
+/**
+ * El estado del inquilino que decide `siguiente_paso`, MÁS las dos cosas que solo se
+ * pueden leer con el contexto de ese inquilino puesto: el `practitioner.role` de esta
+ * consulta y su lista explícita de permisos. Van juntas porque se leen en la misma
+ * consulta y porque quien necesita una necesita las otras: el `rol` que viaja al cliente
+ * sale del `practitioner.role`, no de `account.role` (`_convenciones.md`).
+ */
+export type NextStepFacts = {
+  licenseStatus: string | null;
+  firstDayDone: boolean;
+  /** Nulo para una paciente, y también para una cuenta `practitioner` sin fila activa. */
+  practitionerRole: PractitionerRole | null;
+  /** `practitioner.permissions`. Nulo en el 100 % de las filas de la primera entrega. */
+  permissions: readonly string[] | null;
+};
 
 /**
  * Lo que la apertura devuelve, y por qué va junto: `siguiente_paso` depende del estado de

@@ -15,3 +15,18 @@ export type Caller = {
   practiceId: string | null;
   permissions: readonly string[];
 };
+
+/**
+ * Quien llega con un token de alcance `recuperacion`. Es a propósito MUCHO más pobre que
+ * `Caller`: acertar un código de seis dígitos autoriza una pantalla, no una sesión.
+ *
+ * No hay `role`, no hay `practiceId` y no hay `sessionId` porque el token no los lleva
+ * (`RecoveryClaims`): el rol sería el oráculo que `recuperacion.md` cierra, y la sesión
+ * todavía no existe. Los tres se conocen al guardar la contraseña, y los devuelve la base
+ * en esa misma transacción.
+ */
+export type RecoveryCaller = {
+  via: 'recuperacion';
+  accountId: string;
+  region: Region;
+};

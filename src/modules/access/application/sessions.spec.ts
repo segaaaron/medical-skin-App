@@ -36,8 +36,8 @@ function puerto(opciones: {
   return {
     vistos,
     port: {
-      open: () => Promise.resolve({ sessionId: ESTA, licenseStatus: null, firstDayDone: true }),
-      nextStepFacts: () => Promise.resolve({ licenseStatus: null, firstDayDone: true }),
+      open: () => Promise.resolve({ sessionId: ESTA, licenseStatus: null, firstDayDone: true, practitionerRole: null, permissions: null }),
+      nextStepFacts: () => Promise.resolve({ licenseStatus: null, firstDayDone: true, practitionerRole: null, permissions: null }),
       list: (owner) => {
         vistos.push({ owner });
         return Promise.resolve(opciones.filas ?? []);
