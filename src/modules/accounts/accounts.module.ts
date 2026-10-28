@@ -1,6 +1,6 @@
-// El cableado de las cuentas. Un solo endpoint por ahora: el resto de `cuentas.md`
-// —el alta de pacientes, el reenvío de acceso, `GET /v1/cuentas/mia` y el borrado— depende
-// de `patient` y de `patient_link`, que no existen todavía.
+// El cableado de las cuentas. Dos endpoints: el cambio de contraseña y el envío del acceso
+// de una paciente. Lo que falta de `cuentas.md` —el alta (`POST /v1/pacientes`),
+// `POST /v1/equipo`, `GET /v1/cuentas/mia` y el borrado— está dicho en la entrega.
 
 import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
@@ -11,8 +11,10 @@ import { Argon2Passwords } from '../../shared/security/passwords';
 import { POOL } from '../../shared/shared.module';
 import { AccountsController } from './accounts.controller';
 import { ChangeOwnPassword } from './application/change-password';
+import { SendPatientAccess } from './application/send-patient-access';
 import { AccountsRepository } from './infrastructure/accounts.repository';
-import { PasswordAttempts } from './infrastructure/password-attempts';
+import { PatientAccessRepository } from './infrastructure/patient-access.repository';
+import { PasswordAttempts, ResendLimit } from './infrastructure/password-attempts';
 
 @Module({
   controllers: [AccountsController],
@@ -36,6 +38,26 @@ import { PasswordAttempts } from './infrastructure/password-attempts';
         clock: SystemClock,
       ) => new ChangeOwnPassword(repo, passwords, attempts, clock),
       inject: [AccountsRepository, Argon2Passwords, PasswordAttempts, SystemClock],
+    },
+    {
+      provide: PatientAccessRepository,
+      useFactory: (pool: Pool) => new PatientAccessRepository(pool),
+      inject: [POOL],
+    },
+    {
+      provide: ResendLimit,
+      useFactory: (counters: Counters) => new ResendLimit(counters),
+      inject: [Counters],
+    },
+    {
+      provide: SendPatientAccess,
+      useFactory: (
+        repo: PatientAccessRepository,
+        passwords: Argon2Passwords,
+        limit: ResendLimit,
+        clock: SystemClock,
+      ) => new SendPatientAccess(repo, passwords, limit, clock),
+      inject: [PatientAccessRepository, Argon2Passwords, ResendLimit, SystemClock],
     },
   ],
 })
