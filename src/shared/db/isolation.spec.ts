@@ -718,6 +718,44 @@ describe('los planes de las rutas calientes del tramo 2', () => {
        select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctora', now()
          from patient p where p.email like 'ficha-%@prueba.local'`,
     );
+    // Las dos bitácoras, para medir los índices de «lo último primero» del tramo 1 sobre
+    // una tabla con filas de verdad: 20 000 líneas de auditoría y 10 000 fallos en A, y la
+    // mitad en B, que es lo que obliga al motor a elegir entre leer 50 por el índice y
+    // ordenar veinte mil.
+    const bulkLogs = async (t: typeof A, howMany: number) => {
+      await owner.query(
+        `insert into access_audit (practice_id, actor_account_id, actor_label, action, occurred_at)
+         select $1::uuid, $2::uuid, 'Andrea Paz',
+                (array['patient.open', 'patient.create', 'access.resend'])[1 + g % 3],
+                now() - (g || ' minutes')::interval
+           from generate_series(1, $3::int) g`,
+        [t.practice, t.account, howMany],
+      );
+      await owner.query(
+        `insert into service_failure (service, operation, severity, error_code, error_message,
+                                      practice_id, trace_id, will_retry, occurred_at)
+         select 'api', 'pacientes.alta', 'error',
+                (array['fallo_de_servicio', 'imagen_no_procesada'])[1 + g % 2],
+                'VipsJpeg: Premature end of input file', $1::uuid, 'bulk-' || g, false,
+                now() - (g || ' seconds')::interval
+           from generate_series(1, $2::int) g`,
+        [t.practice, howMany / 2],
+      );
+    };
+    await bulkLogs(A, 20_000);
+    await bulkLogs(B, 10_000);
+    // Y unas cuantas sesiones más de la paciente: la consulta de «sesiones activas» ordena
+    // por `last_seen_at` dentro de una sola cuenta.
+    await owner.query(
+      `insert into session (account_id, scope, device_id, last_seen_at)
+       select $1::uuid, 'completo', 'disp-' || g, now() - (g || ' hours')::interval
+         from generate_series(1, 40) g`,
+      [PATIENT.account],
+    );
+    await owner.query('vacuum analyze access_audit');
+    await owner.query('vacuum analyze service_failure');
+    await owner.query('vacuum analyze session');
+
     // `VACUUM` y no solo `ANALYZE`, y esto es un hallazgo que vale para producción: un GIN
     // recién cargado en bloque tiene TODAS sus entradas en la lista pendiente, y el coste
     // de la lista pendiente entra en el cálculo del planificador, así que mientras no se
@@ -792,6 +830,44 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     // así que la autorización se resuelve sin tocar la tabla. 3 bloques, 0,04 ms.
     expect(used).toMatch(/Index Only Scan using patient_link_practice_account_idx/);
     expect(used).not.toContain('Seq Scan on patient_link');
+  });
+
+  it('la bitácora de la consulta se lee por índice, sin ordenar veinte mil líneas', async () => {
+    // `order by occurred_at desc` sin `where practice_id`: el inquilino lo pone la
+    // política. Es la forma de «lo último primero» que repiten las dos bitácoras.
+    const used = await plan(ctxPractitionerA, 'select id, action from access_audit order by occurred_at desc limit 50');
+    expect(used).toContain('access_audit_practice_idx');
+    expect(used).not.toContain('Sort');
+    expect(used).not.toContain('Seq Scan');
+  });
+
+  it('los fallos de la consulta y el panel de la consola, lo mismo', async () => {
+    const own = await plan(ctxPractitionerA, 'select id from service_failure order by occurred_at desc limit 50');
+    expect(own).toContain('service_failure_practice_idx');
+    expect(own).not.toContain('Sort');
+
+    // El panel de operación (§10.4) cruza inquilinos a propósito: por código y por
+    // antigüedad, que es para lo que existe `service_failure_code_idx`.
+    const console_ = await plan(
+      ctxPlatform,
+      'select id from service_failure where error_code = $1 order by occurred_at desc limit 50',
+      ['fallo_de_servicio'],
+    );
+    expect(console_).toContain('service_failure_code_idx');
+    expect(console_).not.toContain('Sort');
+  });
+
+  it('las sesiones activas de una cuenta entran por su índice parcial', async () => {
+    // Aquí la igualdad por cuenta ya deja pocas filas, así que el orden del índice no
+    // cambia el tiempo: lo que importa es que no se recorra `session` entera. El arreglo
+    // del orden se hace igual porque es gratis y porque esta consulta es la de
+    // `GET /v1/acceso/sesiones`.
+    const used = await plan(
+      ctxPatient,
+      'select id, device_id from session where revoked_at is null order by last_seen_at desc limit 20',
+    );
+    expect(used).toContain('session_account_active_idx');
+    expect(used).not.toContain('Seq Scan');
   });
 
   it('los antecedentes de la paciente no recorren la tabla de nadie', async () => {

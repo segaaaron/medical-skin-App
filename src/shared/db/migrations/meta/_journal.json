@@ -85,6 +85,13 @@
       "when": 1793157000000,
       "tag": "0011_indexes_measured_under_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793157000001,
+      "tag": "0012_desc_nulls_first_everywhere",
+      "breakpoints": true
     }
   ]
 }
