@@ -182,6 +182,11 @@ async function clean() {
   ]);
   await owner.query('delete from service_failure where practice_id = any($1::uuid[])', [[A.practice, B.practice]]);
   await owner.query('delete from access_audit where practice_id = any($1::uuid[])', [[A.practice, B.practice]]);
+  // Y la cuarta sin claves foráneas: la bitácora clínica. `patient`, `patient_link` y
+  // `medical_history` sí se las lleva el cascade de `practice`.
+  await owner.query('delete from medical_history_audit where practice_id = any($1::uuid[])', [
+    [A.practice, B.practice],
+  ]);
 }
 
 /**
@@ -381,6 +386,201 @@ describe('aislamiento entre inquilinos · conexión directa (5433)', () => {
     } finally {
       client.release();
     }
+  });
+});
+
+describe('tramo 2 · patient, patient_link y medical_history', () => {
+  it('el inquilino A no lee ni una fila del B en las cuatro tablas nuevas', async () => {
+    expect({
+      patient: await whatItSees(app, ctxPractitionerA, 'select id from patient where practice_id = $1', [B.practice]),
+      patient_by_id: await whatItSees(app, ctxPractitionerA, 'select id from patient where id = $1', [B.patient]),
+      // Y tampoco por el correo exacto, que es el intento que de verdad se escribe: el
+      // duplicado del alta es POR CONSULTA, no global (cuentas.md, §12.2.1).
+      patient_by_email: await whatItSees(
+        app,
+        ctxPractitionerA,
+        'select id from patient where email = $1 and id = $2',
+        ['paciente@prueba.local', B.patient],
+      ),
+      patient_link: await whatItSees(app, ctxPractitionerA, 'select id from patient_link where id = $1', [B.link]),
+      // La cara por cuenta de `patient_link` no le sirve a la doctora para saltar el
+      // inquilino: su política es la otra, y las políticas se suman por rol, no por tabla.
+      link_by_account: await whatItSees(
+        app,
+        ctxPractitionerA,
+        'select id from patient_link where account_id = $1 and practice_id = $2',
+        [PATIENT.account, B.practice],
+      ),
+      medical_history: await whatItSees(app, ctxPractitionerA, 'select id from medical_history where id = $1', [
+        B.history,
+      ]),
+      history_notes: await whatItSees(app, ctxPractitionerA, 'select notes from medical_history where patient_id = $1', [
+        B.patient,
+      ]),
+    }).toEqual({
+      patient: '0 filas',
+      patient_by_id: '0 filas',
+      patient_by_email: '0 filas',
+      patient_link: '0 filas',
+      link_by_account: '0 filas',
+      medical_history: '0 filas',
+      history_notes: '0 filas',
+    });
+
+    // Y no pasa por estar todo vacío: con su propio contexto, A ve lo suyo y entero.
+    expect({
+      patient: (await read(app, ctxPractitionerA, 'select id from patient')).map((r) => r.id),
+      link: (await read(app, ctxPractitionerA, 'select id from patient_link')).map((r) => r.id),
+      history: (await read(app, ctxPractitionerA, 'select id from medical_history')).map((r) => r.id),
+      // El correo del acceso y el estado del vínculo: lo que la doctora puede saber del
+      // acceso de SU paciente, y sale de `patient_link`, nunca de `account`.
+      vinculo: (
+        await read(app, ctxPractitionerA, 'select status, email::text as email from patient_link')
+      ).map((r) => `${r.status} ${r.email}`),
+    }).toEqual({
+      patient: [A.patient],
+      link: [A.link],
+      history: [A.history],
+      vinculo: ['vinculada paciente@prueba.local'],
+    });
+  });
+
+  it('la paciente ve sus dos vínculos, de dos inquilinos distintos, y seis columnas', async () => {
+    // La única lectura del sistema que cruza inquilinos, y cruza solo las fichas de quien
+    // pregunta. Sin contexto de inquilino: `app_patient` no fija ninguno.
+    const links = await read(app, ctxPatient, 'select practice_name, practitioner_name, city, status from patient_link');
+    expect(links.map((r) => `${r.practice_name} · ${r.city} · ${r.status}`).sort()).toEqual([
+      'Clinica A · Santa Cruz · vinculada',
+      'Clinica B · La Paz · invitada',
+    ]);
+
+    expect({
+      // Las tres cadenas están copiadas justo para que esto siga cerrado (pregunta 7).
+      practice: await whatItSees(app, ctxPatient, 'select name from practice'),
+      practitioner: await whatItSees(app, ctxPatient, 'select first_name from practitioner'),
+      // La ficha es de la consulta: no tiene política aquí.
+      patient: await whatItSees(app, ctxPatient, 'select id from patient'),
+      // Y de su propio vínculo no lee ni cuándo le mandaron el acceso ni el correo:
+      // columnas que no están en su grant.
+      access_sent_at: await whatItSees(app, ctxPatient, 'select access_sent_at from patient_link'),
+      email: await whatItSees(app, ctxPatient, 'select email from patient_link'),
+    }).toEqual({
+      practice: 'permiso denegado',
+      practitioner: 'permiso denegado',
+      patient: '0 filas',
+      access_sent_at: 'permiso denegado',
+      email: 'permiso denegado',
+    });
+  });
+
+  it('los antecedentes se abren con el vínculo aceptado, y sin fototipo ni notas', async () => {
+    const seen = await read(app, ctxPatient, 'select practice_id, has_allergies::text from medical_history');
+    // Uno, no dos: el de B está `invitada` y su política exige `vinculada`.
+    expect(seen).toEqual([{ practice_id: A.practice, has_allergies: 'true' }]);
+
+    expect({
+      phototype: await whatItSees(app, ctxPatient, 'select phototype from medical_history'),
+      notes: await whatItSees(app, ctxPatient, 'select notes from medical_history'),
+      write_notes: await whatItSees(app, ctxPatient, `update medical_history set notes = 'colada'`),
+      write_phototype: await whatItSees(app, ctxPatient, 'update medical_history set phototype = 6'),
+    }).toEqual({
+      phototype: 'permiso denegado',
+      notes: 'permiso denegado',
+      write_notes: 'permiso denegado',
+      write_phototype: 'permiso denegado',
+    });
+  });
+
+  it('«la doctora gana» es un predicado por columna, y la base lo sostiene', async () => {
+    // Lo que escribe el endpoint de la paciente: solo si el campo está vacío o lo escribió
+    // ella. `allergies_source` es 'doctora', así que no toca ninguna fila y el endpoint
+    // tiene con qué contestar `no_guardado: [{campo, por_que}]`.
+    const blocked = await withTenantContext(app, ctxPatient, async (client) =>
+      client.query(
+        `update medical_history
+            set has_allergies = false, allergies = '{}'::text[],
+                allergies_source = 'paciente', allergies_source_at = now()
+          where patient_id = $1
+            and (allergies_source is null or allergies_source = 'paciente')`,
+        [A.patient],
+      ),
+    );
+    expect(blocked.rowCount).toBe(0);
+
+    // Y el campo que nadie llenó sí lo escribe, con su procedencia.
+    const written = await withTenantContext(app, ctxPatient, async (client) =>
+      client.query(
+        `update medical_history
+            set takes_medication = false, medication_source = 'paciente', medication_source_at = now()
+          where patient_id = $1
+            and (medication_source is null or medication_source = 'paciente')`,
+        [A.patient],
+      ),
+    );
+    expect(written.rowCount).toBe(1);
+
+    // Y su fila de bitácora no puede apuntar al inquilino de otra: el `WITH CHECK` no es
+    // `true`, es su propio vínculo aceptado.
+    expect({
+      own: await whatItSees(
+        app,
+        ctxPatient,
+        `insert into medical_history_audit (practice_id, patient_id, field, previous_value, actor_source)
+         values ($1, $2, 'medicacion', 'null'::jsonb, 'paciente')`,
+        [A.practice, A.patient],
+      ),
+      other_tenant: await whatItSees(
+        app,
+        ctxPatient,
+        `insert into medical_history_audit (practice_id, patient_id, field, previous_value, actor_source)
+         values ($1, $2, 'medicacion', 'null'::jsonb, 'paciente')`,
+        [B.practice, B.patient],
+      ),
+      // Y no la lee: la bitácora de la ficha es de la consulta.
+      read: await whatItSees(app, ctxPatient, 'select id from medical_history_audit'),
+    }).toEqual({ own: '0 filas', other_tenant: 'permiso denegado', read: 'permiso denegado' });
+  });
+
+  it('el rol de plataforma no lee NADA de las cuatro tablas, que es el punto', async () => {
+    expect({
+      patient: await whatItSees(app, ctxPlatform, 'select id from patient'),
+      patient_link: await whatItSees(app, ctxPlatform, 'select id from patient_link'),
+      medical_history: await whatItSees(app, ctxPlatform, 'select id from medical_history'),
+      medical_history_audit: await whatItSees(app, ctxPlatform, 'select id from medical_history_audit'),
+      // Ni por el correo, que es lo que la consola sí tiene en `account`.
+      by_email: await whatItSees(app, ctxPlatform, 'select id from patient where email = $1', [
+        'paciente@prueba.local',
+      ]),
+    }).toEqual({
+      patient: 'permiso denegado',
+      patient_link: 'permiso denegado',
+      medical_history: 'permiso denegado',
+      medical_history_audit: 'permiso denegado',
+      by_email: 'permiso denegado',
+    });
+  });
+
+  it('nadie borra una ficha ni un vínculo: la salida es archivar', async () => {
+    expect({
+      patient: await whatItSees(app, ctxPractitionerA, 'delete from patient where id = $1', [A.patient]),
+      link: await whatItSees(app, ctxPractitionerA, 'delete from patient_link where id = $1', [A.link]),
+      history: await whatItSees(app, ctxPractitionerA, 'delete from medical_history where id = $1', [A.history]),
+      audit: await whatItSees(app, ctxPractitionerA, 'delete from medical_history_audit where practice_id = $1', [
+        A.practice,
+      ]),
+      audit_update: await whatItSees(
+        app,
+        ctxPractitionerA,
+        `update medical_history_audit set previous_value = 'null'::jsonb where practice_id = $1`,
+        [A.practice],
+      ),
+    }).toEqual({
+      patient: 'permiso denegado',
+      link: 'permiso denegado',
+      history: 'permiso denegado',
+      audit: 'permiso denegado',
+      audit_update: 'permiso denegado',
+    });
   });
 });
 

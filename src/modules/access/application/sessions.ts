@@ -20,15 +20,23 @@ function ownerOf(caller: Caller): OwnerOfSessions {
   };
 }
 
-/** DELETE /v1/acceso · cerrar sesión en este teléfono. Cerrar lo ya cerrado devuelve 200. */
+/**
+ * DELETE /v1/acceso · cerrar sesión en este teléfono. Cerrar lo ya cerrado devuelve 200.
+ *
+ * `caller` nulo es quien llega con un token de RECUPERACIÓN: ese token no lleva `sid`
+ * porque todavía no hay sesión (`recuperacion.md`), así que no hay fila que revocar y el
+ * 200 es el mismo. `sesion.md`, 27 de octubre: este endpoint lo abre cualquier alcance,
+ * los tres restringidos incluidos, porque «cerrar tu propia sesión no es un privilegio: es
+ * lo contrario», y porque es la única salida de «Crea tu contraseña», que no tiene atrás.
+ */
 export class SignOut {
   constructor(
     private readonly sessions: SessionPort,
     private readonly clock: ClockPort,
   ) {}
 
-  async run(caller: Caller): Promise<{ cerrada_en: string }> {
-    await this.sessions.revokeOne(ownerOf(caller), caller.sessionId);
+  async run(caller: Caller | null): Promise<{ cerrada_en: string }> {
+    if (caller !== null) await this.sessions.revokeOne(ownerOf(caller), caller.sessionId);
     return { cerrada_en: this.clock.now().toISOString() };
   }
 }

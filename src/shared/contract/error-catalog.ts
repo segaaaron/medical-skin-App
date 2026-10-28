@@ -48,7 +48,6 @@ export type ErrorCode =
   // los seis del transporte (_convenciones.md · «Los errores del transporte»)
   | 'ruta_no_existe'
   | 'cuerpo_no_valido'
-  | 'metodo_no_permitido'
   | 'cuerpo_demasiado_grande'
   | 'formato_no_admitido'
   | 'demasiadas_peticiones'
@@ -188,10 +187,15 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // Los seis del transporte (_convenciones.md · «Los errores del transporte», 27 de
-  // octubre). No son de ningún endpoint: los devuelve el borde antes de llegar a uno.
-  // Tres no le dicen nada al usuario porque son errores de programación del cliente,
-  // pero TIENEN código, y por eso la app puede registrarlos y nosotros verlos.
+  // Los del transporte (_convenciones.md · «Los errores del transporte», 27 de octubre).
+  // No son de ningún endpoint: los devuelve el borde antes de llegar a uno. Dos no le
+  // dicen nada al usuario —`mensaje` vacío— porque son errores de programación del
+  // cliente, pero TIENEN código, y por eso la app los registra y nosotros los vemos.
+  //
+  // `405 metodo_no_permitido` NO está, y es la retirada del 27 de octubre: Fastify no
+  // distingue «ruta que no existe» de «método que esa ruta no admite», así que un `PUT` a
+  // una ruta de solo `POST` sale como `404 ruta_no_existe`. Un código que el servidor no
+  // puede dar es peor que no prometerlo.
   // ---------------------------------------------------------------------------------
   ruta_no_existe: { status: 404, message: '', field: null },
   cuerpo_no_valido: {
@@ -199,7 +203,6 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Algo de lo que mandaste no está bien. Revísalo y vuelve a intentar.',
     field: null,
   },
-  metodo_no_permitido: { status: 405, message: '', field: null },
   cuerpo_demasiado_grande: {
     status: 413,
     message: 'Eso es demasiado grande para mandarlo así. Las fotos se suben por su propia pantalla.',
@@ -330,7 +333,6 @@ export const FAILURE_PHRASES = {
 export const TRANSPORT_CODE_BY_STATUS: Readonly<Record<number, ErrorCode>> = {
   400: 'cuerpo_no_valido',
   404: 'ruta_no_existe',
-  405: 'metodo_no_permitido',
   413: 'cuerpo_demasiado_grande',
   415: 'formato_no_admitido',
   429: 'demasiadas_peticiones',

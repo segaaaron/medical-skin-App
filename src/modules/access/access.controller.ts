@@ -70,7 +70,8 @@ export class AccessController {
   @Delete()
   @HttpCode(200)
   async leave(@Req() req: RequestWithContext) {
-    return this.signOut.run(callerOf(req));
+    const ctx = contextOf(req);
+    return this.signOut.run(ctx.recovery !== null ? null : callerOf(req));
   }
 
   @Get('sesiones')
