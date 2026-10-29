@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   pruebas:
-    name: lint · tipos · 679 pruebas contra la base real
+    name: lint · tipos · la suite contra la base real
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

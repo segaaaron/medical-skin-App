@@ -63,7 +63,7 @@ Cuando cambies algo, ejecuta solo el test que tocaste.
 ## Antes de commitear
 
 ```sh
-pnpm verify                            # lint + tipos + las 681 pruebas contra la base real
+pnpm verify                            # lint + tipos + la suite entera contra la base real
 git config core.hooksPath .githooks    # una vez por copia: gitleaks antes de cada commit
 ```
 
