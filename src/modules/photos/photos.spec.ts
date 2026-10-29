@@ -104,7 +104,9 @@ async function objectExists(key: string): Promise<boolean> {
 beforeAll(async () => {
   // El cubo de desarrollo: LocalStack arranca vacío y en producción lo crea el despliegue.
   const bucket = signUrl(storage, { method: 'PUT', key: '', expiresInSeconds: 60, now: new Date() });
-  await fetch(bucket.url.replace(`/${storage.bucket}/?`, `/${storage.bucket}?`), { method: 'PUT' });
+  // Sin tocar la URL: la clave vacía firma `/<cubo>` y eso es lo que se pide. El `.replace()`
+  // que había aquí funcionaba porque LocalStack no comprobaba la firma —ahora sí—.
+  await fetch(bucket.url, { method: 'PUT' });
 
   await owner.query(`delete from practice where id = $1`, [P.practice]);
   await owner.query(`delete from account where id = any($1::uuid[])`, [

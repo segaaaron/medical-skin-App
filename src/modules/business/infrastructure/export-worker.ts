@@ -78,19 +78,17 @@ export class ExportWorker {
     const now = new Date();
     for (const row of expired) {
       if (row.object_key === null) continue;
+      // Se firma EL MÉTODO QUE SE USA: el método entra en la firma, y un enlace de `GET`
+      // usado con `DELETE` da `SignatureDoesNotMatch`. Un borrado que falle deja el objeto
+      // —no la fila—, así que lo peor es disco: la fila ya está `vencida` y el caso de uso
+      // devuelve `410` sin mirar el almacenamiento.
       const url = signUrl(this.storage, {
-        method: 'GET',
+        method: 'DELETE',
         key: row.object_key,
         expiresInSeconds: 120,
         now,
       });
-      // `DELETE` con la firma de un `GET` no vale: se firma el método que se usa. El
-      // almacenamiento rechaza lo que no cuadre, y un borrado que falla deja el objeto —no la
-      // fila— así que lo peor es disco, no un dato accesible: la fila ya está `vencida` y el
-      // caso de uso devuelve `410`.
-      await fetch(url.url.replace('X-Amz-SignedHeaders', 'X-Amz-SignedHeaders'), {
-        method: 'DELETE',
-      }).catch(() => undefined);
+      await fetch(url.url, { method: 'DELETE' }).catch(() => undefined);
     }
     return expired.length;
   }

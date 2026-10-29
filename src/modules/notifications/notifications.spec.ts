@@ -381,3 +381,88 @@ describe('el envío, el silencio y la higiene de tokens', () => {
     expect(await outbox.enqueueAsJob(draft)).toBe(false);
   });
 });
+
+describe('la bandeja con dos trabajadores, y su retención', () => {
+  beforeAll(async () => {
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [N.practice]);
+    await owner.query(`delete from device where account_id = $1`, [N.doctor]);
+    await owner.query(`delete from alert_preference where account_id = $1`, [N.doctor]);
+    await owner.query(
+      `insert into device (account_id, device_id, token, platform, permission)
+       values ($1, 'tel-lease', 'token-ios-lease', 'ios', 'concedido')`,
+      [N.doctor],
+    );
+  });
+
+  it('dos trabajadores a la vez NO mandan el mismo push dos veces', async () => {
+    await owner.query(
+      `insert into notification_outbox (practice_id, account_id, kind, channel, subject_key,
+                                        dedupe_key)
+       values ($1, $2, 'seguridad', 'push', 'seguridad', 'lease-uno')`,
+      [N.practice, N.doctor],
+    );
+
+    // Dos pasadas EN PARALELO, que es lo que pasa en cuanto la API y el trabajador sean dos
+    // procesos. Sin el arrendamiento las dos leían la misma fila y el push salía dos veces.
+    const uno = new FakePush('ios');
+    const otro = new FakePush('ios');
+    await Promise.all([
+      new Notifications(outbox, [uno], null, clock).send(),
+      new Notifications(outbox, [otro], null, clock).send(),
+    ]);
+
+    const mandados = [...uno.sent, ...otro.sent].filter((m) => m.title === 'Movimiento en tu cuenta');
+    expect(mandados).toHaveLength(1);
+
+    const { rows } = await owner.query<{ status: string }>(
+      `select status from notification_outbox where dedupe_key = 'lease-uno'`,
+    );
+    expect(rows[0]?.status).toBe('enviado');
+  });
+
+  it('un aviso sin remitente para su plataforma NO gasta sus intentos', async () => {
+    await owner.query(`delete from device where account_id = $1`, [N.doctor]);
+    await owner.query(
+      `insert into device (account_id, device_id, token, platform, permission)
+       values ($1, 'tel-android', 'token-android', 'android', 'concedido')`,
+      [N.doctor],
+    );
+    await owner.query(
+      `insert into notification_outbox (practice_id, account_id, kind, channel, subject_key,
+                                        dedupe_key)
+       values ($1, $2, 'seguridad', 'push', 'seguridad', 'sin-remitente')`,
+      [N.practice, N.doctor],
+    );
+
+    // Solo hay remitente de iOS y el token es de Android: el canal NO se intentó. Eso no es un
+    // fallo, es que falta una credencial —y contarlo mataba el aviso en tres pasadas—.
+    await new Notifications(outbox, [new FakePush('ios')], null, clock).send();
+
+    const { rows } = await owner.query<{ status: string; attempts: number }>(
+      `select status, attempts from notification_outbox where dedupe_key = 'sin-remitente'`,
+    );
+    expect(rows[0]).toMatchObject({ status: 'pendiente', attempts: 0 });
+  });
+
+  it('una fila cerrada hace 100 días se va; una de ayer se queda', async () => {
+    await owner.query(
+      `insert into notification_outbox (practice_id, account_id, kind, channel, subject_key,
+                                        dedupe_key, status, sent_at, updated_at)
+       values ($1, $2, 'mensaje', 'push', 'mensaje', 'retencion-vieja', 'enviado',
+               now() - interval '100 days', now() - interval '100 days'),
+              ($1, $2, 'mensaje', 'push', 'mensaje', 'retencion-nueva', 'enviado',
+               now() - interval '1 day', now() - interval '1 day')`,
+      [N.practice, N.doctor],
+    );
+
+    const borradas = await new Notifications(outbox, [], null, clock).purgeSent(90);
+    expect(borradas).toBeGreaterThanOrEqual(1);
+
+    const { rows } = await owner.query<{ dedupe_key: string }>(
+      `select dedupe_key from notification_outbox
+        where dedupe_key in ('retencion-vieja', 'retencion-nueva')`,
+    );
+    // Noventa días es lo que hace falta para responder «esto se te mandó el día 3 a las 9:14».
+    expect(rows.map((r) => r.dedupe_key)).toEqual(['retencion-nueva']);
+  });
+});

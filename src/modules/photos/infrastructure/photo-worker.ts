@@ -89,18 +89,23 @@ export class PhotoWorker {
     });
 
     const now = new Date();
+    let done = 0;
     for (const photo of photos) {
+      const gone: boolean[] = [];
       for (const derivative of DERIVATIVES) {
-        await this.remove(`${photo.id}/${derivative.name}.avif`, now);
+        gone.push(await this.remove(`${photo.id}/${derivative.name}.avif`, now));
       }
-      // El sello DESPUÉS de tocar el almacenamiento: si el proceso muere en medio, el siguiente
-      // intento vuelve a encontrar la foto y borra lo que quede. Las claves son deterministas,
-      // así que borrar lo ya borrado es un 404 que no importa.
+      // EL SELLO SOLO SI LAS TRES SE FUERON. Sellar igual sería una fila que afirma que los
+      // bytes no están cuando siguen ahí, y entonces nadie vuelve a mirar. Si el
+      // almacenamiento no respondió, la foto se queda en la lista y la pasada siguiente lo
+      // vuelve a intentar: las claves son deterministas, así que repetir no cuesta nada.
+      if (gone.some((ok) => !ok)) continue;
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_derivatives($1, false)', [photo.id]),
       );
+      done += 1;
     }
-    return photos.length;
+    return done;
   }
 
   /** Y el camino de vuelta: reactivar la ficha las regenera desde la maestra. */
@@ -157,17 +162,24 @@ export class PhotoWorker {
     });
 
     const now = new Date();
+    let done = 0;
     for (const photo of photos) {
+      const gone: boolean[] = [];
       for (const derivative of DERIVATIVES) {
-        await this.remove(`${photo.id}/${derivative.name}.avif`, now);
+        gone.push(await this.remove(`${photo.id}/${derivative.name}.avif`, now));
       }
-      await this.remove(KEYS.master(photo.id), now);
-      await this.remove(KEYS.upload(photo.id), now);
+      gone.push(await this.remove(KEYS.master(photo.id), now));
+      gone.push(await this.remove(KEYS.upload(photo.id), now));
+      // Lo mismo, y aquí importa más: `purged_at` significa «los bytes ya se fueron». Si se
+      // escribiera sin que se fueran, la foto de alguien que pidió que se borrara seguiría en
+      // el disco con una fila diciendo que no.
+      if (gone.some((ok) => !ok)) continue;
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_erased($1)', [photo.id]),
       );
+      done += 1;
     }
-    return photos.length;
+    return done;
   }
 
   private async process(
@@ -280,9 +292,17 @@ export class PhotoWorker {
     if (!response.ok) throw new Error(`el almacenamiento rechazó ${key}: ${response.status}`);
   }
 
-  private async remove(key: string, now: Date): Promise<void> {
-    const url = signUrl(this.storage, { method: 'GET', key, expiresInSeconds: 120, now });
-    await fetch(url.url, { method: 'DELETE' }).catch(() => undefined);
+  /**
+   * Borra un objeto, y DEVUELVE SI SE FUE. La firma es de `DELETE` —el método entra en la
+   * firma, y con la de un `GET` el almacenamiento responde `SignatureDoesNotMatch`—, y un
+   * `404` cuenta como ido: la clave es determinista, así que borrar lo ya borrado es el
+   * resultado que se quería.
+   */
+  private async remove(key: string, now: Date): Promise<boolean> {
+    const url = signUrl(this.storage, { method: 'DELETE', key, expiresInSeconds: 120, now });
+    const response = await fetch(url.url, { method: 'DELETE' }).catch(() => null);
+    if (response === null) return false;
+    return response.ok || response.status === 404;
   }
 }
 

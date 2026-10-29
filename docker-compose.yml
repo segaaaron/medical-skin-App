@@ -43,6 +43,17 @@ services:
       SERVICES: s3
       DEBUG: "0"
       PERSISTENCE: "1"
+      # LA FIRMA SE COMPRUEBA, Y NO ERA LO PREDETERMINADO. LocalStack trae
+      # `S3_SKIP_SIGNATURE_VALIDATION=1` de serie: no valida ni la firma ni la caducidad de un
+      # enlace prefirmado. Medido el 29 de octubre de 2026 —aceptó un `DELETE` con una firma de
+      # 64 ceros y borró el objeto—, así que **toda prueba de URL firmada pasaba en verde
+      # contra un almacenamiento que no comprobaba lo que se estaba probando**: fue lo que tapó
+      # que los tres sitios que borran objetos firmaban un `GET` y llamaban con `DELETE`.
+      #
+      # Con esto en `0`, la firma tiene que cuadrar de verdad —el método entra en ella— y la
+      # caducidad también. La validación solo puede pasar si la clave secreta es `test`, que es
+      # la de `.env.example`.
+      S3_SKIP_SIGNATURE_VALIDATION: "0"
     volumes:
       - medskin-s3:/var/lib/localstack
     healthcheck:

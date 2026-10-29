@@ -78,6 +78,7 @@ export function startNotifications(
       run: async () => ({
         volver: await notifications.callBack(),
         tokens: await notifications.sweepTokens(),
+        bandeja: await notifications.purgeSent(),
       }),
     },
   ] as const;

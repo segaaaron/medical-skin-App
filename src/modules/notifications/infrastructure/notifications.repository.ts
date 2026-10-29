@@ -133,6 +133,16 @@ export class NotificationsRepository implements OutboxPort {
     });
   }
 
+  async purgeSent(days: number, limit: number): Promise<number> {
+    return withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      const { rows } = await c.query<{ n: number }>(
+        'select medskin_notifications_purge($1, $2) as n',
+        [days, limit],
+      );
+      return rows[0]?.n ?? 0;
+    });
+  }
+
   async appointmentsToRemind(
     hours: number,
     windowMinutes: number,

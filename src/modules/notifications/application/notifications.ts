@@ -157,6 +157,16 @@ export class Notifications {
     return this.outbox.sweepStaleDevices(days, 1_000);
   }
 
+  /**
+   * LA RETENCIÓN DE LA BANDEJA, diaria. Una fila enviada se queda 90 días —lo que hace falta
+   * para responder «esto se te mandó el día 3 a las 9:14»— y después se va. Sin esto la tabla
+   * crece sin fin, y mil filas `incidencia` de una cuenta dicen demasiado aunque ninguna lleve
+   * un dato clínico dentro.
+   */
+  async purgeSent(days = 90): Promise<number> {
+    return this.outbox.purgeSent(days, 5_000);
+  }
+
   // -----------------------------------------------------------------------------------
 
   private async enqueue(
@@ -184,12 +194,17 @@ export class Notifications {
 
     const text = textOf(notification.subjectKey);
     let delivered = 0;
+    let tried = 0;
     let lastReason = 'ningún dispositivo aceptó el aviso';
 
     for (const device of devices) {
       const sender = this.push.get(device.platform);
+      // SIN REMITENTE PARA ESA PLATAFORMA NO SE INTENTÓ NADA, y eso no es un fallo: es que
+      // falta una credencial. Contarlo como fallo gastaba los tres intentos de la fila y
+      // mataba el aviso —si solo hay APNs configurado, todos los tokens de Android—.
       if (sender === undefined) continue;
 
+      tried += 1;
       const sent = await sender.send(device, { ...text, data: notification.data });
       if (sent.outcome === 'ok') {
         delivered += 1;
@@ -206,6 +221,11 @@ export class Notifications {
       result.sent += 1;
       return;
     }
+    // Ni un intento: la fila se queda pendiente tal cual, sin gastar nada. El arrendamiento de
+    // `medskin_notifications_due` la devuelve en cinco minutos, y cuando la credencial exista
+    // saldrá sola.
+    if (tried === 0) return;
+
     await this.outbox.failed(notification.id, lastReason, MAX_ATTEMPTS);
     result.failed += 1;
   }

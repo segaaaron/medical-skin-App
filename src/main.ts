@@ -7,6 +7,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import type { Pool } from 'pg';
 
 import { AppModule } from './app.module';
+import { pushSendersOf } from './modules/notifications/notifications.module';
 import { config } from './shared/config/config';
 import { assertDecoyParity } from './shared/security/decoy-parity';
 import { POOL } from './shared/shared.module';
@@ -74,7 +75,16 @@ async function start() {
   await assertDecoyParity(app.get<Pool>(POOL));
 
   await app.listen(cfg.PORT, '0.0.0.0');
-  process.stdout.write(`medskin-api escuchando en ${cfg.PORT} · región ${cfg.REGION}\n`);
+
+  // QUÉ CANALES DE PUSH HAY, DICHO AL ARRANCAR. Sin credencial no se construye el remitente y
+  // los avisos se encolan y esperan —que es lo correcto, no se pierden—, pero eso no puede ser
+  // un silencio: alguien tiene que poder ver de un vistazo que los push no están saliendo.
+  // Sale el nombre del canal y nunca una ruta ni un identificador de llave.
+  const canales = pushSendersOf(cfg).map((sender) => sender.platform);
+  const push = canales.length === 0 ? 'push SIN CONFIGURAR' : `push: ${canales.join(' y ')}`;
+  process.stdout.write(
+    `medskin-api escuchando en ${cfg.PORT} · región ${cfg.REGION} · ${push}\n`,
+  );
 }
 
 void start();

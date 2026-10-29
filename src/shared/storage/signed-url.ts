@@ -36,15 +36,39 @@ export const EXPIRY = {
 } as const;
 
 /**
- * Un enlace firmado para `PUT` o `GET`. La firma va en la query (`presigned URL`), que es lo
- * que permite que el teléfono suba sin cabeceras de autorización.
+ * Un enlace firmado para `GET`, `PUT` o `DELETE`. La firma va en la query (`presigned URL`),
+ * que es lo que permite que el teléfono suba sin cabeceras de autorización.
+ *
+ * **EL MÉTODO ENTRA EN LA FIRMA**, y es la primera línea del `canonicalRequest` de aquí abajo:
+ * un enlace firmado para `GET` usado con `DELETE` da otra cadena, y el almacenamiento responde
+ * `SignatureDoesNotMatch`. Hasta el 29 de octubre de 2026 los tres sitios que borran objetos
+ * firmaban un `GET` y llamaban con `DELETE`, con un `.catch()` que se comía el 403: **en
+ * producción no borraban nada y la fila decía que sí**. No se vio porque LocalStack **no
+ * comprueba firmas** —medido: acepta un `DELETE` con una firma de 64 ceros y borra el
+ * objeto—, así que la prueba de integración pasaba en verde contra un almacenamiento que no
+ * valida lo que se estaba probando. Es la lección de «verde no es prueba» en su forma más
+ * incómoda: la prueba era real, el almacenamiento no.
  */
 export function signUrl(
   config: StorageConfig,
-  p: { method: 'GET' | 'PUT'; key: string; expiresInSeconds: number; now: Date; contentType?: string },
+  p: {
+    method: 'GET' | 'PUT' | 'DELETE';
+    key: string;
+    expiresInSeconds: number;
+    now: Date;
+    contentType?: string;
+  },
 ): SignedUrl {
   const host = hostOf(config);
-  const path = config.forcePathStyle ? `/${config.bucket}/${p.key}` : `/${p.key}`;
+  // LA CLAVE VACÍA ES EL CUBO, y no lleva barra al final: `PUT /medskin-dev` crea el cubo y
+  // `PUT /medskin-dev/` es otra ruta, así que otra firma. Firmar una y pedir la otra daba
+  // `SignatureDoesNotMatch`, y las pruebas lo tapaban con un `.replace()` sobre la URL porque
+  // LocalStack no comprobaba firmas. Ahora las comprueba y esto tiene que cuadrar.
+  const path = config.forcePathStyle
+    ? p.key === ''
+      ? `/${config.bucket}`
+      : `/${config.bucket}/${p.key}`
+    : `/${p.key}`;
 
   const amzDate = stamp(p.now);
   const dateOnly = amzDate.slice(0, 8);

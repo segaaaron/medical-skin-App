@@ -64,6 +64,8 @@ export interface OutboxPort {
   deviceFailed(deviceId: string): Promise<void>;
   deviceGone(deviceId: string): Promise<void>;
   sweepStaleDevices(days: number, limit: number): Promise<number>;
+  /** La retención de la propia bandeja: lo cerrado y viejo se va. */
+  purgeSent(days: number, limit: number): Promise<number>;
   appointmentsToRemind(hours: number, windowMinutes: number): Promise<readonly AppointmentToRemind[]>;
   patientsToReturn(limit: number): Promise<readonly PatientToReturn[]>;
 }

@@ -288,11 +288,13 @@ export class PhotosRepository implements PhotoPort {
       );
       // Y los objetos se van de verdad: la maestra es irreversible, y es lo que el contrato
       // promete. Borrar del almacenamiento no bloquea la respuesta.
+      // La firma es de `DELETE`: el método entra en la firma, y con la de un `GET` el
+      // almacenamiento responde `SignatureDoesNotMatch` —y el `.catch()` se lo comía—.
+      // Si alguno no se va, lo recoge la pasada `eraseDeleted()` del trabajador, que mira
+      // `deleted_at IS NOT NULL AND purged_at IS NULL`: esto es el camino rápido, no el único.
       for (const key of [KEYS.master(photoId), KEYS.upload(photoId), KEYS.thumb(photoId), KEYS.view(photoId), KEYS.full(photoId)]) {
-        const url = signUrl(this.storage, { method: 'GET', key, expiresInSeconds: 60, now });
-        void fetch(url.url.replace('X-Amz-Signature', 'X-Amz-Signature'), { method: 'DELETE' }).catch(
-          () => undefined,
-        );
+        const url = signUrl(this.storage, { method: 'DELETE', key, expiresInSeconds: 60, now });
+        void fetch(url.url, { method: 'DELETE' }).catch(() => undefined);
       }
       return { outcome: 'deleted' };
     });
