@@ -414,6 +414,20 @@
       "when": 1793240844197,
       "tag": "0058_schedulers_need_to_read",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793307929247,
+      "tag": "0059_quitar_notify_sin_duenio_y_partir_la_caducidad",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793308906296,
+      "tag": "0060_devolver_las_columnas_de_account",
+      "breakpoints": true
     }
   ]
 }

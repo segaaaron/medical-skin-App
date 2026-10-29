@@ -104,8 +104,12 @@ export class ExportsController {
 
   @Post()
   @HttpCode(202)
-  async request(@Req() req: RequestWithContext) {
-    return this.business.requestExport(callerOf(req));
+  async request(@Req() req: RequestWithContext, @Body() body: unknown) {
+    // `negocio.md`: «Idempotente sí (`Idempotency-Key`): una solicitud por día y por cuenta».
+    // Era el único POST que crea algo sin leerla, y la consecuencia es concreta: si el 202 se
+    // perdía, el reintento recibía el `429` del único-por-día y la app **nunca llegaba a
+    // conocer el `id`** de la exportación que sí se había creado.
+    return this.business.requestExport(callerOf(req), readIdempotencyKey(req, body ?? {}));
   }
 
   @Get(':id')

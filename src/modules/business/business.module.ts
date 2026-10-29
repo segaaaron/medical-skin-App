@@ -66,31 +66,38 @@ const EXPORT_EVERY_MS = 60 * 1000;
       provide: EXPORT_WORKER,
       useFactory: (redis: Redis, worker: ExportWorker, failures: FailureLog) => {
         const queue = createQueue(QUEUE_NAMES.dataExport, redis);
+        const recordFailure = (cause: unknown, jobId?: string) =>
+          failures.record({
+            service: 'worker',
+            operation: QUEUE_NAMES.dataExport,
+            severity: 'error',
+            errorCode: 'fallo_de_servicio',
+            cause,
+            traceId: jobId ?? 'sin-traza',
+            requestId: jobId ?? 'sin-peticion',
+            appVersion: null,
+            platform: null,
+            region: null,
+            context: null,
+          });
+
+        // CON SU REGISTRO, y no con un `.catch(() => undefined)`: si la programación falla al
+        // arrancar, no se arma NINGUNA exportación nunca y cada paciente recibe «te llega por
+        // correo» sin que llegue nada. Era el único de los cuatro sitios equivalentes del
+        // proyecto que se lo comía en silencio.
         queue
           .upsertJobScheduler(
             QUEUE_NAMES.dataExport,
             { every: EXPORT_EVERY_MS },
             { name: QUEUE_NAMES.dataExport, opts: { attempts: 1, removeOnFail: 1_000 } },
           )
-          .catch(() => undefined);
+          .catch((cause: unknown) => recordFailure(cause, 'programacion'));
         const running = createWorker(QUEUE_NAMES.dataExport, redis, async () => ({
           armadas: await worker.run(),
           vencidas: await worker.expire(),
         }));
         running.on('failed', (job, cause) => {
-          void failures.record({
-            service: 'worker',
-            operation: QUEUE_NAMES.dataExport,
-            severity: 'error',
-            errorCode: 'fallo_de_servicio',
-            cause,
-            traceId: job?.id ?? 'sin-traza',
-            requestId: job?.id ?? 'sin-peticion',
-            appVersion: null,
-            platform: null,
-            region: null,
-            context: null,
-          });
+          void recordFailure(cause, job?.id);
         });
         return { queue, worker: running };
       },

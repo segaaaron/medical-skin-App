@@ -699,6 +699,63 @@ describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
     expect(JSON.stringify(rows[0]?.data)).not.toContain('Ana');
   });
 
+  it('una ficha SIN CUENTA en la lista de espera no se queda el hueco ni se le dice que se avisó', async () => {
+    // El defecto que la bandeja de salida vino a cerrar, por la otra puerta: avisar necesita un
+    // vínculo con cuenta, y «la mitad de las fichas de una consulta no tiene cuenta». Antes se
+    // le reservaba el hueco 30 minutos y la respuesta decía `lista_de_espera_avisada: 1`.
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [MINE.practice]);
+
+    // Una ficha de esta consulta SIN `patient_link`: nadie a quien mandarle un push.
+    const { rows: sola } = await owner.query<{ id: string }>(
+      `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived)
+       values ($1, 'Sin', 'Cuenta', '1990-01-01', 'sincuenta@tramo4.local', 'instagram')
+       returning id`,
+      [MINE.practice],
+    );
+    await owner.query(
+      `insert into waitlist_entry (practice_id, patient_id, treatment_id, from_date, to_date)
+       values ($1, $2, $3, '2026-11-01', '2026-12-31')`,
+      [MINE.practice, sola[0]!.id, treatment],
+    );
+
+    const booked = (await appointments.book(
+      {
+        paciente_id: BEA.patient,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      doctor(MINE.practice, MINE.doctor),
+      key('hueco-sin-cuenta'),
+    )) as { id: string };
+
+    const cancelled = (await appointments.cancel(
+      booked.id,
+      doctor(MINE.practice, MINE.doctor),
+    )) as { lista_de_espera_avisada: number };
+
+    // LA RESPUESTA DICE LA VERDAD: no se avisó a nadie.
+    expect(cancelled.lista_de_espera_avisada).toBe(0);
+
+    // Y EL HUECO NO SE LE RESERVA a quien no se enteró: reservarlo es perderlo.
+    const { rows: espera } = await owner.query<{ offered_until: Date | null }>(
+      `select offered_until from waitlist_entry where patient_id = $1`,
+      [sola[0]!.id],
+    );
+    expect(espera[0]?.offered_until).toBeNull();
+
+    const { rows: avisos } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from notification_outbox
+        where practice_id = $1 and kind = 'hueco_libre'`,
+      [MINE.practice],
+    );
+    expect(avisos[0]?.n).toBe('0');
+
+    await owner.query(`delete from waitlist_entry where patient_id = $1`, [sola[0]!.id]);
+    await owner.query(`delete from patient where id = $1`, [sola[0]!.id]);
+  });
+
   it('cancelar exige citas:cancelar, y reagendar citas:crear', async () => {
     await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
     const booked = (await appointments.book(

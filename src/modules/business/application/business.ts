@@ -195,23 +195,13 @@ export class Business {
     };
   }
 
-  async requestExport(caller: Caller): Promise<unknown> {
+  async requestExport(caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {
     const asking = this.reader(caller, 'informes:leer');
-    const asked = await this.business.requestExport(asking);
+    const asked = await this.business.requestExport(asking, idempotency, exportView);
+    if (asked.replay !== null) return asked.replay;
     if (asked.outcome === 'too_soon') throw new ContractError('exportacion_reciente');
 
-    return {
-      id: asked.id,
-      estado: 'pedida',
-      // DICE LO QUE EL SISTEMA PUEDE CUMPLIR, y nada más: el enlace es una URL firmada del
-      // almacenamiento, así que dura 24 horas y quien la tenga la usa. «Un solo uso» pedía un
-      // endpoint propio delante del almacenamiento que marcara la descarga, y eso es una ruta
-      // nueva y una decisión de contrato (anotado en `negocio.md`, 29 de octubre de 2026).
-      como_llega: 'Te llega por correo, con un enlace que dura 24 horas.',
-      // LA DECISIÓN INCÓMODA, DICHA SIN ESCONDERLA.
-      no_incluye:
-        'Tu historia clínica completa, con las notas de tu doctora, la pides directamente a tu consulta: ellos tienen que dártela.',
-    };
+    return exportView(asked.id!);
   }
 
   async exportStatus(exportId: string, caller: Caller): Promise<unknown> {
@@ -257,6 +247,26 @@ export class Business {
     }
     return this.who(caller, permission, 'No tienes permiso para esto.');
   }
+}
+
+/**
+ * La respuesta del `202` de la exportación, en un solo sitio: la usa la primera llamada y la
+ * guarda la clave de idempotencia, para que el reintento devuelva EL MISMO cuerpo con el MISMO
+ * identificador. Sin eso, un `202` perdido dejaba a la app sin forma de conocer el `id`.
+ */
+function exportView(id: string): unknown {
+  return {
+    id,
+    estado: 'pedida',
+    // DICE LO QUE EL SISTEMA PUEDE CUMPLIR, y nada más: el enlace es una URL firmada del
+    // almacenamiento, así que dura 24 horas y quien la tenga la usa. «Un solo uso» pedía un
+    // endpoint propio delante del almacenamiento que marcara la descarga, y eso es una ruta
+    // nueva y una decisión de contrato (anotado en `negocio.md`, 29 de octubre de 2026).
+    como_llega: 'Te llega por correo, con un enlace que dura 24 horas.',
+    // LA DECISIÓN INCÓMODA, DICHA SIN ESCONDERLA.
+    no_incluye:
+      'Tu historia clínica completa, con las notas de tu doctora, la pides directamente a tu consulta: ellos tienen que dártela.',
+  };
 }
 
 function paymentView(row: PaymentRow, forPatient: boolean) {

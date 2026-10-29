@@ -94,7 +94,12 @@ export interface BusinessPort {
   ): Promise<{ suppressed: boolean; rows: readonly Record<string, unknown>[] }>;
   plan(caller: BusinessCaller): Promise<PlanRow | null>;
   requestPlan(caller: BusinessCaller, wanted: string, note: string | null): Promise<string | null>;
-  requestExport(caller: BusinessCaller): Promise<{ outcome: 'queued' | 'too_soon'; id: string | null }>;
+  requestExport(
+    caller: BusinessCaller,
+    idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (id: string) => unknown,
+  ): Promise<{ outcome: 'queued' | 'too_soon'; id: string | null; replay: unknown }>;
   exportStatus(
     caller: BusinessCaller,
     exportId: string,

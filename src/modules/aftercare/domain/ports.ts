@@ -59,12 +59,19 @@ export interface AftercarePort {
     },
     idempotency: IdempotencyRecord,
     /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
-    render: (answer: { id: string; practitioner: string | null; phone: string | null }) => unknown,
+    render: (answer: {
+      id: string;
+      practitioner: string | null;
+      phone: string | null;
+      /** Si el aviso a la consulta se encoló de verdad. La frase depende de esto. */
+      notified: boolean;
+    }) => unknown,
   ): Promise<{
     outcome: 'received' | 'no_session';
     id: string | null;
     practitioner: string | null;
     phone: string | null;
+    notified: boolean;
     replay: unknown;
   }>;
   /** `create: false` es la LECTURA, y no escribe: un `GET` no crea el hilo. */

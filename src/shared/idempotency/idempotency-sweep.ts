@@ -181,7 +181,36 @@ export async function recordSweepFailure(
 export class RetentionSweep {
   constructor(private readonly pool: Pool) {}
 
-  async run(passes = 5, batch = 50): Promise<{ purged: number; pending: boolean }> {
+  /**
+   * APAGADO A PROPÓSITO, Y NO ES UN OLVIDO · 29 de octubre de 2026.
+   *
+   * `medskin_purge_retained` (0051/0054) borra el dato de salud de SEIS tablas y deja dentro la
+   * **nota clínica firmada** (`session_note.fields`), el **evento adverso**, el **plan de
+   * cuidados** con el nombre del tratamiento, la **incidencia** que escribió la paciente y las
+   * **observaciones de la sesión**. Y escribe `purged_at` en la misma pasada, que es lo que la
+   * hace idempotente: **la ficha no vuelve a ser candidata nunca**. O sea que cumple a medias
+   * un plazo irreversible y cierra la puerta.
+   *
+   * Completarlo NO es una decisión de la capa de datos. La pregunta es «¿la nota de un acto
+   * médico se borra al vencer el plazo, o se conserva como registro profesional obligatorio con
+   * su propio plazo, distinto del de los datos de contacto?», y en varias jurisdicciones la
+   * respuesta es la segunda. Si es la segunda, lo que está mal no es el barrendero: es la
+   * promesa del 200 y la cabecera de la 0051.
+   *
+   * MIENTRAS NO ESTÉ DECIDIDO, NO CORRE. El vencimiento más temprano posible es 2033 —siete
+   * años desde el primer borrado—, así que no se pierde nada esperando, y hoy **cero filas**
+   * tienen `purged_at`: eso hace que esto sea barato hoy y carísimo dentro de un año. La
+   * pregunta está en `docs/contratos/preguntas-abiertas.md`.
+   */
+  static readonly PAUSED_REASON =
+    'el barrido de retención está apagado hasta que se decida si la nota clínica firmada se borra al vencer el plazo: `docs/contratos/preguntas-abiertas.md`';
+
+  run(): Promise<{ purged: number; pending: boolean }> {
+    return Promise.reject(new Error(`RetentionSweep: ${RetentionSweep.PAUSED_REASON}`));
+  }
+
+  /** El cuerpo, intacto para cuando la decisión esté escrita. */
+  private async runWhenDecided(passes = 5, batch = 50): Promise<{ purged: number; pending: boolean }> {
     let purged = 0;
     for (let pass = 1; pass <= passes; pass += 1) {
       const done = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
@@ -199,21 +228,21 @@ export class RetentionSweep {
   }
 }
 
-/** La cola diaria del barrido de retención, con la misma plumbería que la horaria de arriba. */
+/**
+ * La cola del barrido de retención · **SIN PROGRAMAR, a propósito**.
+ *
+ * La cola y el trabajador se crean —para que el apagado del módulo siga teniendo qué cerrar y
+ * para que encolar a mano siga siendo posible el día que se decida— pero **no se registra
+ * ninguna programación repetible**: `RetentionSweep.run()` está apagado y el motivo está en su
+ * propia documentación. Una cola que falla cada noche con el mismo error es ruido que se acaba
+ * silenciando, y lo que hace falta aquí es una decisión de producto, no un reintento.
+ */
 export function startRetentionSweep(
   redis: Redis,
   sweep: RetentionSweep,
   failures: FailureLog,
 ): { queue: Queue; worker: Worker } {
   const queue = createQueue(QUEUE_NAMES.retentionSweep, redis);
-  queue
-    .upsertJobScheduler(
-      QUEUE_NAMES.retentionSweep,
-      { every: 24 * 60 * 60 * 1000 },
-      { name: QUEUE_NAMES.retentionSweep, opts: { attempts: 1, removeOnFail: 1_000 } },
-    )
-    .catch((cause: unknown) => recordSweepFailure(failures, cause, 'programacion-retencion'));
-
   const worker = createWorker(QUEUE_NAMES.retentionSweep, redis, () => sweep.run());
   worker.on('failed', (job, cause) => {
     void recordSweepFailure(failures, cause, job?.id);

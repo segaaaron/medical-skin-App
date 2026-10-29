@@ -481,9 +481,26 @@ export class BusinessRepository implements BusinessPort {
 
   async requestExport(
     caller: BusinessCaller,
-  ): Promise<{ outcome: 'queued' | 'too_soon'; id: string | null }> {
+    idempotency: IdempotencyRecord,
+    render: (id: string) => unknown,
+  ): Promise<{ outcome: 'queued' | 'too_soon'; id: string | null; replay: unknown }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
+      // LA RESERVA ANTES DE ESCRIBIR NADA, como los demás `POST` que crean algo. Y aquí tiene
+      // una consecuencia que no tienen los otros: el único-por-día lo garantiza un índice, así
+      // que sin clave un `202` perdido devolvía `429` al reintento y la app **nunca llegaba a
+      // conocer el `id`** de la exportación que sí se había creado. El contrato la exige.
+      const replay = await claim<unknown>(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        practiceId: caller.isPatient ? null : caller.practiceId,
+        unfinished: 'No pudimos preparar tu copia, y puede que sí se haya pedido.',
+      });
+      if (replay !== null) {
+        return { outcome: 'queued', id: null, replay: replay.response };
+      }
+
       await c.query('savepoint before_export');
+      let id: string | null;
       try {
         const { rows } = await c.query<{ id: string }>(
           `insert into data_export (account_id, practice_id)
@@ -491,15 +508,25 @@ export class BusinessRepository implements BusinessPort {
           [caller.isPatient ? null : caller.practiceId],
         );
         await c.query('release savepoint before_export');
-        return { outcome: 'queued', id: rows[0]?.id ?? null };
+        id = rows[0]?.id ?? null;
       } catch (failure) {
         // Una solicitud por día y por cuenta, garantizada por el único sobre el día.
         if (isUnique(failure)) {
           await c.query('rollback to savepoint before_export');
-          return { outcome: 'too_soon', id: null };
+          await release(c, { record: idempotency, accountId: caller.accountId });
+          return { outcome: 'too_soon', id: null, replay: null };
         }
         throw failure;
       }
+      if (id === null) throw new Error('la exportación no devolvió su identificador');
+
+      await complete(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        status: 202,
+        response: render(id),
+      });
+      return { outcome: 'queued', id, replay: null };
     });
   }
 

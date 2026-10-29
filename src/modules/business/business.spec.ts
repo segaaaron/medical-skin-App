@@ -103,8 +103,12 @@ beforeAll(async () => {
   await owner.query(`delete from account where id = any($1::uuid[])`, [
     [B.doctor, B.assistant, B.account],
   ]);
+  // LA CUENTA DE LA PACIENTE TAMBIÉN. Desde el 29 de octubre de 2026 `POST /v1/my-data/exports`
+  // lleva clave de idempotencia, y sin este borrado la segunda corrida REPITE la respuesta
+  // guardada en vez de pedir una exportación nueva: la prueba del único-por-día dejaba de
+  // probar nada y pasaba igual. Es la segunda vez hoy que una clave nueva pide esta línea.
   await owner.query(`delete from idempotency_key where account_id = any($1::uuid[])`, [
-    [B.doctor, B.assistant],
+    [B.doctor, B.assistant, B.account],
   ]);
   await owner.query(`delete from data_export where account_id = any($1::uuid[])`, [
     [B.doctor, B.account],
@@ -497,14 +501,24 @@ describe('informes, plan y exportación', () => {
   });
 
   it('la exportación es una por día y dice lo que NO lleva', async () => {
-    const asked = (await business.requestExport(ana)) as { id: string; no_incluye: string };
+    const asked = (await business.requestExport(ana, key('export-1'))) as {
+      id: string;
+      no_incluye: string;
+    };
     expect(asked.id).toBeTruthy();
     // La decisión incómoda, dicha sin esconderla.
     expect(asked.no_incluye).toContain('notas de tu doctora');
 
-    await expect(business.requestExport(ana)).rejects.toMatchObject({
+    // Con OTRA clave, el único-por-día: `429`.
+    await expect(business.requestExport(ana, key('export-2'))).rejects.toMatchObject({
       code: 'exportacion_reciente',
     });
+
+    // Y CON LA MISMA CLAVE, la misma respuesta con el MISMO id: es el caso del `202` perdido,
+    // donde antes el reintento recibía `429` y la app se quedaba sin conocer el identificador
+    // de la exportación que sí se había creado.
+    const again = (await business.requestExport(ana, key('export-1'))) as { id: string };
+    expect(again).toEqual(asked);
 
     const status = (await business.exportStatus(asked.id, ana)) as { estado: string };
     expect(status.estado).toBe('pedida');

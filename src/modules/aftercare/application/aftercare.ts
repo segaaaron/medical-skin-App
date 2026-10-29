@@ -101,6 +101,7 @@ export class Aftercare {
       id: reported.id!,
       practitioner: reported.practitioner,
       phone: reported.phone,
+      notified: reported.notified,
     });
   }
 
@@ -304,12 +305,18 @@ function incidentView(answer: {
   id: string;
   practitioner: string | null;
   phone: string | null;
+  notified: boolean;
 }): unknown {
   return {
     id: answer.id,
     estado: 'recibida',
-    avisamos_a: answer.practitioner,
-    que_sigue: 'Tu doctora lo recibió y te va a responder por el chat.',
+    // `avisamos_a` SOLO SI SE AVISÓ. Y si no —una consulta sin dueña registrada, que es una
+    // columna nullable desde el tramo 1—, la frase dice la verdad: queda registrado y lo verá
+    // al abrir la app. Prometer un aviso que no salió es el defecto que este endpoint tenía.
+    avisamos_a: answer.notified ? answer.practitioner : null,
+    que_sigue: answer.notified
+      ? 'Tu doctora lo recibió y te va a responder por el chat.'
+      : 'Queda registrado en tu consulta. Lo verán al abrir MedSkin.',
     // VIAJA SIEMPRE, incluso con `leve`: «una app no es un servicio de urgencias y no puede
     // comportarse como si lo fuera». La salida al teléfono es obligatoria en esta respuesta.
     si_es_urgente:

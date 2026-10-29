@@ -569,47 +569,60 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       );
 
       // «Cancelar libera el hueco y avisa a la lista de espera en el acto, en orden de
-      // llegada.» El aviso lo manda el tramo 7; lo que este tramo hace es contarlas y marcar a
-      // quién le toca: una a la vez, 30 minutos.
+      // llegada.» Una a la vez, treinta minutos.
+      //
+      // Y EL ORDEN DE LAS DOS COSAS IMPORTA: se avisa PRIMERO y se reserva DESPUÉS, solo si el
+      // aviso se encoló. Al revés —que es como estaba— el hueco se le reservaba treinta minutos
+      // a alguien a quien no se le podía avisar, y la respuesta decía
+      // `lista_de_espera_avisada: 1`. Eso pasa de verdad: `medskin_notify_waitlist` necesita un
+      // `patient_link` con cuenta, y **la mitad de las fichas de una consulta no tiene cuenta**
+      // (lo dice la propia 0046). O sea que el defecto que la bandeja de salida cerró seguía
+      // abierto por otra puerta: la de la paciente que no usa la app.
+      //
+      // Así que se recorre la lista EN ORDEN y se le ofrece a la primera a la que de verdad se
+      // le puede decir. Si a ninguna, el hueco se queda libre para quien lo tome y la respuesta
+      // dice `0`: la consulta ve su lista de espera en la pantalla y llama por teléfono, que es
+      // lo que haría igual. Reservarle el hueco a quien no se enteró es perderlo.
       const { rows: waiting } = await c.query<{ id: string }>(
         `select id from waitlist_entry
           where treatment_id = $1
             and $2::date between from_date and to_date
-          order by created_at limit 1`,
+          order by created_at`,
         [found.treatment_id, now],
       );
-      if (waiting[0] !== undefined) {
-        await c.query(
-          `update waitlist_entry set offered_until = $2 where id = $1`,
-          [waiting[0].id, new Date(now.getTime() + 30 * 60_000)],
-        );
-        // Y EL AVISO, EN LA MISMA TRANSACCIÓN. Hasta hoy la respuesta decía
-        // `lista_de_espera_avisada: 1` y el hueco se le reservaba treinta minutos a alguien
-        // que nunca se enteraba. El aviso del hueco libre es una de las dos excepciones al
-        // horario de silencio del contrato, y por eso sale a cualquier hora: un hueco avisado
-        // a las siete de la mañana ya lo tomó otra.
-        //
-        // La función resuelve la cuenta de quien espera: quien cancela —que puede ser otra
-        // paciente— no lee el vínculo de nadie más.
-        await c.query(
+
+      const until = new Date(now.getTime() + 30 * 60_000);
+      let offered = 0;
+      for (const entry of waiting) {
+        // La función resuelve la cuenta de quien espera —quien cancela, que puede ser otra
+        // paciente, no lee el vínculo de nadie más— y devuelve nulo si no hay a quién avisar.
+        const { rows: queued } = await c.query<{ id: string | null }>(
           `select medskin_notify_waitlist($1,
                     jsonb_build_object('tratamiento_id', $2::text,
                                        'empieza_en', $3::text,
                                        'vence_en', $4::text),
-                    $5)`,
+                    $5) as id`,
           [
-            waiting[0].id,
+            entry.id,
             found.treatment_id,
             found.starts_at.toISOString(),
-            new Date(now.getTime() + 30 * 60_000).toISOString(),
-            `hueco:${appointmentId}:${waiting[0].id}`,
+            until.toISOString(),
+            `hueco:${appointmentId}:${entry.id}`,
           ],
         );
+        if (queued[0]?.id == null) continue;
+
+        await c.query(`update waitlist_entry set offered_until = $2 where id = $1`, [
+          entry.id,
+          until,
+        ]);
+        offered = 1;
+        break;
       }
 
       const row = await this.readOne(c, appointmentId);
       if (row === null) throw new Error(`la cita ${appointmentId} no se pudo releer al cancelar`);
-      return { outcome: 'cancelled', row, deposit, waitlisted: waiting.length };
+      return { outcome: 'cancelled', row, deposit, waitlisted: offered };
     });
   }
 

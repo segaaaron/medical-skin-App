@@ -65,32 +65,67 @@ export class ExportWorker {
     return pending.length;
   }
 
-  /** La caducidad: a las 24 h la fila pasa a `vencida` y el objeto se borra del disco. */
+  /**
+   * La caducidad: a las 24 h el objeto se borra del disco y la fila pasa a `vencida`.
+   *
+   * EN ESE ORDEN, y es el arreglo de un defecto: antes se marcaba `vencida` y se borraba
+   * después con un `.catch()` encima, así que un borrado rechazado dejaba **el JSON con la
+   * copia completa de los datos de una paciente en el disco** y una fila diciendo que no. El
+   * sello solo se escribe si el objeto se fue, igual que hace el trabajador de fotos.
+   *
+   * El `410 exportacion_vencida` del contrato NO depende de esto: lo decide el caso de uso
+   * comparando `expires_at` con la hora, así que el enlace deja de valer a las 24 h aunque el
+   * almacenamiento esté caído.
+   */
   async expire(): Promise<number> {
     const expired = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
       const { rows } = await c.query<{ id: string; object_key: string | null }>(
-        'select * from medskin_exports_expired($1)',
+        'select * from medskin_exports_to_expire($1)',
         [100],
       );
       return rows;
     });
 
     const now = new Date();
+    let done = 0;
     for (const row of expired) {
-      if (row.object_key === null) continue;
-      // Se firma EL MÉTODO QUE SE USA: el método entra en la firma, y un enlace de `GET`
-      // usado con `DELETE` da `SignatureDoesNotMatch`. Un borrado que falle deja el objeto
-      // —no la fila—, así que lo peor es disco: la fila ya está `vencida` y el caso de uso
-      // devuelve `410` sin mirar el almacenamiento.
-      const url = signUrl(this.storage, {
-        method: 'DELETE',
-        key: row.object_key,
-        expiresInSeconds: 120,
-        now,
+      if (row.object_key !== null) {
+        // Se firma EL MÉTODO QUE SE USA: el método entra en la firma, y un enlace de `GET`
+        // usado con `DELETE` da `SignatureDoesNotMatch`.
+        const url = signUrl(this.storage, {
+          method: 'DELETE',
+          key: row.object_key,
+          expiresInSeconds: 120,
+          now,
+        });
+        const gone = await fetch(url.url, { method: 'DELETE' })
+          .then((response) => response.ok || response.status === 404)
+          .catch(() => false);
+        // Si el almacenamiento no la borró, la fila se queda `lista` y la pasada siguiente lo
+        // vuelve a intentar. Lo que no se hace es sellar un borrado que no ocurrió.
+        if (!gone) {
+          await this.failures.record({
+            service: 'worker',
+            operation: 'exportacion.caducar',
+            severity: 'warning',
+            errorCode: 'fallo_de_servicio',
+            cause: new Error(`el almacenamiento no borró ${row.object_key}`),
+            traceId: row.id,
+            requestId: row.id,
+            appVersion: null,
+            platform: null,
+            region: null,
+            context: null,
+          });
+          continue;
+        }
+      }
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+        await c.query('select medskin_export_expired($1)', [row.id]);
       });
-      await fetch(url.url, { method: 'DELETE' }).catch(() => undefined);
+      done += 1;
     }
-    return expired.length;
+    return done;
   }
 
   private async build(
@@ -132,9 +167,48 @@ export class ExportWorker {
         await c.query('select medskin_export_ready($1, $2, $3)', [exportId, key, expiresAt]);
       });
 
-      // EL CORREO, que es lo que la respuesta prometió. El asunto es neutro: «el asunto es lo
-      // que se lee en la pantalla bloqueada del teléfono» (§11.1), así que no dice de quién son
-      // los datos ni de qué consulta.
+      // Y A PARTIR DE AQUÍ **EL ARCHIVO YA ESTÁ**, así que lo que falle no puede marcar la
+      // exportación como fallida. Antes el correo estaba dentro de este mismo `try`: un relé
+      // caído dejaba la fila en `fallida` con el archivo hecho y, como solo se puede pedir una
+      // al día, la paciente recibía `429` el resto del día y se quedaba sin su copia. Un efecto
+      // a medias sellado como fallo y sin salida para la persona.
+      await this.mail2(exportId, accountId, key, now);
+    } catch (cause) {
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+        await c.query('select medskin_export_failed($1)', [exportId]);
+      });
+      await this.failures.record({
+        service: 'worker',
+        operation: 'exportacion',
+        severity: 'error',
+        errorCode: 'fallo_de_servicio',
+        cause,
+        traceId: exportId,
+        requestId: exportId,
+        appVersion: null,
+        platform: null,
+        region: null,
+        context: null,
+      });
+    }
+  }
+
+  /**
+   * EL CORREO, en su propio camino y con su propio fallo. El asunto es neutro: «el asunto es lo
+   * que se lee en la pantalla bloqueada del teléfono» (§11.1), así que no dice de quién son los
+   * datos ni de qué consulta.
+   *
+   * Si el relé falla, la fila se queda `lista` —el archivo está y el enlace vive 24 h— y el
+   * fallo queda registrado con su causa. Lo que NO pasa es que la exportación se marque fallida
+   * por algo que ocurrió después de estar lista.
+   */
+  private async mail2(
+    exportId: string,
+    accountId: string,
+    key: string,
+    now: Date,
+  ): Promise<void> {
+    try {
       const to = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
         const { rows } = await c.query<{ email: string | null }>(
           'select medskin_account_email($1) as email',
@@ -164,12 +238,10 @@ export class ExportWorker {
         });
       }
     } catch (cause) {
-      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
-        await c.query('select medskin_export_failed($1)', [exportId]);
-      });
+      // La fila se queda `lista`: el archivo está hecho y el enlace vive sus 24 horas.
       await this.failures.record({
         service: 'worker',
-        operation: 'exportacion',
+        operation: 'exportacion.correo',
         severity: 'error',
         errorCode: 'fallo_de_servicio',
         cause,

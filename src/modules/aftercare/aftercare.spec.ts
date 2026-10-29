@@ -95,6 +95,9 @@ beforeAll(async () => {
        values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
       [id, account],
     );
+    // LA DUEÑA REGISTRADA. `practice.owner_account_id` es nullable desde el tramo 1, y sin ella
+    // el aviso de una incidencia no tiene a quién ir: ese caso tiene su propia prueba abajo.
+    await owner.query(`update practice set owner_account_id = $2 where id = $1`, [id, account]);
   }
 
   // Ana, paciente de LAS DOS consultas: es lo que prueba que los hilos no se cruzan.
@@ -290,6 +293,37 @@ describe('el semáforo y «algo no va bien»', () => {
     };
     expect(light.dias.map((day) => day.dia)).toEqual([1, 7]);
     expect(light.dias[0]?.llamar_si).toBe('Fiebre, o dolor que aumenta.');
+  });
+
+  it('sin dueña registrada, la respuesta NO dice que la doctora lo recibió', async () => {
+    // `practice.owner_account_id` es nullable desde el tramo 1. Sin ella, el aviso no tiene a
+    // quién ir — y la respuesta decía «Tu doctora lo recibió y te va a responder por el chat»
+    // igual, porque nadie miraba lo que devolvía la función de encolar. Es el mismo defecto que
+    // la bandeja de salida vino a cerrar, por otra puerta.
+    await owner.query(`update practice set owner_account_id = null where id = $1`, [A.practice]);
+    try {
+      const reported = (await aftercare.reportIncident(
+        { session_id: session, que_pasa: 'Me arde al tocarlo.' },
+        ana,
+        key('inc-sin-duena'),
+      )) as { avisamos_a: string | null; que_sigue: string };
+
+      expect(reported.avisamos_a).toBeNull();
+      expect(reported.que_sigue).not.toContain('Tu doctora lo recibió');
+      expect(reported.que_sigue).toContain('Lo verán al abrir MedSkin');
+
+      const { rows } = await owner.query<{ n: string }>(
+        `select count(*)::text as n from notification_outbox
+          where practice_id = $1 and (data->>'incidencia_id') is not null`,
+        [A.practice],
+      );
+      expect(rows[0]?.n).toBe('0');
+    } finally {
+      await owner.query(`update practice set owner_account_id = $2 where id = $1`, [
+        A.practice,
+        A.doctor,
+      ]);
+    }
   });
 
   it('la incidencia responde SIEMPRE con el teléfono, incluso marcada leve', async () => {

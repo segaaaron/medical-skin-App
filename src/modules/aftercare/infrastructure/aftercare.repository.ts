@@ -6,6 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { ServiceFailure } from '../../../shared/contract/error-catalog';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -102,12 +103,18 @@ export class AftercareRepository implements AftercarePort {
       photoIds: readonly string[];
     },
     idempotency: IdempotencyRecord,
-    render: (answer: { id: string; practitioner: string | null; phone: string | null }) => unknown,
+    render: (answer: {
+      id: string;
+      practitioner: string | null;
+      phone: string | null;
+      notified: boolean;
+    }) => unknown,
   ): Promise<{
     outcome: 'received' | 'no_session';
     id: string | null;
     practitioner: string | null;
     phone: string | null;
+    notified: boolean;
     replay: unknown;
   }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
@@ -127,6 +134,7 @@ export class AftercareRepository implements AftercarePort {
           id: null,
           practitioner: null,
           phone: null,
+          notified: false,
           replay: replay.response,
         };
       }
@@ -150,7 +158,14 @@ export class AftercareRepository implements AftercarePort {
       const session = sessions[0];
       if (session === undefined) {
         await release(c, { record: idempotency, accountId: caller.accountId });
-        return { outcome: 'no_session', id: null, practitioner: null, phone: null, replay: null };
+        return {
+          outcome: 'no_session',
+          id: null,
+          practitioner: null,
+          phone: null,
+          notified: false,
+          replay: null,
+        };
       }
 
       const { rows } = await c.query<{ id: string }>(
@@ -175,12 +190,16 @@ export class AftercareRepository implements AftercarePort {
       // Ni el texto de lo que reportó ni la gravedad viajan en el aviso: el push lleva el
       // identificador y la frase neutra, y la doctora abre la app para leerlo (§11.1).
       //
-      // La función resuelve la cuenta de la consulta: `app_patient` no lee `practice`.
-      await c.query(
+      // La función resuelve la cuenta de la consulta: `app_patient` no lee `practice`. Y
+      // DEVUELVE NULO SI NO HAY A QUIÉN AVISAR: `practice.owner_account_id` es una columna
+      // nullable desde el tramo 1, así que una consulta sin dueña registrada no recibe nada.
+      // Si no se encoló, la respuesta NO puede decir «tu doctora lo recibió»: ese es el
+      // defecto original de este endpoint, con otra condición de entrada.
+      const { rows: queued } = await c.query<{ id: string | null }>(
         `select medskin_notify_practice($1, 'incidencia', 'push', 'incidencia',
                                         jsonb_build_object('incidencia_id', $2::text,
                                                            'paciente_id', $3::text),
-                                        $4, now())`,
+                                        $4, now()) as id`,
         [session.practice_id, id, session.patient_id, `incidencia:${id}`],
       );
 
@@ -189,6 +208,7 @@ export class AftercareRepository implements AftercarePort {
         id,
         practitioner: session.practitioner_name,
         phone: session.phone,
+        notified: queued[0]?.id != null,
       };
       await complete(c, {
         record: idempotency,
@@ -293,8 +313,22 @@ export class AftercareRepository implements AftercarePort {
          returning id`,
         [threadId, caller.isPatient ? 'paciente' : 'consulta', caller.accountId, body],
       );
-      await c.query(`update message_thread set last_message_at = now() where id = $1`, [threadId]);
+      // SI NO SE INSERTÓ NADA, NO SE ENVIÓ NADA. El `insert … select from message_thread`
+      // no afecta ninguna fila si el hilo no existe o la política no lo ve, y
+      // `rows[0]?.id ?? null` convertía ese dato ausente en `{ enviado: true, id: null }` —y
+      // peor: ese cuerpo se guardaba en la clave de idempotencia, así que el reintento de las
+      // 24 horas también afirmaba que se había enviado—. La frase del 500 de este endpoint es
+      // la del contrato: el mensaje está guardado en el teléfono y se reintenta.
       const id = rows[0]?.id ?? null;
+      if (id === null) {
+        await release(c, { record: idempotency, accountId: caller.accountId });
+        throw new ServiceFailure(
+          'No pudimos enviar tu mensaje. Está guardado en tu teléfono y se envía solo cuando vuelva la señal.',
+          new Error(`el hilo ${threadId} no admitió el mensaje`),
+        );
+      }
+
+      await c.query(`update message_thread set last_message_at = now() where id = $1`, [threadId]);
       // «Tienes un mensaje», sin el texto: el de un mensaje clínico no viaja a una pantalla de
       // bloqueo. Va a la otra parte del hilo, y el identificador del mensaje es la clave de
       // deduplicación, así que un reintento no manda dos avisos.
