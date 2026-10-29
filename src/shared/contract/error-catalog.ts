@@ -51,6 +51,13 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `cuidados.md` · cuidados, mensajes y avisos
+  | 'paso_futuro'
+  | 'paso_no_existe'
+  | 'mensaje_vacio'
+  | 'mensaje_demasiado_largo'
+  | 'demasiados_mensajes'
+  | 'vinculo_revocado'
   // `imagenes.md` · las fotos
   | 'tipo_no_admitido'
   | 'demasiado_grande'
@@ -398,6 +405,24 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `cuidados.md`.
+  // -------------------------------------------------------------------------------------
+  paso_futuro: { status: 409, message: 'Ese cuidado todavía no toca.', field: null },
+  paso_no_existe: { status: 404, message: 'Ese cuidado ya no está.', field: null },
+  mensaje_vacio: { status: 400, message: 'Escribe algo.', field: 'texto' },
+  mensaje_demasiado_largo: {
+    status: 400,
+    message: 'Es muy largo. Mándalo en dos.',
+    field: 'texto',
+  },
+  demasiados_mensajes: {
+    status: 429,
+    message: 'Mandaste muchos mensajes seguidos. Espera un rato.',
+    field: null,
+  },
+  vinculo_revocado: { status: 409, message: 'Ese chat está cerrado.', field: null },
+
   // -------------------------------------------------------------------------------------
   // `imagenes.md`. Lo que estos codigos protegen es la cara de una persona.
   // -------------------------------------------------------------------------------------
@@ -1329,6 +1354,24 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `cuidados.md`. Las frases dicen DÓNDE quedó lo que se escribió, que es lo que calma. */
+  readAftercare:
+    'No pudimos cargar tus cuidados. El servidor no respondió. Te mostramos los últimos guardados: puedes volver a intentarlo.',
+  markCareStep:
+    'No pudimos marcarlo. Lo guardamos en tu teléfono y se envía solo: no lo marques dos veces.',
+  readTrafficLight:
+    'No pudimos cargar la guía. El servidor no respondió: puedes volver a intentarlo.',
+  reportIncident:
+    'No pudimos enviar tu reporte. El servidor no respondió. Está guardado en tu teléfono y se envía solo. Si empeora, llama a la consulta.',
+  readMessages:
+    'No pudimos cargar el chat. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+  sendMessage:
+    'No pudimos enviar tu mensaje. Está guardado en tu teléfono y se envía solo cuando vuelva la señal.',
+  saveDevice:
+    'No pudimos registrar este teléfono para avisos. El servidor no respondió: puedes volver a intentarlo.',
+  savePreferences:
+    'No pudimos guardar tus preferencias. El servidor no respondió. Siguen las de antes: puedes volver a intentarlo.',
 
   /** `imagenes.md` · las fotos. La frase dice donde quedo la foto, que es lo que importa. */
   signUpload:

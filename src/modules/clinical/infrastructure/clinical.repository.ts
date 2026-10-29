@@ -286,18 +286,49 @@ export class ClinicalRepository implements ClinicalPort {
         [sessionId],
       );
 
-      // «Firmar es lo que programa los cuidados», con el protocolo COPIADO en ese momento. La
-      // cola y el envío son del tramo 7; lo que este tramo sabe es cuántos pasos se copiaron.
-      const { rows: steps } = await c.query<{ n: string }>(
-        `select count(*)::text as n from treatment_protocol_step
-          where treatment_id = $1 and moment = 'despues'`,
+      // FIRMAR ES LO QUE PROGRAMA LOS CUIDADOS, con el protocolo COPIADO en este momento: el
+      // texto y la hora se guardan en `care_step`, no se enlazan al protocolo. «Cambiar el
+      // protocolo después no mueve lo que ya se le mandó, y una paciente no ve cambiar
+      // instrucciones que ya cumplió.»
+      const { rows: plans } = await c.query<{ id: string }>(
+        `insert into care_plan (practice_id, patient_id, session_id, practice_name,
+                                treatment_name, session_at)
+         select medskin_current_practice(), s.patient_id, s.id,
+                (select l.practice_name from patient_link l
+                  where l.patient_id = s.patient_id limit 1),
+                t.name, s.started_at
+           from clinical_session s
+           join appointment a on a.id = s.appointment_id
+           join treatment t on t.id = a.treatment_id
+          where s.id = $1
+         returning id`,
+        [sessionId],
+      );
+      const planId = plans[0]?.id ?? null;
+
+      const { rows: steps } = await c.query<{ offset_hours: number; text: string }>(
+        `select offset_hours, text from treatment_protocol_step
+          where treatment_id = $1 and moment = 'despues' order by offset_hours`,
         [note.treatment_id],
       );
+      if (planId !== null) {
+        for (const step of steps) {
+          // El instante YA CALCULADO desde el fin de la sesión: la app lo necesita así para
+          // agendar su aviso local y que el recordatorio funcione sin conexión.
+          await c.query(
+            `insert into care_step (practice_id, plan_id, appears_at, text)
+             select medskin_current_practice(), $1,
+                    s.ended_at + make_interval(hours => $2), $3
+               from clinical_session s where s.id = $4`,
+            [planId, step.offset_hours, step.text, sessionId],
+          );
+        }
+      }
 
       return {
         outcome: 'signed',
         row: await this.readOne(c, sessionId, []),
-        aftercare: Number(steps[0]?.n ?? 0),
+        aftercare: steps.length,
       };
     });
   }

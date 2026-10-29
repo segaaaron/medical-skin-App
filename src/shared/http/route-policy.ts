@@ -154,6 +154,38 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `cuidados.md` · los cuidados, el hilo y los avisos. Casi todos son de la PACIENTE; la
+  // consulta entra en el plan —para ver la adherencia— y en el hilo.
+  'GET /v1/aftercare': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readAftercare },
+  'POST /v1/aftercare/:step_id/done': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.markCareStep,
+  },
+  'GET /v1/traffic-light/:session_id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readTrafficLight,
+  },
+  'POST /v1/incidents': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.reportIncident },
+  'GET /v1/messages': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readMessages },
+  'POST /v1/messages': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.sendMessage },
+  // El dispositivo se registra APENAS entra: por eso vale con la contraseña todavia temporal.
+  'POST /v1/devices': {
+    scopes: ['contrasena_temporal', 'segundo_factor', 'completo'],
+    failurePhrase: FAILURE_PHRASES.saveDevice,
+  },
+  'DELETE /v1/devices/:device_id': {
+    scopes: ['contrasena_temporal', 'segundo_factor', 'completo'],
+    failurePhrase: FAILURE_PHRASES.saveDevice,
+  },
+  'GET /v1/alerts/preferences': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.savePreferences,
+  },
+  'PUT /v1/alerts/preferences': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.savePreferences,
+  },
+
   // `imagenes.md` · las fotos. Las dos puertas: la consulta y la paciente —ella sube las suyas
   // y compara su progreso, que es lo que vuelve adictivo el avance—.
   'POST /v1/photos/upload-url': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.signUpload },

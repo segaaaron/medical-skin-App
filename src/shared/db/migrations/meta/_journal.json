@@ -274,6 +274,27 @@
       "when": 1793239165499,
       "tag": "0038_photo_worker_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793239414001,
+      "tag": "0039_tramo7_aftercare",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793239742811,
+      "tag": "0040_patient_reads_own_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793239771894,
+      "tag": "0041_patient_reads_practice_phone",
+      "breakpoints": true
     }
   ]
 }
