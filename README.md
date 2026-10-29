@@ -59,3 +59,20 @@ recorre entera antes de dar por terminado cualquier servicio que toque datos, ac
 
 **Tests: solo lógica y servicios.** Nada de interfaz, nada de comprobar que un doble fue llamado.
 Cuando cambies algo, ejecuta solo el test que tocaste.
+
+## Antes de commitear
+
+```sh
+pnpm verify                            # lint + tipos + las 681 pruebas contra la base real
+git config core.hooksPath .githooks    # una vez por copia: gitleaks antes de cada commit
+```
+
+`pnpm verify` es lo mismo que corre la integración continua (`.github/workflows/ci.yml`), que además
+pasa `pnpm audit`, `osv-scanner`, `gitleaks` y `trivy`. El gancho de pre-commit avisa y deja pasar si
+`gitleaks` no está instalado: un gancho que bloquea por una herramienta que falta se desactiva el
+mismo día.
+
+Las pruebas necesitan la pila de desarrollo levantada (`docker compose up -d`): Postgres con sus dos
+roles, Redis, LocalStack y PgBouncer en modo transacción. No hay dobles de la base en este
+proyecto —el aislamiento multi-tenant no se puede probar contra un doble— y por eso la suite tarda
+quince segundos y no uno.

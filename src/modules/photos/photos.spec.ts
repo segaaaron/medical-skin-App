@@ -425,3 +425,99 @@ describe('borrar', () => {
     expect(after[0]?.deleted_reason).toBe('salí mal');
   });
 });
+
+describe('archivar la ficha borra las derivadas, y reactivarla las devuelve', () => {
+  it('la maestra se queda y las tres derivadas se van, con su camino de vuelta', async () => {
+    // Una foto procesada de verdad: es la única forma de que haya derivadas que borrar.
+    const signed = (await photos.uploadUrl(
+      {
+        patient_id: P.patient,
+        vista: 'perfil_izq',
+        tipo_declarado: 'image/jpeg',
+        bytes_declarados: 200_000,
+      },
+      staff(P.doctor, 'doctora'),
+    )) as { photo_id: string };
+    expect(await uploadTo(signed.photo_id, await aPhoto())).toBe(200);
+    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await worker.run();
+    expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(true);
+
+    // La ficha se archiva. «Las derivadas de sus fotos se borran y la maestra se queda»
+    // (`pacientes.md`), y hasta hoy nadie lo hacía.
+    await owner.query(
+      `update patient set status = 'archivada', archived_at = now() where id = $1`,
+      [P.patient],
+    );
+    expect(await worker.purgeDerivatives()).toBeGreaterThan(0);
+
+    expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(false);
+    expect(await objectExists(KEYS.view(signed.photo_id))).toBe(false);
+    expect(await objectExists(KEYS.full(signed.photo_id))).toBe(false);
+    // LA MAESTRA NO SE TOCA: es la prueba legal del expediente.
+    expect(await objectExists(KEYS.master(signed.photo_id))).toBe(true);
+
+    const { rows } = await owner.query<{ derivatives_ready: boolean; status: string }>(
+      `select derivatives_ready, status from photo where id = $1`,
+      [signed.photo_id],
+    );
+    expect(rows[0]).toMatchObject({ derivatives_ready: false, status: 'lista' });
+
+    // Y reactivarla las regenera desde la maestra: archivar no pierde nada.
+    await owner.query(
+      `update patient set status = 'activa', archived_at = null where id = $1`,
+      [P.patient],
+    );
+    expect(await worker.rebuildDerivatives()).toBeGreaterThan(0);
+    expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(true);
+    expect(await objectExists(KEYS.full(signed.photo_id))).toBe(true);
+
+    const { rows: back } = await owner.query<{ derivatives_ready: boolean }>(
+      `select derivatives_ready from photo where id = $1`,
+      [signed.photo_id],
+    );
+    expect(back[0]?.derivatives_ready).toBe(true);
+  });
+});
+
+describe('borrar una foto se lleva los bytes, no solo la fila', () => {
+  it('los cuatro objetos se van del almacenamiento, maestra incluida', async () => {
+    const signed = (await photos.uploadUrl(
+      {
+        patient_id: P.patient,
+        vista: 'oblicuo_izq',
+        tipo_declarado: 'image/jpeg',
+        bytes_declarados: 200_000,
+      },
+      staff(P.doctor, 'doctora'),
+    )) as { photo_id: string };
+    expect(await uploadTo(signed.photo_id, await aPhoto())).toBe(200);
+    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await worker.run();
+
+    // La doctora la borra: hasta hoy eso marcaba la fila y dejaba los cuatro objetos en el
+    // disco para siempre. Es disco que nadie contaba y es la cara de alguien que pidió que se
+    // fuera.
+    await photos.remove(signed.photo_id, { motivo: 'salió movida' }, staff(P.doctor, 'doctora'));
+    expect(await worker.eraseDeleted()).toBeGreaterThan(0);
+
+    expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(false);
+    expect(await objectExists(KEYS.view(signed.photo_id))).toBe(false);
+    expect(await objectExists(KEYS.full(signed.photo_id))).toBe(false);
+    expect(await objectExists(KEYS.master(signed.photo_id))).toBe(false);
+
+    // Y la fila se queda con su motivo y su sello: «un hueco sin explicación es peor».
+    const { rows } = await owner.query<{ purged_at: Date | null; deleted_reason: string }>(
+      `select purged_at, deleted_reason from photo where id = $1`,
+      [signed.photo_id],
+    );
+    expect(rows[0]?.purged_at).not.toBeNull();
+    expect(rows[0]?.deleted_reason).toBe('salió movida');
+
+    // Y una segunda pasada no vuelve a hacer nada: idempotente por `purged_at`.
+    const { rows: again } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from medskin_photos_to_erase(25)`,
+    );
+    expect(again[0]?.n).toBe('0');
+  });
+});

@@ -100,9 +100,10 @@ export class IdempotencySweep {
  * SIN REINTENTOS (`attempts: 1`), y es la segunda decisión con su motivo: un barrido horario
  * que reintenta tres veces en catorce segundos no aporta nada, porque **la próxima hora
  * vuelve igual** y lo que barre no se ha movido. Lo que sí hace falta es que un barrido que
- * lleva días fallando se vea, y de eso se encargan la cola de fallidos —`removeOnFail: false`,
- * que no borra— y una fila de `service_failure` por CADA intento fallido, no solo por el
- * último.
+ * lleva días fallando se vea, y de eso se encargan la cola de fallidos —acotada a los mil
+ * últimos desde el 29 de octubre de 2026, porque `false` era «no borres nunca» sobre un Redis
+ * de 100 MB— y una fila de `service_failure` por CADA intento fallido, no solo por el último.
+ * El diagnóstico vive en esa tabla; la cola solo sirve para verlo desde el panel.
  */
 export function startIdempotencySweep(
   redis: Redis,
@@ -122,7 +123,7 @@ export function startIdempotencySweep(
     .upsertJobScheduler(
       QUEUE_NAMES.idempotencySweep,
       { every: SWEEP_EVERY_MS },
-      { name: QUEUE_NAMES.idempotencySweep, opts: { attempts: 1, removeOnFail: false } },
+      { name: QUEUE_NAMES.idempotencySweep, opts: { attempts: 1, removeOnFail: 1_000 } },
     )
     .catch((cause: unknown) => recordSweepFailure(failures, cause, 'programacion'));
 
@@ -162,4 +163,60 @@ export async function recordSweepFailure(
     region: null,
     context: null,
   });
+}
+
+/**
+ * EL BARRIDO DEL PLAZO DE CONSERVACIÓN · diario · hallazgo `borrado:retencion-sin-barrendero`.
+ *
+ * Vive aquí al lado del de idempotencia porque es la misma pieza con otro plazo: una tabla que
+ * promete una retención y una función de la base que la cumple. Lo que borra lo decide
+ * `medskin_purge_retained()` (0051), no este archivo: el rol de la aplicación no puede
+ * anonimizar una ficha de otro inquilino, y el trabajo corre con `app_anonymous`, cuyo único
+ * privilegio son funciones como esa.
+ *
+ * Y es el barrido más delicado del sistema, así que dos cotas: 50 fichas por pasada y hasta
+ * cinco pasadas por trabajo. Si algún día hay 10 000 vencimientos el mismo día, se irán en
+ * cuarenta días de barridos y no en una noche que nadie mira.
+ */
+export class RetentionSweep {
+  constructor(private readonly pool: Pool) {}
+
+  async run(passes = 5, batch = 50): Promise<{ purged: number; pending: boolean }> {
+    let purged = 0;
+    for (let pass = 1; pass <= passes; pass += 1) {
+      const done = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+        const { rows } = await c.query<{ n: number }>('select medskin_purge_retained($1) as n', [
+          batch,
+        ]);
+        const n = rows[0]?.n;
+        if (n === undefined) throw new Error('medskin_purge_retained no devolvió cuántas barrió');
+        return n;
+      });
+      purged += done;
+      if (done < batch) return { purged, pending: false };
+    }
+    return { purged, pending: true };
+  }
+}
+
+/** La cola diaria del barrido de retención, con la misma plumbería que la horaria de arriba. */
+export function startRetentionSweep(
+  redis: Redis,
+  sweep: RetentionSweep,
+  failures: FailureLog,
+): { queue: Queue; worker: Worker } {
+  const queue = createQueue(QUEUE_NAMES.retentionSweep, redis);
+  queue
+    .upsertJobScheduler(
+      QUEUE_NAMES.retentionSweep,
+      { every: 24 * 60 * 60 * 1000 },
+      { name: QUEUE_NAMES.retentionSweep, opts: { attempts: 1, removeOnFail: 1_000 } },
+    )
+    .catch((cause: unknown) => recordSweepFailure(failures, cause, 'programacion-retencion'));
+
+  const worker = createWorker(QUEUE_NAMES.retentionSweep, redis, () => sweep.run());
+  worker.on('failed', (job, cause) => {
+    void recordSweepFailure(failures, cause, job?.id);
+  });
+  return { queue, worker };
 }

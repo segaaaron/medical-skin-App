@@ -85,22 +85,35 @@ export class Appointments {
 
     const price = this.priceWithPromotion(facts, now, config.timeZone);
     const depositCents = depositFor(price.cents, config);
-    const booked = await this.appointments.book(asking, {
-      facts,
-      startsAt,
-      endsAt,
-      zone,
-      priceCents: price.cents,
-      promotionId: price.promotionId,
-      patientNote: body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente),
-      forced,
-      depositCents,
-      depositDueAt:
-        depositCents === null ? null : new Date(now.getTime() + config.depositHours * 3_600_000),
-      idempotency,
-      gapMinutes: forced ? 0 : config.gapMinutes,
-    });
+    const booked = await this.appointments.book(
+      asking,
+      {
+        facts,
+        startsAt,
+        endsAt,
+        zone,
+        priceCents: price.cents,
+        promotionId: price.promotionId,
+        patientNote:
+          body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente),
+        forced,
+        depositCents,
+        depositDueAt:
+          depositCents === null ? null : new Date(now.getTime() + config.depositHours * 3_600_000),
+        idempotency,
+        gapMinutes: forced ? 0 : config.gapMinutes,
+      },
+      (row) => this.view(row, config, price.promotionName),
+    );
     if (booked.replay !== null) return booked.replay;
+
+    // El cupo se agotó entre que se leyó y se canjeó: el mismo código y los mismos datos que
+    // cuando la promoción no aplica por fecha o por tratamiento, y el precio es el de lista.
+    if (booked.outcome === 'promotion_quota') {
+      throw new ContractError('promocion_no_aplica', {
+        precio: { centavos: facts.treatment.priceCents },
+      });
+    }
 
     if (booked.outcome === 'slot_taken') {
       // EL ERROR MÁS IMPORTANTE DEL TRAMO, y su valor está en `datos`: los tres huecos
@@ -134,7 +147,9 @@ export class Appointments {
 
   /** Reagendar vuelve a pasar TODAS las comprobaciones: una cita movida es una cita nueva. */
   async reschedule(appointmentId: string, input: unknown, caller: Caller): Promise<unknown> {
-    const asking = this.reader(caller);
+    // Mover una cita es colocarla en un hueco: el permiso es el de crearla. Para la paciente
+    // no hay permiso que mirar —mueve la suya, y su política ya lo acota—.
+    const asking = this.writer(caller, 'citas:crear');
     this.checkUuid(appointmentId);
     const body = asRecord(input);
     const now = this.clock.now();
@@ -168,6 +183,13 @@ export class Appointments {
         config,
         now,
       });
+      // LA REGLA CLÍNICA, y es la razón de que el comentario de arriba diga «todas»: entre que
+      // se agendó y hoy la doctora pudo anotar un embarazo o una alergia, y la puerta que la
+      // paciente usa sola desde su teléfono era la única sin ese muro. Se mira contra el DÍA
+      // NUEVO, que es el que decide el intervalo mínimo.
+      //
+      // `openAppointmentAt` NO se mira aquí: la cita abierta de ese tratamiento es esta misma.
+      await this.checkClinicalRule(asking, practiceId, current, dayOf(startsAt, config.timeZone));
     }
 
     const moved = await this.appointments.reschedule(asking, appointmentId, {
@@ -189,7 +211,9 @@ export class Appointments {
   }
 
   async cancel(appointmentId: string, caller: Caller): Promise<unknown> {
-    const asking = this.reader(caller);
+    // `citas:cancelar`, que es el permiso que la tabla de `_convenciones.md` nombra para esto y
+    // que hasta hoy ningún endpoint comprobaba. Cancelar mueve la seña: no es una lectura.
+    const asking = this.writer(caller, 'citas:cancelar');
     this.checkUuid(appointmentId);
 
     const result = await this.appointments.cancel(
@@ -320,7 +344,6 @@ export class Appointments {
     config: NonNullable<Awaited<ReturnType<SchedulePort['config']>>>,
     now: Date,
   ): Promise<readonly string[]> {
-    const day = dayOf(wanted, config.timeZone);
     const from = new Date(wanted.getTime() - 2 * 86_400_000);
     const to = new Date(wanted.getTime() + 5 * 86_400_000);
     const busy = await this.schedule.busy(asking, practiceId, from, to);
@@ -328,7 +351,6 @@ export class Appointments {
     const days = daysBetween(dayOf(from, config.timeZone), dayOf(to, config.timeZone)).map((each) =>
       slotsOfDay({ day: each, durationMinutes, rules: config, busy, now }),
     );
-    void day;
     return nearestSlots(days, wanted);
   }
 
@@ -394,6 +416,46 @@ export class Appointments {
       return { accountId: caller.accountId, practiceId: null, permissions: [], isPatient: true };
     }
     return practiceOf(caller, 'agenda:leer');
+  }
+
+  /** Igual que `reader()` pero con el permiso de ESCRITURA que nombra la operación. */
+  private writer(caller: Caller, permission: string): ScheduleCaller {
+    if (caller.accountRole === 'paciente') {
+      return { accountId: caller.accountId, practiceId: null, permissions: [], isPatient: true };
+    }
+    return practiceOf(caller, permission);
+  }
+
+  /**
+   * Las dos comprobaciones clínicas del alta, vueltas a pasar: la contraindicación de la ficha
+   * y el intervalo mínimo del tratamiento. Nada más: lo demás del alta —precio, promoción,
+   * seña— se copió en la cita y no se recalcula.
+   */
+  private async checkClinicalRule(
+    asking: ScheduleCaller,
+    practiceId: string,
+    current: AppointmentRow,
+    day: string,
+  ): Promise<void> {
+    const facts = await this.appointments.facts(asking, {
+      practiceId,
+      patientId: current.patientId,
+      treatmentId: current.treatmentId,
+      zone: current.zone,
+      promotionId: null,
+      promotionCode: null,
+      today: day,
+    });
+    // El tratamiento archivado o la ficha que ya no está no bloquean mover una cita que ya
+    // existe: lo que esto vigila es la regla clínica, no el catálogo de hoy.
+    if (facts === 'no_treatment' || facts === 'no_patient') return;
+
+    if (facts.contraindicated) throw new ContractError('tratamiento_no_disponible');
+    if (facts.availableFrom !== null) {
+      throw new ContractError('tratamiento_no_disponible', {
+        disponible_desde: facts.availableFrom,
+      });
+    }
   }
 
   private depositAnswer(outcome: string, row: AppointmentRow | null): unknown {

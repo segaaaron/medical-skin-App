@@ -1,6 +1,7 @@
 // Los cuidados, el semáforo, las incidencias, el hilo, los dispositivos y los avisos.
 
 import { ContractError } from '../../../shared/contract/error-catalog';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
 import type { AftercareCaller, AftercarePort, CarePlanRow } from '../domain/ports';
 
@@ -62,7 +63,11 @@ export class Aftercare {
     };
   }
 
-  async reportIncident(input: unknown, caller: Caller): Promise<unknown> {
+  async reportIncident(
+    input: unknown,
+    caller: Caller,
+    idempotency: IdempotencyRecord,
+  ): Promise<unknown> {
     const asking = this.who(caller, 'historia:leer');
     const body = asRecord(input);
 
@@ -72,37 +77,40 @@ export class Aftercare {
     }
     const what = text(body.que_pasa);
     if (what === null) throw new ContractError('texto_vacio');
-    const perceived = PERCEIVED.includes(String(body.gravedad_percibida))
-      ? String(body.gravedad_percibida)
-      : 'leve';
+    // SIN VALOR POR OMISION: una gravedad que el servidor no reconoce es un 400, no un `leve`
+    // en silencio. Es el dato que ordena la pantalla de urgencias de la doctora.
+    const perceived = enumOf(body.gravedad_percibida, PERCEIVED, 'leve');
+    if (perceived === null) throw new ContractError('gravedad_desconocida');
 
-    const reported = await this.aftercare.reportIncident(asking, {
-      sessionId,
-      what,
-      since: text(body.desde),
-      perceived,
-      photoIds: Array.isArray(body.fotos) ? body.fotos.filter(isUuid) : [],
-    });
+    const reported = await this.aftercare.reportIncident(
+      asking,
+      {
+        sessionId,
+        what,
+        since: text(body.desde),
+        perceived,
+        photoIds: Array.isArray(body.fotos) ? body.fotos.filter(isUuid) : [],
+      },
+      idempotency,
+      incidentView,
+    );
+    if (reported.replay !== null) return reported.replay;
     if (reported.outcome === 'no_session') throw new ContractError('sesion_clinica_no_existe');
 
-    return {
-      id: reported.id,
-      estado: 'recibida',
-      avisamos_a: reported.practitioner,
-      que_sigue: 'Tu doctora lo recibió y te va a responder por el chat.',
-      // VIAJA SIEMPRE, incluso con `leve`: «una app no es un servicio de urgencias y no puede
-      // comportarse como si lo fuera». La salida al teléfono es obligatoria en esta respuesta.
-      si_es_urgente:
-        reported.phone === null
-          ? 'Si empeora o tienes fiebre, llama a la consulta.'
-          : `Si empeora o tienes fiebre, llama a la consulta: ${reported.phone}.`,
-    };
+    return incidentView({
+      id: reported.id!,
+      practitioner: reported.practitioner,
+      phone: reported.phone,
+    });
   }
 
   async messages(query: Record<string, unknown>, caller: Caller): Promise<unknown> {
     const { asking, patientId, practiceId } = await this.thread(caller, query);
-    const thread = await this.aftercare.thread(asking, { patientId, practiceId });
+    const thread = await this.aftercare.thread(asking, { patientId, practiceId }, false);
     if (thread === 'revoked') throw new ContractError('vinculo_revocado');
+    // Un hilo que todavía no existe es un hilo vacío, no un 404 y no una fila nueva: «una
+    // paciente, una doctora, un hilo», y nace cuando alguna escribe.
+    if (thread === null) return { hilo: { id: null, cerrado: false }, mensajes: [] };
 
     const before = typeof query.antes_de === 'string' ? new Date(query.antes_de) : null;
     const messages = await this.aftercare.messages(
@@ -123,7 +131,7 @@ export class Aftercare {
     };
   }
 
-  async send(input: unknown, caller: Caller): Promise<unknown> {
+  async send(input: unknown, caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {
     const body = asRecord(input);
     const { asking, patientId, practiceId } = await this.thread(caller, body);
 
@@ -131,10 +139,12 @@ export class Aftercare {
     if (text_ === null) throw new ContractError('mensaje_vacio');
     if (text_.length > 2000) throw new ContractError('mensaje_demasiado_largo');
 
-    const thread = await this.aftercare.thread(asking, { patientId, practiceId });
+    const thread = await this.aftercare.thread(asking, { patientId, practiceId }, true);
     if (thread === 'revoked') throw new ContractError('vinculo_revocado');
+    if (thread === null) throw new ContractError('vinculo_no_existe');
 
-    const sent = await this.aftercare.send(asking, thread.id, text_);
+    const sent = await this.aftercare.send(asking, thread.id, text_, idempotency);
+    if (sent.replay !== null) return sent.replay;
     if (sent.outcome === 'too_many') throw new ContractError('demasiados_mensajes');
     // El push de este mensaje NO lleva el texto: «Tienes un mensaje de tu doctora». El texto de
     // un mensaje clínico no viaja a una pantalla de bloqueo.
@@ -153,14 +163,17 @@ export class Aftercare {
       : null;
     if (platform === null) throw new ContractError('formato_no_admitido');
 
+    // Igual que la gravedad: un permiso desconocido NO pasa por `concedido`. Mandarle un push
+    // a quien lo denego es la clase de error que nadie reporta y todos recuerdan.
+    const permission = enumOf(body.permiso, PERMISSIONS, 'concedido');
+    if (permission === null) throw new ContractError('permiso_desconocido');
+
     await this.aftercare.registerDevice(asking, {
       deviceId,
       token,
       platform,
       appVersion: text(body.version_app),
-      permission: PERMISSIONS.includes(String(body.permiso))
-        ? String(body.permiso)
-        : 'concedido',
+      permission,
     });
     return { registrado: true };
   }
@@ -283,6 +296,29 @@ function prefsView(prefs: {
   };
 }
 
+/**
+ * La respuesta de una incidencia, en un solo sitio: la usa la primera llamada y la guarda la
+ * clave de idempotencia, para que el reintento devuelva EL MISMO cuerpo.
+ */
+function incidentView(answer: {
+  id: string;
+  practitioner: string | null;
+  phone: string | null;
+}): unknown {
+  return {
+    id: answer.id,
+    estado: 'recibida',
+    avisamos_a: answer.practitioner,
+    que_sigue: 'Tu doctora lo recibió y te va a responder por el chat.',
+    // VIAJA SIEMPRE, incluso con `leve`: «una app no es un servicio de urgencias y no puede
+    // comportarse como si lo fuera». La salida al teléfono es obligatoria en esta respuesta.
+    si_es_urgente:
+      answer.phone === null
+        ? 'Si empeora o tienes fiebre, llama a la consulta.'
+        : `Si empeora o tienes fiebre, llama a la consulta: ${answer.phone}.`,
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -293,6 +329,18 @@ function text(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * UN VALOR DE UNA LISTA CERRADA, sin valor por omisión escondido: ausente devuelve el valor por
+ * omisión declarado, y cualquier otra cosa —otra cadena, un número, un objeto— devuelve `null`,
+ * que quien llama convierte en el 400 de su contrato. `String(unknown)` no vale: un objeto se
+ * convierte en `[object Object]` y eso no es el valor que mandó nadie.
+ */
+function enumOf(value: unknown, allowed: readonly string[], fallback: string): string | null {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') return null;
+  return allowed.includes(value) ? value : null;
 }
 
 function boolean_(value: unknown): boolean | undefined {

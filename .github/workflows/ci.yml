@@ -1,0 +1,123 @@
+# INTEGRACIÓN CONTINUA · la otra mitad del OWASP de `servicios.md` §5.
+#
+# La mitad del código estaba hecha —RLS forzada, Argon2id, zod en los bordes, respuesta
+# señuelo, idempotencia— y la del PROCESO estaba a cero: nada corría las pruebas, nada miraba
+# las dependencias, nada buscaba un secreto en un commit. Un Top 10 sin esto es una tabla que
+# alguien leyó una vez.
+#
+# POR QUÉ `docker compose` Y NO `services:` DE ACTIONS. El entorno de este proyecto no es
+# «un Postgres»: son dos roles —`medskin_owner` que migra y `medskin` que no es dueño— creados
+# por `infra/postgres/init`, más PgBouncer en modo transacción, que es donde se demuestra que
+# un `SET` de sesión se filtra al siguiente cliente. Un `services:` con la imagen pelada no
+# ejecuta ese init, así que la integración continua probaría otra base que la de desarrollo.
+# `docker compose up` corre EXACTAMENTE lo que corre en la máquina de quien programa.
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Denegar por omisión también aquí: el token de este flujo no necesita escribir nada.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: lint · tipos · 679 pruebas contra la base real
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # `--frozen-lockfile` es parte del OWASP A08: la integración instala LO QUE DICE EL
+      # BLOQUEO, no lo que npm resuelva hoy.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Levantar la pila de desarrollo
+        run: |
+          docker compose up -d
+          # Esperar a que las cuatro estén sanas. `docker compose wait` espera a que SALGAN,
+          # que no es lo que queremos, así que se mira el estado.
+          for i in $(seq 1 60); do
+            estado=$(docker compose ps --format '{{.Name}} {{.Health}}')
+            echo "$estado"
+            if ! echo "$estado" | grep -qv healthy; then exit 0; fi
+            sleep 3
+          done
+          echo "la pila no llegó a estar sana"; docker compose logs --tail 50; exit 1
+
+      - name: El entorno de las pruebas
+        run: cp .env.example .env
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:migrate
+      - run: pnpm test
+
+      - name: Los registros de la pila si algo falló
+        if: failure()
+        run: docker compose logs --tail 200
+
+  seguridad:
+    name: dependencias · secretos · imagen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `gitleaks` necesita la historia para mirar los commits, no solo el árbol.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # A06 · componentes vulnerables. `--audit-level high` falla con alto y crítico; lo
+      # moderado se ve y no bloquea, porque un bloqueo que salta cada semana se desactiva.
+      - name: pnpm audit
+        run: pnpm audit --audit-level high
+
+      # Y el segundo par de ojos, que mira la base de datos de OSV y no la de npm: las dos
+      # tienen huecos distintos y es el motivo de que `servicios.md` nombre las dos.
+      - name: osv-scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+
+      # A08 · un secreto filtrado al repositorio. `.env` ya está en `.gitignore`; esto es lo
+      # que avisa el día que alguien lo fuerce o pegue una llave en un archivo que sí sube.
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+
+      # A05 · mala configuración, en el sistema de archivos del repositorio: Dockerfiles,
+      # compose y manifiestos. No falla por lo informativo.
+      - name: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true

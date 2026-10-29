@@ -67,6 +67,7 @@ export class CatalogRepository implements CatalogPort {
     caller: CatalogWriter,
     draft: TreatmentDraft,
     idempotency: IdempotencyRecord,
+    render: (row: TreatmentRow) => unknown,
   ): Promise<{ outcome: 'created' | 'duplicate_name' | 'no_product'; row: TreatmentRow | null; replay: unknown }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // La reserva ANTES de escribir nada, como los otros cinco `POST` que crean algo: lo que
@@ -137,11 +138,14 @@ export class CatalogRepository implements CatalogPort {
       const row = await this.readOne(c, id);
       if (row === null) throw new Error(`el tratamiento ${id} no se pudo releer tras crearlo`);
 
+      // LO QUE SE GUARDA ES LO QUE EL CLIENTE RECIBIO, no la fila interna: un reintento tiene
+      // que devolver el MISMO cuerpo, y la fila lleva nombres en ingles que el contrato no
+      // tiene. `render` es la misma vista que usa la respuesta de la primera llamada.
       await complete(c, {
         record: idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'created', row, replay: null };
     });
@@ -151,7 +155,10 @@ export class CatalogRepository implements CatalogPort {
     caller: CatalogWriter,
     treatmentId: string,
     edit: Partial<TreatmentDraft>,
-  ): Promise<{ outcome: 'edited' | 'no_treatment' | 'duplicate_name' | 'no_product'; row: TreatmentRow | null }> {
+  ): Promise<{
+    outcome: 'edited' | 'no_treatment' | 'duplicate_name' | 'no_product' | 'needs_interval';
+    row: TreatmentRow | null;
+  }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const { rows: found } = await c.query(`select 1 from treatment where id = $1 for update`, [
         treatmentId,
@@ -175,6 +182,15 @@ export class CatalogRepository implements CatalogPort {
             // la relectura de abajo moriría en vez de devolver el 409.
             await c.query('rollback to savepoint before_update');
             return { outcome: 'duplicate_name', row: null };
+          }
+          // La REGLA CLÍNICA la sostiene `treatment_interval_ck`, y el `PATCH` puede violarla
+          // de dos maneras: quitando el intervalo o subiendo las sesiones previstas. El alta
+          // la comprueba en el dominio y da `intervalo_necesario`; aquí se traduce la
+          // restricción, que es la que ve el valor FINAL de la fila tras mezclar los campos
+          // —el dominio solo ve los que vinieron en el cuerpo—.
+          if (isCheck(failure, 'treatment_interval_ck')) {
+            await c.query('rollback to savepoint before_update');
+            return { outcome: 'needs_interval', row: null };
           }
           throw failure;
         }
@@ -207,15 +223,33 @@ export class CatalogRepository implements CatalogPort {
     caller: CatalogWriter,
     treatmentId: string,
     archived: boolean,
-  ): Promise<TreatmentRow | null> {
+  ): Promise<{ outcome: 'done' | 'no_treatment' | 'duplicate_name'; row: TreatmentRow | null }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // Un tratamiento NO se borra: se archiva. `session_note` y `appointment` lo referencian.
-      const { rows } = await c.query<{ id: string }>(
-        `update treatment set status = $2, updated_at = now() where id = $1 returning id`,
-        [treatmentId, archived ? 'archivado' : 'activo'],
-      );
-      if (rows.length === 0) return null;
-      return this.readOne(c, treatmentId);
+      //
+      // Y el `savepoint` por la misma razón que en el alta: `treatment_practice_name_uq` es
+      // PARCIAL —`WHERE status = 'activo'`—, así que la operación que lo viola es REACTIVAR
+      // uno cuyo nombre ya volvió a usar otro activo. Sin volver al punto, la transacción
+      // queda abortada y la relectura de abajo moriría con un 500 donde el resto del módulo
+      // da `409 nombre_repetido`.
+      let found: boolean;
+      await c.query('savepoint before_status');
+      try {
+        const { rows } = await c.query<{ id: string }>(
+          `update treatment set status = $2, updated_at = now() where id = $1 returning id`,
+          [treatmentId, archived ? 'archivado' : 'activo'],
+        );
+        found = rows.length > 0;
+        await c.query('release savepoint before_status');
+      } catch (failure) {
+        if (isUnique(failure)) {
+          await c.query('rollback to savepoint before_status');
+          return { outcome: 'duplicate_name' as const, row: null };
+        }
+        throw failure;
+      }
+      if (!found) return { outcome: 'no_treatment' as const, row: null };
+      return { outcome: 'done' as const, row: await this.readOne(c, treatmentId) };
     });
   }
 
@@ -368,6 +402,7 @@ export class CatalogRepository implements CatalogPort {
     caller: CatalogWriter,
     draft: PromotionDraft,
     idempotency: IdempotencyRecord,
+    render: (row: PromotionRow) => unknown,
   ): Promise<{ outcome: 'created' | 'duplicate_code' | 'no_treatment'; row: PromotionRow | null; replay: unknown }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const replay = await claim<unknown>(c, {
@@ -432,7 +467,7 @@ export class CatalogRepository implements CatalogPort {
         record: idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'created', row, replay: null };
     });
@@ -600,4 +635,11 @@ function mapPromotion(row: Record<string, unknown>): PromotionRow {
 /** `23505 unique_violation`: el `409` lo decide la base y no una lectura previa. */
 function isUnique(failure: unknown): boolean {
   return typeof failure === 'object' && failure !== null && (failure as { code?: string }).code === '23505';
+}
+
+/** `23514 check_violation`, y SOLO la restricción que se nombra: las demás siguen siendo 500. */
+function isCheck(failure: unknown, constraint: string): boolean {
+  if (typeof failure !== 'object' || failure === null) return false;
+  const error = failure as { code?: string; constraint?: string };
+  return error.code === '23514' && error.constraint === constraint;
 }

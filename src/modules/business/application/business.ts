@@ -8,11 +8,19 @@ import { REPORTS, readMovement, readPayment } from '../domain/business';
 import type { BusinessCaller, BusinessPort, MarginRow, PaymentRow } from '../domain/ports';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** El presupuesto de disco por ficha, de `servicios.md`: 120 fotos × ~1,6 MB. */
-const BYTES_PER_PATIENT = 120 * 1_600_000;
 
 export class Business {
-  constructor(private readonly business: BusinessPort) {}
+  /**
+   * `bytesPerPatient` sale de la CONFIGURACIÓN del despliegue y no de una constante: el peso
+   * de una ficha depende de lo que la app reduzca antes de subir y de si la maestra se
+   * recomprime, y la constante anterior —120 × 1,6 MB— venía del plan de JPEG XL que la
+   * medición del 28 de octubre de 2026 descartó. Un número inventado al lado de
+   * `almacenamiento_usado`, que son bytes reales, es la peor clase de número.
+   */
+  constructor(
+    private readonly business: BusinessPort,
+    private readonly bytesPerPatient: number,
+  ) {}
 
   async charge(input: unknown, caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {
     // El asistente clínico NO registra cobros, y es del contrato: `cobros:registrar` lo tienen
@@ -20,7 +28,9 @@ export class Business {
     const asking = this.who(caller, 'cobros:registrar', 'El asistente clínico no registra cobros.');
     const draft = readPayment(input);
 
-    const charged = await this.business.charge(asking, draft, idempotency);
+    const charged = await this.business.charge(asking, draft, idempotency, (row) =>
+      paymentView(row, false),
+    );
     if (charged.replay !== null) return charged.replay;
     if (charged.outcome === 'no_session') throw new ContractError('sesion_clinica_no_existe');
     if (charged.outcome === 'already') throw new ContractError('ya_cobrado');
@@ -132,7 +142,11 @@ export class Business {
       'informes:leer',
       'Solo la dueña de la consulta puede ver los informes.',
     );
-    const kind = REPORTS.find((known) => known === query.informe) ?? 'ingresos';
+    // `ingresos` cuando no se pide ninguno; un nombre que el servidor no reconoce es un 400.
+    // Devolver ingresos ante `?informe=margen_por_hora` es contestar otra pregunta.
+    const asked = query.informe === undefined ? 'ingresos' : query.informe;
+    const kind = REPORTS.find((known) => known === asked);
+    if (kind === undefined) throw new ContractError('informe_desconocido');
 
     const report = await this.business.report(asking, {
       kind,
@@ -146,11 +160,11 @@ export class Business {
   }
 
   async plan(caller: Caller): Promise<unknown> {
-    const asking = this.who(caller, 'equipo:crear', 'Solo la dueña de la consulta ve su plan.');
+    const asking = this.who(caller, 'plan:leer', 'Solo la dueña de la consulta ve su plan.');
     const plan = await this.business.plan(asking);
     if (plan === null) throw new ContractError('inquilino_no_existe');
 
-    const limitBytes = plan.patientLimit * BYTES_PER_PATIENT;
+    const limitBytes = plan.patientLimit * this.bytesPerPatient;
     return {
       plan: plan.plan,
       limite_pacientes: plan.patientLimit,
@@ -167,7 +181,7 @@ export class Business {
   }
 
   async requestPlan(input: unknown, caller: Caller): Promise<unknown> {
-    const asking = this.who(caller, 'equipo:crear', 'Solo la dueña de la consulta amplía el plan.');
+    const asking = this.who(caller, 'plan:ampliar', 'Solo la dueña de la consulta amplía el plan.');
     const body = asRecord(input);
     const wanted = text(body.plan);
     if (wanted === null) throw new ContractError('nombre_vacio');
@@ -189,7 +203,11 @@ export class Business {
     return {
       id: asked.id,
       estado: 'pedida',
-      como_llega: 'Te llega por correo, con un enlace de 24 horas y un solo uso.',
+      // DICE LO QUE EL SISTEMA PUEDE CUMPLIR, y nada más: el enlace es una URL firmada del
+      // almacenamiento, así que dura 24 horas y quien la tenga la usa. «Un solo uso» pedía un
+      // endpoint propio delante del almacenamiento que marcara la descarga, y eso es una ruta
+      // nueva y una decisión de contrato (anotado en `negocio.md`, 29 de octubre de 2026).
+      como_llega: 'Te llega por correo, con un enlace que dura 24 horas.',
       // LA DECISIÓN INCÓMODA, DICHA SIN ESCONDERLA.
       no_incluye:
         'Tu historia clínica completa, con las notas de tu doctora, la pides directamente a tu consulta: ellos tienen que dártela.',

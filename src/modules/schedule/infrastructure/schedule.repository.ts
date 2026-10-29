@@ -328,7 +328,12 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       idempotency: IdempotencyRecord;
       gapMinutes: number;
     },
-  ): Promise<{ outcome: 'booked' | 'slot_taken'; row: AppointmentRow | null; replay: unknown }> {
+    render: (row: AppointmentRow) => unknown,
+  ): Promise<{
+    outcome: 'booked' | 'slot_taken' | 'promotion_quota';
+    row: AppointmentRow | null;
+    replay: unknown;
+  }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // La reserva de la clave, antes de escribir nada: «sin clave un reintento produce dos
       // citas», y es el contrato quien la exige en este endpoint.
@@ -343,14 +348,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       // El margen entre citas no lo cubre la restricción de solape —no es solape, es cortesía
       // clínica—, así que se mira aquí. `forzar: true` lo salta: la agenda es de la doctora.
       if (!p.forced && p.gapMinutes > 0) {
-        const { rows } = await c.query<{ id: string }>(
-          `select a.id from appointment a
-            where a.status in ('pendiente_de_sena', 'confirmada', 'atendida', 'no_asistio')
-              and a.starts_at < $2::timestamptz + make_interval(mins => $3)
-              and a.ends_at > $1::timestamptz - make_interval(mins => $3)`,
-          [p.startsAt, p.endsAt, p.gapMinutes],
-        );
-        if (rows.length > 0) {
+        if (await this.gapTaken(c, p.facts.practiceId, p.startsAt, p.endsAt, p.gapMinutes, null)) {
           await release(c, { record: p.idempotency, accountId: caller.accountId });
           return { outcome: 'slot_taken', row: null, replay: null };
         }
@@ -358,9 +356,30 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
 
       const deposit = p.depositCents !== null;
       let id: string;
-      // `SAVEPOINT` porque una violación de restricción aborta la transacción entera y el
-      // `release()` de abajo moriría con ella (la lección del tramo 3).
+      // UN SOLO `SAVEPOINT` PARA LAS DOS ESCRITURAS —el cupo y la cita—, porque son una sola
+      // cosa: o las dos o ninguna. Si el cupo se descontara fuera del punto, un hueco tomado
+      // dejaría el `redeemed` subido para una cita que no existe. Y el punto hace falta igual
+      // porque una violación de restricción aborta la TRANSACCIÓN entera, no la sentencia, así
+      // que el `release()` del `catch` moriría con ella (la lección del tramo 3).
       await c.query('savepoint before_booking');
+
+      // «Dos pacientes que canjean el último cupo a la vez no pueden canjearlo las dos»: el
+      // cupo se descuenta EN ESTA MISMA TRANSACCIÓN, y por una función (0043) por dos razones.
+      // `app_patient` no tiene `UPDATE` sobre `promotion` —reservar con descuento por la
+      // puerta de la paciente era un 500 seguro— y la función comprueba el cupo DENTRO del
+      // `UPDATE`, así que «ya no hay cupo» son cero filas y no una transacción abortada.
+      if (p.promotionId !== null) {
+        const { rows: redeemed } = await c.query<{ ok: boolean | null }>(
+          'select medskin_promotion_redeem($1, $2) as ok',
+          [p.promotionId, p.facts.practiceId],
+        );
+        if (redeemed[0]?.ok !== true) {
+          await c.query('rollback to savepoint before_booking');
+          await release(c, { record: p.idempotency, accountId: caller.accountId });
+          return { outcome: 'promotion_quota', row: null, replay: null };
+        }
+      }
+
       try {
         const { rows } = await c.query<{ id: string }>(
           `insert into appointment (practice_id, patient_id, treatment_id, zone, starts_at,
@@ -401,20 +420,35 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         throw failure;
       }
 
-      // El cupo de la promoción se descuenta EN ESTA MISMA TRANSACCIÓN: «dos pacientes que
-      // canjean el último cupo a la vez no pueden canjearlo las dos». El `CHECK` de la 0026 es
-      // lo que hace que la segunda falle en vez de pasarse.
-      if (p.promotionId !== null) {
-        await c.query(`update promotion set redeemed = redeemed + 1 where id = $1`, [p.promotionId]);
-      }
+      // LA PREPARACIÓN PREVIA, encolada al agendar y no por un programador: el protocolo de
+      // «antes» ya está decidido, así que el aviso nace con su instante —24 h antes— y espera
+      // en la tabla. Solo si el tratamiento tiene pasos de antes, y solo si esas 24 h todavía
+      // no pasaron: un aviso de preparación para dentro de dos horas no prepara nada.
+      await c.query(
+        `select medskin_notify_patient($1, $2, 'preparacion_previa', 'push', 'preparacion',
+                                       jsonb_build_object('cita_id', $3::text),
+                                       'preparacion:' || $3::text, $4)
+          where exists (select 1 from treatment_protocol_step s
+                         where s.treatment_id = $5 and s.moment = 'antes')
+            and $4::timestamptz > now()`,
+        [
+          p.facts.practiceId,
+          p.facts.patientId,
+          id,
+          new Date(p.startsAt.getTime() - 24 * 3_600_000),
+          p.facts.treatment.id,
+        ],
+      );
 
       const row = await this.readOne(c, id);
       if (row === null) throw new Error(`la cita ${id} no se pudo releer tras crearla`);
+      // LO QUE SE GUARDA ES LO QUE EL CLIENTE RECIBIO, no la fila interna: un reintento tiene
+      // que devolver el MISMO 201, y la fila lleva nombres en ingles que el contrato no tiene.
       await complete(c, {
         record: p.idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'booked', row, replay: null };
     });
@@ -449,8 +483,8 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
     p: { startsAt: Date; endsAt: Date; zone: string | null; note: string | null; gapMinutes: number },
   ): Promise<{ outcome: 'moved' | 'slot_taken' | 'attended' | 'cancelled'; row: AppointmentRow | null }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows: current } = await c.query<{ status: string }>(
-        `select status from appointment where id = $1 for update`,
+      const { rows: current } = await c.query<{ status: string; practice_id: string }>(
+        `select status, practice_id from appointment where id = $1 for update`,
         [appointmentId],
       );
       const found = current[0];
@@ -459,6 +493,15 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         return { outcome: 'attended', row: null };
       }
       if (found.status === 'cancelada') return { outcome: 'cancelled', row: null };
+
+      // El mismo margen de cortesía que al reservar, y excluyendo esta cita: sin esto mover
+      // una cita era la única puerta por la que el margen de la consulta no se respetaba.
+      if (
+        p.gapMinutes > 0 &&
+        (await this.gapTaken(c, found.practice_id, p.startsAt, p.endsAt, p.gapMinutes, appointmentId))
+      ) {
+        return { outcome: 'slot_taken', row: null };
+      }
 
       await c.query('savepoint before_move');
       try {
@@ -539,6 +582,28 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         await c.query(
           `update waitlist_entry set offered_until = $2 where id = $1`,
           [waiting[0].id, new Date(now.getTime() + 30 * 60_000)],
+        );
+        // Y EL AVISO, EN LA MISMA TRANSACCIÓN. Hasta hoy la respuesta decía
+        // `lista_de_espera_avisada: 1` y el hueco se le reservaba treinta minutos a alguien
+        // que nunca se enteraba. El aviso del hueco libre es una de las dos excepciones al
+        // horario de silencio del contrato, y por eso sale a cualquier hora: un hueco avisado
+        // a las siete de la mañana ya lo tomó otra.
+        //
+        // La función resuelve la cuenta de quien espera: quien cancela —que puede ser otra
+        // paciente— no lee el vínculo de nadie más.
+        await c.query(
+          `select medskin_notify_waitlist($1,
+                    jsonb_build_object('tratamiento_id', $2::text,
+                                       'empieza_en', $3::text,
+                                       'vence_en', $4::text),
+                    $5)`,
+          [
+            waiting[0].id,
+            found.treatment_id,
+            found.starts_at.toISOString(),
+            new Date(now.getTime() + 30 * 60_000).toISOString(),
+            `hueco:${appointmentId}:${waiting[0].id}`,
+          ],
         );
       }
 
@@ -697,6 +762,41 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
     return 'ok';
   }
 
+  /**
+   * El margen de cortesía entre citas, que NO es solape y por eso no lo decide la restricción
+   * de exclusión de la 0032: `10:00–10:30` y `10:35–11:05` no se solapan y aun así rompen un
+   * margen de 15 minutos.
+   *
+   * Se comprueba leyendo antes de escribir, y un `select` no serializa nada: dos reservas
+   * simultáneas dentro del margen pasarían las dos. De ahí el cerrojo de aviso, que SÍ
+   * serializa: lo toma la transacción, se suelta sola al terminar, y acota a las reservas de
+   * ESTA consulta —el `practice_id` es la clave— para no poner en cola las de las demás.
+   *
+   * ponytail: un cerrojo por consulta serializa TODAS sus reservas, no solo las vecinas. Con
+   * una agenda de consultorio es gratis; si alguna llega a reservar en paralelo de verdad, la
+   * clave puede bajar al día (`practice_id` + fecha) sin tocar a quien llama.
+   */
+  private async gapTaken(
+    c: PoolClient,
+    practiceId: string,
+    startsAt: Date,
+    endsAt: Date,
+    gapMinutes: number,
+    exceptAppointmentId: string | null,
+  ): Promise<boolean> {
+    await c.query('select pg_advisory_xact_lock(hashtext($1))', [`agenda:${practiceId}`]);
+    const { rows } = await c.query<{ id: string }>(
+      `select a.id from appointment a
+        where a.status in ('pendiente_de_sena', 'confirmada', 'atendida', 'no_asistio')
+          and ($4::uuid is null or a.id <> $4)
+          and a.starts_at < $2::timestamptz + make_interval(mins => $3)
+          and a.ends_at > $1::timestamptz - make_interval(mins => $3)
+        limit 1`,
+      [startsAt, endsAt, gapMinutes, exceptAppointmentId],
+    );
+    return rows.length > 0;
+  }
+
   private async readOne(c: PoolClient, id: string): Promise<AppointmentRow | null> {
     const { rows } = await c.query<Record<string, unknown>>(`${APPOINTMENT_SELECT} where a.id = $1`, [
       id,
@@ -777,3 +877,4 @@ function isExclusion(failure: unknown): boolean {
     (failure as { code?: string }).code === '23P01'
   );
 }
+

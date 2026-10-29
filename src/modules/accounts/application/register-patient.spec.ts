@@ -588,8 +588,14 @@ describe('POST /v1/patients · el relé caído', () => {
       // No dice «puedes volver a intentarlo»: reintentar el alta crearía una segunda ficha
       // de la misma persona. La salida es volver a mandarle el acceso.
       mensaje:
-        'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+        'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
     });
+    // Y TRAE CON QUÉ REENVIAR. La frase manda volver a mandárselo, y el identificador que el
+    // reenvío pide viajaba solo en el 201 que nunca llegó: la doctora leía la salida y no
+    // tenía con qué tomarla.
+    const datos = fallo.data as { paciente_id?: unknown; cuenta_id?: unknown };
+    expect(typeof datos.paciente_id).toBe('string');
+    expect(typeof datos.cuenta_id).toBe('string');
     // La marca vuelve a nulo porque el vínculo acaba de nacer y nulo es lo que había:
     // `access_sent_at` solo puede afirmar un envío que ocurrió.
     expect(marcas).toEqual([null]);
@@ -661,7 +667,7 @@ describe('POST /v1/patients · la idempotencia', () => {
     // intentarlo» mandaría a crear una segunda ficha de la misma persona.
     expect(fallo.code).toBe('fallo_de_servicio');
     expect(fallo.userMessage).toBe(
-      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
     );
     expect(cadenaDe(fallo)).toContain('la fila de la clave no apareció');
   });

@@ -1,0 +1,11 @@
+-- =======================================================================================
+-- LA 0043 LE DIO `UPDATE` SOBRE `promotion` A `medskin_access` Y NO LE DIO `SELECT`
+--
+-- Y un `UPDATE … WHERE quota IS NULL OR redeemed < quota` LEE esas dos columnas: sin
+-- `SELECT`, Postgres responde «permission denied for table promotion» desde dentro de la
+-- función, que es exactamente el 500 que la 0043 existía para quitar. Lo cazó la prueba del
+-- último cupo, que es la razón por la que esa prueba se escribió antes de arreglar nada.
+--
+-- La 0043 ya está aplicada y no se toca (§3.4, regla 7 · napkin §1.5): esta es la siguiente.
+-- =======================================================================================
+GRANT SELECT ON "promotion" TO medskin_access;

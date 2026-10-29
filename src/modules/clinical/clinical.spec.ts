@@ -383,6 +383,43 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     await expect(
       sessions.saveDraft(session, { campos: { motivo: 'otro' } }, caller(P.doctor, 'doctora')),
     ).rejects.toMatchObject({ code: 'nota_ya_firmada' });
+
+    // «Firmar lo firmado devuelve el MISMO 200», y eso incluye el recuento de cuidados: la
+    // doctora firma con mala señal, la respuesta se pierde y la app reintenta. Devolver 0 aquí
+    // dejaba a la app sin poder distinguir «firmada sin cuidados» de «ya estaba firmada».
+    const again = (await sessions.sign(session, caller(P.doctor, 'doctora'))) as {
+      estado: string;
+      cuidados_programados: number;
+    };
+    expect(again).toEqual(signed);
+    expect(again.cuidados_programados).toBe(2);
+
+    // Y no duplicó el plan: un `care_plan` y dos pasos, los mismos.
+    const { rows: plans } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from care_plan where session_id = $1`,
+      [session],
+    );
+    expect(plans[0]?.n).toBe('1');
+
+    // FIRMAR PROGRAMA LOS AVISOS, no solo las filas: un aviso por paso, con el instante del
+    // paso, y sin el texto del cuidado —que es clínico— dentro.
+    const { rows: avisos } = await owner.query<{
+      kind: string;
+      send_after: Date;
+      data: Record<string, unknown>;
+    }>(
+      `select o.kind, o.send_after, o.data
+         from notification_outbox o
+         join care_step st on st.id = (o.data->>'paso_id')::uuid
+         join care_plan cp on cp.id = st.plan_id
+        where cp.session_id = $1 and o.kind = 'cuidado'
+        order by o.send_after`,
+      [session],
+    );
+    expect(avisos).toHaveLength(2);
+    expect(JSON.stringify(avisos.map((a) => a.data))).not.toContain('recuestes');
+    // El retraso es nativo: el aviso del paso de +3 h no sale hoy.
+    expect(avisos[0]!.send_after.getTime()).toBeGreaterThan(Date.parse('2026-11-03T15:38:00Z'));
   });
 
   it('una nota firmada se corrige, y una sesión firmada no se anula', async () => {
@@ -580,5 +617,177 @@ describe('anular devuelve el stock', () => {
       [created.id],
     );
     expect(still[0]).toMatchObject({ status: 'anulada' });
+  });
+});
+
+describe('el consentimiento que abre la nota, y quién lo firma', () => {
+  it('recepción no firma un consentimiento informado', async () => {
+    // El endpoint era el único de los tramos 2 al 8 sin ninguna comprobación de permiso: el
+    // documento que protege a la doctora en una reclamación lo podía crear quien no estaba en
+    // la sala. «La paciente O la consulta CON ELLA PRESENTE», y presente es `sesiones:registrar`.
+    const recepcion: Caller = {
+      ...caller(P.doctor, 'doctora'),
+      role: 'recepcion',
+      permissions: ['pacientes:leer', 'agenda:leer', 'citas:crear', 'cobros:registrar'],
+    };
+    await expect(
+      consents.sign(
+        {
+          patient_id: P.patient,
+          treatment_id: treatment,
+          version: '2026-09-01',
+          proposito: 'clinico',
+          respuestas: { q1: 0, q2: 0, q3: 0 },
+        },
+        recepcion,
+        key('c-recepcion'),
+      ),
+    ).rejects.toMatchObject({ code: 'sin_permiso' });
+  });
+
+  it('un consentimiento de una versión que ya no es la vigente no abre la nota de hoy', async () => {
+    // Una ficha nueva, su cita atendida y su sesión: lo que se prueba es la PUERTA de la firma.
+    const { rows: made } = await owner.query<{ id: string }>(
+      `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived)
+       values ($1, 'Carla', 'Vaca', '1988-06-02', 'carla.ficha@tramo5.local', 'instagram')
+       returning id`,
+      [P.practice],
+    );
+    const patient = made[0]!.id;
+    const { rows: cita } = await owner.query<{ id: string }>(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents, attended)
+       values ($1, $2, $3, now() - interval '2 hours', now() - interval '1 hour', 'atendida',
+               192000, true)
+       returning id`,
+      [P.practice, patient, treatment],
+    );
+
+    // Firma la versión vigente de hoy.
+    await consents.sign(
+      {
+        patient_id: patient,
+        treatment_id: treatment,
+        version: '2026-09-01',
+        proposito: 'clinico',
+        respuestas: { q1: 0, q2: 0, q3: 0 },
+      },
+      caller(P.doctor, 'doctora'),
+      key('c-carla'),
+    );
+
+    const created = (await sessions.create(
+      {
+        appointment_id: cita[0]!.id,
+        aplicaciones: [
+          {
+            lot_id: lot,
+            zona: 'entrecejo',
+            unidades_totales: 4,
+            puntos: [{ zona: 'entrecejo', x: 0.5, y: 0.3, unidades: 4 }],
+          },
+        ],
+      },
+      caller(P.doctor, 'doctora'),
+      key('s-carla'),
+    )) as { id: string };
+    await sessions.saveDraft(
+      created.id,
+      { campos: { motivo: 'Primera sesión.' } },
+      caller(P.doctor, 'doctora'),
+    );
+
+    // Y AHORA la consulta publica un texto nuevo porque añadió un riesgo. El de 2026-09-01
+    // deja de ser el vigente, así que ya no prueba que alguien le leyera ese riesgo.
+    await owner.query(
+      `insert into consent_text (practice_id, treatment_id, version, body, questions, answer_key)
+       values ($1, $2, '2026-12-01', 'Texto con el riesgo nuevo.',
+               '[{"id":"q1","texto":"¿Qué puede pasar?","opciones":["a","b"]},
+                 {"id":"q2","texto":"¿Qué no hacer?","opciones":["a","b"]},
+                 {"id":"q3","texto":"¿Qué no se garantiza?","opciones":["a","b"]}]'::jsonb,
+               '{"q1":0,"q2":0,"q3":0}'::jsonb)`,
+      [P.practice, treatment],
+    );
+
+    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+      code: 'consentimiento_desactualizado',
+    });
+
+    // Firmado el nuevo, la nota se cierra.
+    await consents.sign(
+      {
+        patient_id: patient,
+        treatment_id: treatment,
+        version: '2026-12-01',
+        proposito: 'clinico',
+        respuestas: { q1: 0, q2: 0, q3: 0 },
+      },
+      caller(P.doctor, 'doctora'),
+      key('c-carla-2'),
+    );
+    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).resolves.toMatchObject({
+      estado: 'firmada',
+    });
+
+    await owner.query(`delete from consent_text where version = '2026-12-01'`);
+  });
+
+  it('firmar sin ficha de profesional activa es un 403 con salida, no un 500', async () => {
+    const { rows: made } = await owner.query<{ id: string }>(
+      `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived)
+       values ($1, 'Dana', 'Roca', '1991-02-02', 'dana.ficha@tramo5.local', 'instagram')
+       returning id`,
+      [P.practice],
+    );
+    const patient = made[0]!.id;
+    const { rows: cita } = await owner.query<{ id: string }>(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents, attended)
+       values ($1, $2, $3, now() - interval '4 hours', now() - interval '3 hours', 'atendida',
+               192000, true)
+       returning id`,
+      [P.practice, patient, treatment],
+    );
+    await consents.sign(
+      {
+        patient_id: patient,
+        treatment_id: treatment,
+        version: '2026-09-01',
+        proposito: 'clinico',
+        respuestas: { q1: 0, q2: 0, q3: 0 },
+      },
+      caller(P.doctor, 'doctora'),
+      key('c-dana'),
+    );
+    const created = (await sessions.create(
+      {
+        appointment_id: cita[0]!.id,
+        aplicaciones: [
+          {
+            lot_id: lot,
+            zona: 'entrecejo',
+            unidades_totales: 4,
+            puntos: [{ zona: 'entrecejo', x: 0.5, y: 0.3, unidades: 4 }],
+          },
+        ],
+      },
+      caller(P.doctor, 'doctora'),
+      key('s-dana'),
+    )) as { id: string };
+    await sessions.saveDraft(
+      created.id,
+      { campos: { motivo: 'Primera sesión.' } },
+      caller(P.doctor, 'doctora'),
+    );
+
+    // Su ficha de profesional se retira entre que abrió la sesión y firma. El `CHECK` de
+    // `session_note` exige la identidad de quien firma: sin ella no hay firma que guardar.
+    await owner.query(`update practitioner set status = 'retirada' where account_id = $1`, [
+      P.doctor,
+    ]);
+    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+      code: 'practicante_no_activo',
+    });
+    await owner.query(`update practitioner set status = 'activa' where account_id = $1`, [P.doctor]);
   });
 });

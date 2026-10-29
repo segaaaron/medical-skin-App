@@ -19,6 +19,7 @@
 import { readFileSync } from 'node:fs';
 
 import {
+  decodeProtectedHeader,
   calculateJwkThumbprint,
   errors as joseErrors,
   exportJWK,
@@ -114,9 +115,20 @@ const LABEL_MAX = 120;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class PlatformTokens {
+  /**
+   * UNA LISTA DE LLAVES Y NO UNA, y es el arreglo de un hallazgo: con una sola, rotar la llave
+   * del servicio de plataforma APAGABA LA CONSOLA. La llave nueva no puede publicarse aquí y
+   * empezar a usarse allá en el mismo instante —son dos procesos y dos despliegues—, y los
+   * tokens de quince minutos ya emitidos con la vieja se rechazaban todos: `kid` desconocido,
+   * `401`, y nadie de soporte podía entrar hasta que los dos lados coincidieran.
+   *
+   * La primera de la lista es la del despliegue; las demás vienen de
+   * `PLATFORM_JWT_PUBLIC_KEYS_EXTRA` y existen para la ventana de la rotación. Lo que NO
+   * cambia es que aquí solo viven llaves PÚBLICAS: este proceso no puede firmar un token de
+   * consola ni por error.
+   */
   private constructor(
-    private readonly publicKey: CryptoKey,
-    private readonly kid: string,
+    private readonly keys: ReadonlyMap<string, CryptoKey>,
     private readonly region: Region,
   ) {}
 
@@ -138,14 +150,27 @@ export class PlatformTokens {
       );
     }
 
-    const publicKey = await importSPKI(
-      readFileSync(cfg.PLATFORM_JWT_PUBLIC_KEY_PATH, 'utf8'),
-      'Ed25519',
-    );
-    // El `kid` es la huella de la llave pública, igual que en las sesiones: con rotación cada
-    // 90 días el verificador sabe cuál es la suya sin que nadie mantenga un número a mano.
-    const kid = await calculateJwkThumbprint(await exportJWK(publicKey));
-    return new PlatformTokens(publicKey, kid, cfg.REGION);
+    // La del despliegue primero, y después las de la ventana de rotación. Una ruta repetida o
+    // vacía se ignora: la lista es configuración y una coma de más no es un motivo para que
+    // la API no arranque.
+    const paths = [
+      cfg.PLATFORM_JWT_PUBLIC_KEY_PATH,
+      ...(cfg.PLATFORM_JWT_PUBLIC_KEYS_EXTRA ?? '')
+        .split(',')
+        .map((path) => path.trim())
+        .filter((path) => path !== ''),
+    ];
+
+    const keys = new Map<string, CryptoKey>();
+    for (const path of paths) {
+      const publicKey = await importSPKI(readFileSync(path, 'utf8'), 'Ed25519');
+      // El `kid` es la huella de la llave pública, igual que en las sesiones: con rotación
+      // cada 90 días el verificador sabe cuál es la suya sin que nadie mantenga un número a
+      // mano.
+      const kid = await calculateJwkThumbprint(await exportJWK(publicKey));
+      if (!keys.has(kid)) keys.set(kid, publicKey);
+    }
+    return new PlatformTokens(keys, cfg.REGION);
   }
 
   /**
@@ -162,7 +187,14 @@ export class PlatformTokens {
    */
   async verify(token: string): Promise<PlatformCaller> {
     try {
-      const { payload, protectedHeader } = await jwtVerify(token, this.publicKey, {
+      // EL `kid` ELIGE LA LLAVE, y un `kid` que no está es un token que esta región no puede
+      // atender. Se mira ANTES de verificar la firma para no verificar contra una llave que no
+      // es la del token: `jose` devolvería «firma mala» y el motivo real se perdería.
+      const { kid } = decodeProtectedHeader(token);
+      const key = kid === undefined ? undefined : this.keys.get(kid);
+      if (key === undefined) throw new ContractError('token_de_plataforma_no_valido');
+
+      const { payload } = await jwtVerify(token, key, {
         algorithms: [...ALGORITHMS],
         issuer: PLATFORM_ISSUER,
         // `iat` y `exp` obligatorios, y `maxTokenAge` los 15 minutos del contrato: un token
@@ -174,7 +206,6 @@ export class PlatformTokens {
         maxTokenAge: PLATFORM_TOKEN_LIFETIME_SECONDS,
       });
 
-      if (protectedHeader.kid !== this.kid) throw new ContractError('token_de_plataforma_no_valido');
       return this.read(payload);
     } catch (failure) {
       if (failure instanceof ContractError) throw failure;

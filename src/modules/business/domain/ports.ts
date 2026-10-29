@@ -49,6 +49,8 @@ export interface BusinessPort {
     caller: BusinessCaller,
     draft: PaymentDraft,
     idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (row: PaymentRow) => unknown,
   ): Promise<{
     outcome: 'charged' | 'no_session' | 'already' | 'no_credit';
     row: PaymentRow | null;

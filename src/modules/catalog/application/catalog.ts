@@ -35,7 +35,7 @@ export class Catalog {
   ) {}
 
   async list(caller: Caller, query: Record<string, unknown>): Promise<unknown> {
-    const asking = writerOf(caller, 'pacientes:leer');
+    const asking = writerOf(caller, 'catalogo:leer');
     const rows = await this.catalog.list(asking, query.estado === 'todos');
     return { tratamientos: rows.map(treatmentView) };
   }
@@ -44,7 +44,7 @@ export class Catalog {
     const asking = writerOf(caller, 'catalogo:editar');
     const draft = readTreatment(input);
 
-    const result = await this.catalog.create(asking, draft, key);
+    const result = await this.catalog.create(asking, draft, key, treatmentView);
     if (result.replay !== null) return result.replay;
     if (result.outcome === 'duplicate_name') throw new ContractError('nombre_repetido');
     if (result.outcome === 'no_product') throw new ContractError('producto_no_existe');
@@ -60,6 +60,7 @@ export class Catalog {
     if (result.outcome === 'no_treatment') throw new ContractError('tratamiento_no_existe');
     if (result.outcome === 'duplicate_name') throw new ContractError('nombre_repetido');
     if (result.outcome === 'no_product') throw new ContractError('producto_no_existe');
+    if (result.outcome === 'needs_interval') throw new ContractError('intervalo_necesario');
     return treatmentView(result.row!);
   }
 
@@ -67,13 +68,16 @@ export class Catalog {
   async archive(treatmentId: string, caller: Caller, archived: boolean): Promise<unknown> {
     const asking = writerOf(caller, 'catalogo:editar');
     this.checkUuid(treatmentId);
-    const row = await this.catalog.archive(asking, treatmentId, archived);
-    if (row === null) throw new ContractError('tratamiento_no_existe');
-    return treatmentView(row);
+    const result = await this.catalog.archive(asking, treatmentId, archived);
+    if (result.outcome === 'no_treatment') throw new ContractError('tratamiento_no_existe');
+    // Reactivar es la operación que viola el índice único parcial del nombre: el mismo `409`
+    // que daría crear uno con ese nombre, porque es el mismo choque.
+    if (result.outcome === 'duplicate_name') throw new ContractError('nombre_repetido');
+    return treatmentView(result.row!);
   }
 
   async protocol(treatmentId: string, caller: Caller): Promise<unknown> {
-    const asking = writerOf(caller, 'catalogo:editar');
+    const asking = writerOf(caller, 'catalogo:leer');
     this.checkUuid(treatmentId);
     const protocol = await this.catalog.protocol(asking, treatmentId);
     if (protocol === null) throw new ContractError('tratamiento_no_existe');
@@ -89,7 +93,7 @@ export class Catalog {
   }
 
   async contraindications(treatmentId: string, caller: Caller): Promise<unknown> {
-    const asking = writerOf(caller, 'catalogo:editar');
+    const asking = writerOf(caller, 'catalogo:leer');
     this.checkUuid(treatmentId);
     const list = await this.catalog.contraindications(asking, treatmentId);
     if (list === null) throw new ContractError('tratamiento_no_existe');
@@ -135,7 +139,12 @@ export class Catalog {
     const asking = writerOf(caller, 'promociones:editar');
     const today = this.clock.now().toISOString().slice(0, 10);
 
-    const result = await this.catalog.createPromotion(asking, readPromotion(input, today), key);
+    const result = await this.catalog.createPromotion(
+      asking,
+      readPromotion(input, today),
+      key,
+      promotionView,
+    );
     if (result.replay !== null) return result.replay;
     if (result.outcome === 'duplicate_code') throw new ContractError('codigo_repetido');
     if (result.outcome === 'no_treatment') throw new ContractError('tratamiento_no_existe');

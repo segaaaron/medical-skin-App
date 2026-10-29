@@ -478,6 +478,22 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
       [RACE.practice],
     );
     expect(rows[0]?.total).toBe('1');
+
+    // Y A LA DUEÑA SE LE AVISA, por los dos canales y una sola vez. Antes la decisión se
+    // escribía y la doctora no se enteraba de nada: abría la app y mirába si había cambiado.
+    const { rows: avisos } = await owner.query<{
+      channel: string;
+      subject_key: string;
+      data: Record<string, unknown>;
+    }>(
+      `select channel, subject_key, data from notification_outbox
+        where practice_id = $1 and kind = 'seguridad' order by channel`,
+      [RACE.practice],
+    );
+    expect(avisos.map((a) => a.channel)).toEqual(['correo', 'push']);
+    expect(avisos[0]?.subject_key).toBe('licencia_aprobada');
+    // Y el aviso no lleva el motivo de nada: solo el estado.
+    expect(avisos[0]?.data).toEqual({ estado: 'verificada' });
   });
 
   it('una clave CADUCADA no sirve una respuesta vieja, y se puede volver a usar', async () => {

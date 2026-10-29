@@ -41,6 +41,8 @@ export interface ClinicalPort {
     caller: ClinicalCaller,
     draft: SessionDraft,
     idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (row: SessionRow) => unknown,
   ): Promise<{
     outcome:
       | 'created'
@@ -67,7 +69,15 @@ export interface ClinicalPort {
     sessionId: string,
     now: Date,
   ): Promise<{
-    outcome: 'signed' | 'no_session' | 'empty' | 'conflicts' | 'no_consent' | 'voided';
+    outcome:
+      | 'signed'
+      | 'no_session'
+      | 'empty'
+      | 'conflicts'
+      | 'no_consent'
+      | 'stale_consent'
+      | 'no_practitioner'
+      | 'voided';
     row: SessionRow | null;
     aftercare: number;
   }>;
@@ -107,6 +117,8 @@ export interface LotPort {
     caller: ClinicalCaller,
     draft: LotDraft,
     idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (row: LotRow) => unknown,
   ): Promise<{
     outcome: 'created' | 'duplicate_code' | 'no_product';
     row: LotRow | null;

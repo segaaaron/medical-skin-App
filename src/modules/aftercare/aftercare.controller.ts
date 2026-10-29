@@ -5,6 +5,7 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Quer
 
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
+import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
 import type { Caller } from '../access/application/caller';
 import { Aftercare } from './application/aftercare';
 
@@ -47,7 +48,7 @@ export class IncidentsController {
   @Post()
   @HttpCode(201)
   async report(@Req() req: RequestWithContext, @Body() body: unknown) {
-    return this.aftercare.reportIncident(body, callerOf(req));
+    return this.aftercare.reportIncident(body, callerOf(req), readIdempotencyKey(req, body));
   }
 }
 
@@ -64,7 +65,7 @@ export class MessagesController {
   @Post()
   @HttpCode(201)
   async send(@Req() req: RequestWithContext, @Body() body: unknown) {
-    return this.aftercare.send(body, callerOf(req));
+    return this.aftercare.send(body, callerOf(req), readIdempotencyKey(req, body));
   }
 }
 

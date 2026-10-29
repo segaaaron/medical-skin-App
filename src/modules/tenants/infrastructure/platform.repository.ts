@@ -346,6 +346,30 @@ export class PlatformRepository
           [p.practiceId, p.actor.subject, p.actor.label, p.decision.status, p.actor.region],
         );
 
+        // Y SE LE AVISA, en la misma transacción que la decisión. Hasta hoy la doctora pasaba
+        // de «en revisión» a «activa» —o a «rechazada»— sin que nadie se lo dijera: en una
+        // aprobación es una espera de más, y en un rechazo hay algo que corregir y nadie lo
+        // contó. Los dos canales, porque esto es seguridad de la cuenta y no se apaga.
+        //
+        // El aviso NO lleva el motivo del rechazo: eso vive en su columna, bajo la política de
+        // la licencia, y la doctora lo lee al abrir la app. Un motivo en una pantalla de
+        // bloqueo es la misma clase de fuga que un dato clínico.
+        const subject = row.status === 'verificada' ? 'licencia_aprobada' : 'licencia_rechazada';
+        for (const channel of ['push', 'correo'] as const) {
+          await c.query(
+            `select medskin_notify_owner($1, 'seguridad', $2, $3,
+                                         jsonb_build_object('estado', $4::text),
+                                         $5)`,
+            [
+              p.practiceId,
+              channel,
+              subject,
+              row.status,
+              `licencia:${p.practiceId}:${row.status}:${channel}`,
+            ],
+          );
+        }
+
         const { rows: stats } = await c.query<StatsRow>(
           'select patient_count from medskin_platform_practice_stats($1)',
           [p.practiceId],

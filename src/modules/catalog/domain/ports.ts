@@ -65,6 +65,8 @@ export interface CatalogPort {
     caller: CatalogWriter,
     draft: TreatmentDraft,
     idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (row: TreatmentRow) => unknown,
   ): Promise<{
     outcome: 'created' | 'duplicate_name' | 'no_product';
     row: TreatmentRow | null;
@@ -75,14 +77,14 @@ export interface CatalogPort {
     treatmentId: string,
     edit: Partial<TreatmentDraft>,
   ): Promise<{
-    outcome: 'edited' | 'no_treatment' | 'duplicate_name' | 'no_product';
+    outcome: 'edited' | 'no_treatment' | 'duplicate_name' | 'no_product' | 'needs_interval';
     row: TreatmentRow | null;
   }>;
   archive(
     caller: CatalogWriter,
     treatmentId: string,
     archived: boolean,
-  ): Promise<TreatmentRow | null>;
+  ): Promise<{ outcome: 'done' | 'no_treatment' | 'duplicate_name'; row: TreatmentRow | null }>;
   protocol(caller: CatalogWriter, treatmentId: string): Promise<Protocol | null>;
   saveProtocol(
     caller: CatalogWriter,
@@ -108,6 +110,7 @@ export interface CatalogPort {
     caller: CatalogWriter,
     draft: PromotionDraft,
     idempotency: IdempotencyRecord,
+    render: (row: PromotionRow) => unknown,
   ): Promise<{
     outcome: 'created' | 'duplicate_code' | 'no_treatment';
     row: PromotionRow | null;

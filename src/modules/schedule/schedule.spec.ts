@@ -11,6 +11,7 @@ import type { Caller } from '../access/application/caller';
 import { Appointments } from './application/appointments';
 import { Schedule } from './application/schedule';
 import { SyncBatch } from './application/sync';
+import { IdempotencyGuard } from '../../shared/idempotency/idempotency-guard';
 import { ScheduleRepository } from './infrastructure/schedule.repository';
 
 const ownerUrl =
@@ -30,7 +31,7 @@ const clock = { now: () => NOW };
 const repo = new ScheduleRepository(app);
 const schedule = new Schedule(repo, clock);
 const appointments = new Appointments(repo, repo, clock);
-const sync = new SyncBatch(appointments);
+const sync = new SyncBatch(appointments, new IdempotencyGuard(app));
 
 const MINE = { practice: 'ffffffff-0000-4000-8000-000000000001', doctor: 'ffffffff-0000-4000-8000-000000000011' };
 const OTHER = { practice: 'ffffffff-0000-4000-8000-000000000002', doctor: 'ffffffff-0000-4000-8000-000000000012' };
@@ -51,6 +52,7 @@ function doctor(practice: string, account: string): Caller {
       'agenda:leer',
       'citas:crear',
       'citas:cancelar',
+      'horarios:leer',
       'horarios:definir',
       'cobros:registrar',
     ],
@@ -186,6 +188,39 @@ describe('los horarios y los huecos', () => {
     // El miércoles es feriado, y el motivo viaja: un día vacío sin motivo deja a la app
     // diciendo «no hay nada» cuando lo que pasa es que la consulta cerró.
     expect(seen.dias[1]).toMatchObject({ huecos: [], motivo: 'feriado' });
+  });
+
+  it('un número que no es un número es un 400, no un NaN camino de la base', async () => {
+    // `Number("x")` daba `NaN`, `NaN` iba a una columna `integer` y el 500 lo escribía
+    // Postgres: el error de forma de este endpoint lo decidía la base.
+    await expect(
+      schedule.save(
+        { franjas: [], margen_entre_citas_minutos: 'x' },
+        doctor(MINE.practice, MINE.doctor),
+      ),
+    ).rejects.toMatchObject({ code: 'numero_fuera_de_rango' });
+
+    // Y un número fuera de rango tampoco: un margen de ocho horas no es un margen.
+    await expect(
+      schedule.save(
+        { franjas: [], margen_entre_citas_minutos: 480 },
+        doctor(MINE.practice, MINE.doctor),
+      ),
+    ).rejects.toMatchObject({ code: 'numero_fuera_de_rango' });
+  });
+
+  it('una nota de cita de un megabyte no entra en la base', async () => {
+    // El único tope era el megabyte del cuerpo de Fastify. Cien notas así son cien megabytes
+    // de disco en una VPS de dos gigas.
+    await expect(
+      owner.query(
+        `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                  status, price_cents, patient_note)
+         values ($1, $2, $3, now() + interval '40 days', now() + interval '40 days 30 minutes',
+                 'confirmada', 0, $4)`,
+        [MINE.practice, ANA.patient, treatment, 'x'.repeat(2001)],
+      ),
+    ).rejects.toThrow(/appointment_note_len_ck/);
   });
 
   it('un feriado sobre un día con citas NO se impone', async () => {
@@ -467,5 +502,295 @@ describe('la lista de espera y el lote', () => {
     expect(result.rechazadas).toHaveLength(1);
     expect(result.rechazadas[0]).toMatchObject({ clave: 'op-2', codigo: 'hueco_ocupado' });
     expect(result.rechazadas[0]?.mensaje).toBe('Ese horario se acaba de ocupar.');
+  });
+});
+
+describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
+  beforeAll(async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from promotion where practice_id = $1`, [MINE.practice]);
+  });
+
+  it('el último cupo de una promoción, canjeado a la vez, da promocion_no_aplica y no 500', async () => {
+    // Un solo cupo y dos pacientes en huecos distintos: lo que se pelea es el cupo, no el hueco.
+    const { rows } = await owner.query<{ id: string }>(
+      `insert into promotion (practice_id, name, discount_type, discount_value, starts_on,
+                              ends_on, quota, redeemed, segment_key, published)
+       values ($1, 'Último cupo', 'porcentaje', 20, '2026-11-01', '2026-11-30', 1, 0, 'todas', true)
+       returning id`,
+      [MINE.practice],
+    );
+    const promotion = rows[0]!.id;
+
+    const first = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+        promocion_id: promotion,
+      },
+      patient(ANA.account),
+      key('cupo-ana'),
+    )) as { precio_aplicado: { centavos: number } };
+    // 20 % de 192 000.
+    expect(first.precio_aplicado.centavos).toBe(153600);
+
+    // La segunda llega con el cupo ya agotado. Antes de hoy: `CHECK` violado, transacción
+    // abortada y 500 con «puede que sí haya quedado agendada». Ahora, el código del contrato
+    // CON EL PRECIO DE LISTA, para ofrecerle reservar sin ella.
+    const failed = await appointments
+      .book(
+        {
+          practice_id: MINE.practice,
+          tratamiento_id: treatment,
+          empieza_en: '2026-11-03T15:30:00.000Z',
+          promocion_id: promotion,
+        },
+        patient(BEA.account),
+        key('cupo-bea'),
+      )
+      .catch((failure: unknown) => failure as { code: string; data?: { precio?: { centavos: number } } });
+    expect(failed).toMatchObject({ code: 'promocion_no_aplica' });
+    expect((failed as { data?: { precio?: { centavos: number } } }).data?.precio?.centavos).toBe(192000);
+
+    // Y el cupo no se pasó: la fila sigue en uno de uno.
+    const { rows: after } = await owner.query<{ redeemed: number; n: string }>(
+      `select p.redeemed,
+              (select count(*)::text from appointment a where a.promotion_id = p.id) as n
+         from promotion p where p.id = $1`,
+      [promotion],
+    );
+    expect(after[0]?.redeemed).toBe(1);
+    expect(after[0]?.n).toBe('1');
+  });
+
+  it('reagendar vuelve a pasar la regla clínica: una contraindicación anotada después frena', async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    const booked = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      patient(ANA.account),
+      key('clinica-antes'),
+    )) as { id: string };
+
+    // La doctora anota el embarazo DESPUÉS de agendada, y el tratamiento lo contraindica.
+    await owner.query(
+      `insert into treatment_contraindication (practice_id, treatment_id, key, absolute)
+       values ($1, $2, 'embarazo', true)`,
+      [MINE.practice, treatment],
+    );
+    await owner.query(`delete from medical_history where patient_id = $1`, [ANA.patient]);
+    await owner.query(
+      `insert into medical_history (practice_id, patient_id, pregnancy_or_lactation,
+                                    pregnancy_or_lactation_source, pregnancy_or_lactation_source_at)
+       values ($1, $2, 'embarazo', 'doctora', now())`,
+      [MINE.practice, ANA.patient],
+    );
+
+    // Ella mueve su cita desde la app: la única puerta sin el muro clínico era esta.
+    await expect(
+      appointments.reschedule(
+        booked.id,
+        { empieza_en: '2026-11-03T15:30:00.000Z' },
+        patient(ANA.account),
+      ),
+    ).rejects.toMatchObject({ code: 'tratamiento_no_disponible' });
+
+    await owner.query(`delete from treatment_contraindication where treatment_id = $1`, [treatment]);
+    await owner.query(`delete from medical_history where patient_id = $1`, [ANA.patient]);
+
+    // Sin la contraindicación, la misma llamada mueve la cita.
+    const moved = (await appointments.reschedule(
+      booked.id,
+      { empieza_en: '2026-11-03T15:30:00.000Z' },
+      patient(ANA.account),
+    )) as { empieza_en: string };
+    expect(moved.empieza_en).toBe('2026-11-03T15:30:00.000Z');
+  });
+
+  it('reagendar respeta el margen de cortesía, que antes solo se miraba al reservar', async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    const nine = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      patient(ANA.account),
+      key('margen-1'),
+    )) as { id: string };
+    const later = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T16:00:00.000Z',
+      },
+      patient(BEA.account),
+      key('margen-2'),
+    )) as { id: string };
+
+    // 13:40 termina la primera; con 15 minutos de margen, las 13:30 de la rejilla se pisan.
+    await expect(
+      appointments.reschedule(
+        later.id,
+        { empieza_en: '2026-11-03T13:30:00.000Z' },
+        doctor(MINE.practice, MINE.doctor),
+      ),
+    ).rejects.toMatchObject({ code: 'hueco_ocupado' });
+
+    // Y la cita no se movió.
+    const still = (await appointments.one(later.id, doctor(MINE.practice, MINE.doctor))) as {
+      empieza_en: string;
+    };
+    expect(still.empieza_en).toBe('2026-11-03T16:00:00.000Z');
+    void nine;
+  });
+
+  it('cancelar con lista de espera DEJA EL AVISO, que antes se afirmaba y no existía', async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [MINE.practice]);
+
+    const booked = (await appointments.book(
+      {
+        paciente_id: BEA.patient,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      doctor(MINE.practice, MINE.doctor),
+      key('aviso-hueco'),
+    )) as { id: string };
+
+    // Ana espera ese tratamiento para ese día.
+    await appointments.joinWaitlist(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        desde: '2026-11-01',
+        hasta: '2026-12-31',
+      },
+      patient(ANA.account),
+    );
+
+    const cancelled = (await appointments.cancel(
+      booked.id,
+      doctor(MINE.practice, MINE.doctor),
+    )) as { lista_de_espera_avisada: number };
+    expect(cancelled.lista_de_espera_avisada).toBe(1);
+
+    // Y AHORA LA RESPUESTA ES VERDAD: hay una fila que lo manda, a la cuenta de quien espera.
+    const { rows } = await owner.query<{
+      account_id: string;
+      kind: string;
+      data: Record<string, unknown>;
+    }>(
+      `select account_id, kind, data from notification_outbox
+        where practice_id = $1 and kind = 'hueco_libre'`,
+      [MINE.practice],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.account_id).toBe(ANA.account);
+    // Lleva cuándo vence la reserva de 30 minutos, y ni el nombre de nadie.
+    expect(rows[0]?.data.vence_en).toBeTruthy();
+    expect(JSON.stringify(rows[0]?.data)).not.toContain('Ana');
+  });
+
+  it('cancelar exige citas:cancelar, y reagendar citas:crear', async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    const booked = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      patient(ANA.account),
+      key('permisos'),
+    )) as { id: string };
+
+    const sinCancelar = {
+      ...doctor(MINE.practice, MINE.doctor),
+      permissions: ['agenda:leer', 'citas:crear', 'horarios:leer'],
+    };
+    await expect(appointments.cancel(booked.id, sinCancelar)).rejects.toMatchObject({
+      code: 'sin_permiso',
+    });
+
+    const sinCrear = {
+      ...doctor(MINE.practice, MINE.doctor),
+      permissions: ['agenda:leer', 'citas:cancelar'],
+    };
+    await expect(
+      appointments.reschedule(booked.id, { empieza_en: '2026-11-03T15:30:00.000Z' }, sinCrear),
+    ).rejects.toMatchObject({ code: 'sin_permiso' });
+
+    // Con el permiso que nombra la operación, sí.
+    await expect(
+      appointments.cancel(booked.id, doctor(MINE.practice, MINE.doctor)),
+    ).resolves.toMatchObject({ estado: 'cancelada' });
+  });
+});
+
+describe('el lote de sincronización, con tope y con clave', () => {
+  beforeAll(async () => {
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from idempotency_key where account_id = any($1::uuid[])`, [
+      [MINE.doctor, ANA.account, BEA.account],
+    ]);
+  });
+
+  it('un lote de 201 operaciones no entra, y dice el máximo', async () => {
+    const operations = Array.from({ length: 201 }, (_, i) => ({
+      clave: `op-grande-${i}`,
+      tipo: 'cita.cancelar',
+      datos: { cita_id: '00000000-0000-4000-8000-000000000000' },
+    }));
+    await expect(
+      sync.run({ operaciones: operations }, doctor(MINE.practice, MINE.doctor)),
+    ).rejects.toMatchObject({ code: 'lote_demasiado_grande', data: { maximo: 200 } });
+  });
+
+  it('reenviar el lote NO vuelve a mover una cita que ya se movió después', async () => {
+    const booked = (await appointments.book(
+      {
+        paciente_id: ANA.patient,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      doctor(MINE.practice, MINE.doctor),
+      key('lote-base'),
+    )) as { id: string };
+
+    const batch = {
+      operaciones: [
+        {
+          clave: 'op-mover-1',
+          tipo: 'cita.mover',
+          datos: { cita_id: booked.id, empieza_en: '2026-11-03T15:30:00.000Z' },
+        },
+      ],
+    };
+    const first = await sync.run(batch, doctor(MINE.practice, MINE.doctor));
+    expect(first.aplicadas).toBe(1);
+
+    // La doctora la mueve otra vez, ya con señal.
+    await appointments.reschedule(
+      booked.id,
+      { empieza_en: '2026-11-03T16:00:00.000Z' },
+      doctor(MINE.practice, MINE.doctor),
+    );
+
+    // Y la app reenvía su bandeja de salida. SIN la clave de cada operación, esto devolvía la
+    // cita a las 15:30 y deshacía el cambio posterior.
+    const again = await sync.run(batch, doctor(MINE.practice, MINE.doctor));
+    expect(again.aplicadas).toBe(1);
+
+    const still = (await appointments.one(booked.id, doctor(MINE.practice, MINE.doctor))) as {
+      empieza_en: string;
+    };
+    expect(still.empieza_en).toBe('2026-11-03T16:00:00.000Z');
   });
 });

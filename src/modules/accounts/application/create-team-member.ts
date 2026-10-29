@@ -194,9 +194,12 @@ export class CreateTeamMember {
       await this.mail.sendTeamAccess(facts);
     } catch (cause) {
       // Ni el correo ni la contraseña entran en la causa: solo la cuenta (§10.3).
+      // Con el identificador de la cuenta que YA está creada: el reenvío
+      // —`POST /v1/team/{member_id}/access`— lo pide, y viajaba solo en el 201 que no llegó.
       throw new ServiceFailure(
         FAILURE_PHRASES.createTeamMemberMail,
         new Error(`no se pudo mandar el acceso del equipo de la cuenta ${accountId}`, { cause }),
+        { cuenta_id: accountId },
       );
     }
   }

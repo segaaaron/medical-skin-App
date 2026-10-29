@@ -14,6 +14,8 @@
     "db:generate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "tsx --env-file=.env src/shared/db/migrate.ts",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.ts\"",
     "db:seed": "tsx --env-file=.env src/shared/db/seed.ts"
@@ -37,8 +39,8 @@
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "sharp": "0.34.5",
-    "zod": "3.25.76"
+    "sharp": "0.35.5",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@nestjs/cli": "11.0.24",

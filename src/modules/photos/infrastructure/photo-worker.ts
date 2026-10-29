@@ -13,15 +13,16 @@
 //   4 · la maestra, recomprimida solo si la compilación lo permite;
 //   5 · las tres derivadas en AVIF.
 //
-// JPEG XL · MEDIDO EL 28 DE OCTUBRE DE 2026: `sharp` 0.34.5 con libvips 8.17.3 en darwin-arm64
-// **no trae libjxl** —ni de entrada ni de salida—, así que la maestra se guarda TAL CUAL y se
-// anota en `master_format: 'original'`. Es lo que el contrato manda («nunca se degrada la
+// JPEG XL · MEDIDO OTRA VEZ EL 29 DE OCTUBRE DE 2026, con `sharp` 0.35.5 y libvips 8.18.7
+// —la subida que cierra tres CVE de libvips, libheif y librsvg (OWASP A06)—: **sigue sin traer
+// libjxl**, ni de entrada ni de salida. HEIF/AVIF sí. Así que la maestra se guarda TAL CUAL y
+// se anota en `master_format: 'original'`. Es lo que el contrato manda («nunca se degrada la
 // maestra por un problema de codificador») y lo que convierte la pregunta abierta del traspaso
 // en un hecho: el presupuesto de disco de la VPS hay que recalcularlo con la foto sin
 // recomprimir, no con 1,55 MB.
 
 import type { Pool } from 'pg';
-import sharp from 'sharp';
+import sharp, { type Metadata } from 'sharp';
 
 import { withTenantContext } from '../../../shared/db/tenant-context';
 import type { FailureLog } from '../../../shared/failures/service-failure';
@@ -65,6 +66,108 @@ export class PhotoWorker {
       await this.process(photo.id, photo.practice_id, photo.attempts, photo.patient_id);
     }
     return rows.length;
+  }
+
+  /**
+   * LAS DERIVADAS DE UNA FICHA ARCHIVADA SE BORRAN · hallazgo H-18.
+   *
+   * `pacientes.md` lo dice desde el principio: «al archivar, las derivadas de sus fotos se
+   * borran y la maestra se queda», y se regeneran al reactivarla. Nadie lo hacía: una consulta
+   * que archiva 50 fichas al cerrar el año se quedaba con las tres derivadas de cada foto
+   * ocupando disco, y eso es crecimiento que el presupuesto de la VPS no contaba.
+   *
+   * No hace falta tabla nueva: el estado ya está en los datos —`patient.status` y
+   * `photo.derivatives_ready`—, y las dos consultas son dos funciones de la 0043. La maestra
+   * NO se toca: es la prueba legal del expediente.
+   */
+  async purgeDerivatives(limit = 25): Promise<number> {
+    const photos = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      const { rows } = await c.query<{ id: string }>('select id from medskin_photos_to_purge($1)', [
+        limit,
+      ]);
+      return rows;
+    });
+
+    const now = new Date();
+    for (const photo of photos) {
+      for (const derivative of DERIVATIVES) {
+        await this.remove(`${photo.id}/${derivative.name}.avif`, now);
+      }
+      // El sello DESPUÉS de tocar el almacenamiento: si el proceso muere en medio, el siguiente
+      // intento vuelve a encontrar la foto y borra lo que quede. Las claves son deterministas,
+      // así que borrar lo ya borrado es un 404 que no importa.
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
+        c.query('select medskin_photo_derivatives($1, false)', [photo.id]),
+      );
+    }
+    return photos.length;
+  }
+
+  /** Y el camino de vuelta: reactivar la ficha las regenera desde la maestra. */
+  async rebuildDerivatives(limit = 25): Promise<number> {
+    const photos = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      const { rows } = await c.query<{ id: string }>(
+        'select id from medskin_photos_to_rebuild($1)',
+        [limit],
+      );
+      return rows;
+    });
+
+    const now = new Date();
+    for (const photo of photos) {
+      const master = await this.download(KEYS.master(photo.id), now);
+      // Sin maestra no hay nada que regenerar, y marcarla como lista sería mentir. Se queda
+      // como está: la foto sigue `lista` sin derivadas, y eso se ve en la pantalla.
+      if (master === null) continue;
+
+      for (const derivative of DERIVATIVES) {
+        const bytes = await sharp(master)
+          .rotate()
+          .resize({
+            width: derivative.side,
+            height: derivative.side,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .avif({ quality: 62 })
+          .toBuffer();
+        await this.upload(`${photo.id}/${derivative.name}.avif`, bytes, now);
+      }
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
+        c.query('select medskin_photo_derivatives($1, true)', [photo.id]),
+      );
+    }
+    return photos.length;
+  }
+
+  /**
+   * LOS BYTES DE UNA FOTO BORRADA · la otra mitad de un borrado.
+   *
+   * Borrar una foto marcaba la fila (`deleted_at`) y dejaba los cuatro objetos en el disco
+   * para siempre. Es disco que nadie contaba y, peor, es la cara de alguien que pidió que se
+   * fuera y seguía estando. Aquí se van los cuatro —las tres derivadas y LA MAESTRA—, porque
+   * esto no es archivar: es borrar.
+   */
+  async eraseDeleted(limit = 25): Promise<number> {
+    const photos = await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      const { rows } = await c.query<{ id: string }>('select id from medskin_photos_to_erase($1)', [
+        limit,
+      ]);
+      return rows;
+    });
+
+    const now = new Date();
+    for (const photo of photos) {
+      for (const derivative of DERIVATIVES) {
+        await this.remove(`${photo.id}/${derivative.name}.avif`, now);
+      }
+      await this.remove(KEYS.master(photo.id), now);
+      await this.remove(KEYS.upload(photo.id), now);
+      await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
+        c.query('select medskin_photo_erased($1)', [photo.id]),
+      );
+    }
+    return photos.length;
   }
 
   private async process(
@@ -184,7 +287,7 @@ export class PhotoWorker {
 }
 
 /** La cámara, de los metadatos. Nunca el GPS, que no se copia a ningún sitio. */
-function readCamera(meta: sharp.Metadata): string | null {
+function readCamera(meta: Metadata): string | null {
   const exif = meta.exif;
   if (exif === undefined) return null;
   // El EXIF crudo lleva el modelo en texto plano; leerlo entero exigiría un analizador, y lo
@@ -194,7 +297,7 @@ function readCamera(meta: sharp.Metadata): string | null {
   return model?.[1]?.trim() ?? null;
 }
 
-function readIso(meta: sharp.Metadata): number | null {
+function readIso(meta: Metadata): number | null {
   const exif = meta.exif;
   if (exif === undefined) return null;
   const iso = /ISO\w*\0*(\d{2,5})/.exec(exif.toString('latin1'));

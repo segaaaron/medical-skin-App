@@ -342,6 +342,77 @@ describe('el borrado de la propia cuenta', () => {
       [LEAVING.account],
     );
     expect(rows[0]).toEqual({ until: RETENTION_UNTIL, reason: 'ya_no_la_uso', practice_deleted: false });
+
+    // Y LA FECHA QUEDA TAMBIÉN EN EL VÍNCULO SUELTO, que es la única fila desde la que un
+    // barrendero puede volver a la ficha: en `access_audit` no sirve, porque el correo de la
+    // cuenta se anonimiza y desde la bitácora ya no se llega a nadie.
+    const { rows: vinculos } = await owner.query<{ retention_until: string | null }>(
+      `select to_char(retention_until, 'YYYY-MM-DD') as retention_until
+         from patient_link where patient_id = any($1::uuid[])`,
+      [[LEAVING.patientBusy, LEAVING.patientOther]],
+    );
+    expect(vinculos.map((v) => v.retention_until)).toEqual([RETENTION_UNTIL, RETENTION_UNTIL]);
+  });
+
+  it('cumplido el plazo, el barrendero anonimiza la ficha y deja los libros de la consulta', async () => {
+    // El plazo vence: se adelanta la fecha, que es lo que haría el calendario.
+    await owner.query(
+      `update patient_link set retention_until = current_date - 1
+        where patient_id = any($1::uuid[])`,
+      [[LEAVING.patientBusy, LEAVING.patientOther]],
+    );
+
+    const { rows: barridas } = await owner.query<{ n: number }>(
+      'select medskin_purge_retained(50) as n',
+    );
+    expect(Number(barridas[0]?.n)).toBe(2);
+
+    // La ficha se QUEDA, anonimizada: borrar la fila arrastraría en cascada `payment` y
+    // `appointment`, que son los libros de la consulta y no son dato de la paciente.
+    const { rows: fichas } = await owner.query<{
+      first_name: string;
+      email: string | null;
+      phone: string | null;
+      status: string;
+      purged: boolean;
+    }>(
+      `select first_name, email, phone, status, purged_at is not null as purged
+         from patient where id = $1`,
+      [LEAVING.patientBusy],
+    );
+    // El correo se ANONIMIZA en vez de irse: la columna es `NOT NULL` y tiene razón —el correo
+    // de la ficha es por dónde la doctora le escribe—, así que queda uno del dominio inválido
+    // que no es de nadie, igual que en el borrado de la cuenta.
+    expect(fichas[0]).toMatchObject({
+      first_name: 'Ficha',
+      phone: null,
+      status: 'archivada',
+      purged: true,
+    });
+    expect(fichas[0]?.email).toContain('@medskin.invalid');
+
+    // El dato de salud, fuera. Y el vínculo suelto también: su correo era la llave del
+    // «vuelve_si», y pasado el plazo ya no hay nada a lo que volver.
+    const { rows: resto } = await owner.query<{ historias: string; vinculos: string }>(
+      `select (select count(*)::text from medical_history where patient_id = $1) as historias,
+              (select count(*)::text from patient_link where patient_id = $1) as vinculos`,
+      [LEAVING.patientBusy],
+    );
+    expect(resto[0]).toEqual({ historias: '0', vinculos: '0' });
+
+    // Y queda la línea de que se fue, con la fecha que se le prometió.
+    const { rows: linea } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from access_audit
+        where action = 'paciente.plazo_cumplido' and subject_id = $1`,
+      [LEAVING.patientBusy],
+    );
+    expect(linea[0]?.n).toBe('1');
+
+    // Segunda pasada: nada que hacer. Idempotente por `purged_at`.
+    const { rows: otra } = await owner.query<{ n: number }>(
+      'select medskin_purge_retained(50) as n',
+    );
+    expect(Number(otra[0]?.n)).toBe(0);
   });
 
   it('borrar lo ya borrado devuelve el mismo 200, con la fecha del borrado de verdad', async () => {

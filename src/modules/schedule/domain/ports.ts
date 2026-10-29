@@ -129,7 +129,13 @@ export interface AppointmentPort {
       /** Para rechazar el hueco tomado entre que lo vio y confirmó. */
       gapMinutes: number;
     },
-  ): Promise<{ outcome: 'booked' | 'slot_taken'; row: AppointmentRow | null; replay: unknown }>;
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (row: AppointmentRow) => unknown,
+  ): Promise<{
+    outcome: 'booked' | 'slot_taken' | 'promotion_quota';
+    row: AppointmentRow | null;
+    replay: unknown;
+  }>;
   list(
     caller: ScheduleCaller,
     p: { practiceId: string | null; from: string | null; to: string | null; status: string | null },

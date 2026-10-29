@@ -23,6 +23,7 @@ export class ClinicalRepository implements ClinicalPort {
     caller: ClinicalCaller,
     draft: SessionDraft,
     idempotency: IdempotencyRecord,
+    render: (row: SessionRow) => unknown,
   ): Promise<{
     outcome:
       | 'created'
@@ -155,11 +156,13 @@ export class ClinicalRepository implements ClinicalPort {
 
       const row = await this.readOne(c, sessionId, stock);
       if (row === null) throw new Error(`la sesión ${sessionId} no se pudo releer tras crearla`);
+      // Lo que se guarda es lo que el cliente recibio, no la fila interna: un reintento tiene
+      // que devolver el MISMO 201.
       await complete(c, {
         record: idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'created', row, replay: null };
     });
@@ -228,7 +231,15 @@ export class ClinicalRepository implements ClinicalPort {
     sessionId: string,
     now: Date,
   ): Promise<{
-    outcome: 'signed' | 'no_session' | 'empty' | 'conflicts' | 'no_consent' | 'voided';
+    outcome:
+      | 'signed'
+      | 'no_session'
+      | 'empty'
+      | 'conflicts'
+      | 'no_consent'
+      | 'stale_consent'
+      | 'no_practitioner'
+      | 'voided';
     row: SessionRow | null;
     aftercare: number;
   }> {
@@ -255,31 +266,64 @@ export class ClinicalRepository implements ClinicalPort {
       const note = rows[0];
       if (note === undefined) return { outcome: 'no_session', row: null, aftercare: 0 };
       if (note.status === 'anulada') return { outcome: 'voided', row: null, aftercare: 0 };
-      // Firmar lo firmado devuelve el mismo 200: idempotente por naturaleza.
+      // Firmar lo firmado devuelve EL MISMO 200: idempotente por naturaleza, y eso incluye el
+      // recuento de cuidados. Devolver 0 aquí hacía que la app no pudiera distinguir «firmada
+      // sin cuidados» de «ya estaba firmada», que es justo el caso del reintento con mala
+      // señal. Se cuenta lo que hay, no lo que esta llamada acabó de insertar.
       if (note.signed_at !== null) {
-        return { outcome: 'signed', row: await this.readOne(c, sessionId, []), aftercare: 0 };
+        const { rows: already } = await c.query<{ steps: string }>(
+          `select count(s.id) as steps
+             from care_plan p
+             left join care_step s on s.plan_id = p.id
+            where p.session_id = $1`,
+          [sessionId],
+        );
+        return {
+          outcome: 'signed',
+          row: await this.readOne(c, sessionId, []),
+          aftercare: Number(already[0]?.steps ?? 0),
+        };
       }
       if (noteIsEmpty(note.fields)) return { outcome: 'empty', row: null, aftercare: 0 };
       if (note.conflicts.length > 0) return { outcome: 'conflicts', row: null, aftercare: 0 };
 
       if (note.requires_consent) {
-        const { rows: consents } = await c.query(
-          `select 1 from consent
-            where patient_id = $1 and treatment_id = $2 and purpose = 'clinico'
-              and revoked_at is null`,
+        // LA VERSIÓN IMPORTA, y hasta hoy esta puerta no la miraba: valía CUALQUIER
+        // consentimiento sin revocar. «Un consentimiento que apunta a un texto que cambió
+        // después no prueba nada» (`sesiones.md`), así que lo que abre la nota es una firma de
+        // la versión VIGENTE —la última publicada de ese tratamiento—. Si la consulta no tiene
+        // texto publicado no hay versión que exigir, y entonces basta la firma.
+        const { rows: consents } = await c.query<{ version: string; vigente: string | null }>(
+          `select c.version,
+                  (select t.version from consent_text t
+                    where t.treatment_id = $2 and t.published
+                    order by t.created_at desc nulls first limit 1) as vigente
+             from consent c
+            where c.patient_id = $1 and c.treatment_id = $2 and c.purpose = 'clinico'
+              and c.revoked_at is null
+            order by c.signed_at desc nulls first`,
           [note.patient_id, note.treatment_id],
         );
         if (consents.length === 0) return { outcome: 'no_consent', row: null, aftercare: 0 };
+
+        const current = consents[0]!.vigente;
+        if (current !== null && !consents.some((row) => row.version === current)) {
+          return { outcome: 'stale_consent', row: null, aftercare: 0 };
+        }
       }
 
+      // `session_note_signed_ck` EXIGE la identidad de quien firma, así que una ficha de
+      // profesional desactivada daba 500 en vez de un código. Es un 403 con salida.
       const { rows: practitioners } = await c.query<{ id: string }>(
         `select id from practitioner where account_id = $1 and status = 'activa'`,
         [caller.accountId],
       );
+      const practitionerId = practitioners[0]?.id ?? null;
+      if (practitionerId === null) return { outcome: 'no_practitioner', row: null, aftercare: 0 };
 
       await c.query(
         `update session_note set signed_at = $2, signed_by_practitioner_id = $3 where id = $1`,
-        [note.id, now, practitioners[0]?.id ?? null],
+        [note.id, now, practitionerId],
       );
       await c.query(
         `update clinical_session set status = 'firmada' where id = $1`,
@@ -294,8 +338,16 @@ export class ClinicalRepository implements ClinicalPort {
         `insert into care_plan (practice_id, patient_id, session_id, practice_name,
                                 treatment_name, session_at)
          select medskin_current_practice(), s.patient_id, s.id,
-                (select l.practice_name from patient_link l
-                  where l.patient_id = s.patient_id limit 1),
+                -- El nombre que verá la paciente en su plan. Sale de SU vínculo cuando lo
+                -- tiene, y si no —una ficha sin cuenta, que es la mitad de las de una
+                -- consulta— del nombre de la consulta, que la política ya acota a esta.
+                -- La columna es NOT NULL: sin este coalesce, firmar la nota de una paciente
+                -- que no usa la app era un 500 justo en la firma.
+                coalesce(
+                  (select l.practice_name from patient_link l
+                    where l.patient_id = s.patient_id limit 1),
+                  (select pr.name from practice pr)
+                ),
                 t.name, s.started_at
            from clinical_session s
            join appointment a on a.id = s.appointment_id
@@ -323,6 +375,27 @@ export class ClinicalRepository implements ClinicalPort {
             [planId, step.offset_hours, step.text, sessionId],
           );
         }
+      }
+
+      // Y EL PLAN SE PROGRAMA DE VERDAD: un aviso por paso, con el instante del paso como
+      // `send_after`. Es el «retraso nativo» que pide `cuidados.md`, y vive en la fila de la
+      // bandeja y no en un trabajo de Redis: un cuidado del día 7 no puede depender de que la
+      // cola sobreviva siete días.
+      //
+      // El aviso NO lleva el texto del cuidado —que es clínico—: lleva el identificador del
+      // paso, y la app lo pide ya desbloqueada.
+      if (planId !== null) {
+        await c.query(
+          `select medskin_notify_patient(cp.practice_id, cp.patient_id, 'cuidado', 'push',
+                                         'cuidado',
+                                         jsonb_build_object('paso_id', st.id::text,
+                                                            'plan_id', st.plan_id::text),
+                                         'cuidado:' || st.id::text, st.appears_at)
+             from care_step st
+             join care_plan cp on cp.id = st.plan_id
+            where cp.id = $1`,
+          [planId],
+        );
       }
 
       return {

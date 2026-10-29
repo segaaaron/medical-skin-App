@@ -36,7 +36,7 @@ export class ClinicalSessions {
     const asking = clinicalOf(caller, 'sesiones:registrar');
     const draft = readSession(input);
 
-    const created = await this.sessions.create(asking, draft, idempotency);
+    const created = await this.sessions.create(asking, draft, idempotency, view);
     if (created.replay !== null) return created.replay;
     switch (created.outcome) {
       case 'no_appointment':
@@ -95,6 +95,10 @@ export class ClinicalSessions {
         throw new ContractError('conflictos_sin_resolver');
       case 'no_consent':
         throw new ContractError('consentimiento_pendiente');
+      case 'stale_consent':
+        throw new ContractError('consentimiento_desactualizado');
+      case 'no_practitioner':
+        throw new ContractError('practicante_no_activo');
       default:
         break;
     }
@@ -183,7 +187,7 @@ export class Lots {
     const asking = clinicalOf(caller, 'inventario:editar');
     const draft = readLot(input, this.clock.now().toISOString().slice(0, 10));
 
-    const created = await this.lots.create(asking, draft, idempotency);
+    const created = await this.lots.create(asking, draft, idempotency, lotView);
     if (created.replay !== null) return created.replay;
     if (created.outcome === 'duplicate_code') throw new ContractError('codigo_de_lote_repetido');
     if (created.outcome === 'no_product') throw new ContractError('producto_no_existe');
@@ -237,10 +241,17 @@ export class Consents {
   }
 
   async sign(input: unknown, caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {
+    const isPatient = caller.accountRole === 'paciente';
+    // «La paciente O LA CONSULTA CON ELLA PRESENTE» (`sesiones.md`), y presente significa en la
+    // sala: el permiso es `sesiones:registrar`, el mismo que registra el tratamiento. Era el
+    // único endpoint de los tramos 2 al 8 sin ninguna comprobación de permiso, así que
+    // recepción —cuyo `historia:leer` es «no» por escrito— podía crear el documento que
+    // protege a la doctora en una reclamación sin haber estado delante.
+    if (!isPatient) clinicalOf(caller, 'sesiones:registrar');
     const asking = {
       accountId: caller.accountId,
       practiceId: caller.practiceId,
-      isPatient: caller.accountRole === 'paciente',
+      isPatient,
     };
     const draft = readConsent(input);
     if (Object.keys(draft.answers).length < 3) throw new ContractError('respuestas_incompletas');

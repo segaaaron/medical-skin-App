@@ -150,8 +150,20 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
       // ficha va después, así que no hay nada que deshacer.
       if (account === null) return no('email_unavailable');
 
-      const patientId = await this.insertFicha(c, p.ficha);
-      await this.insertLink(c, {
+      // EL «vuelve_si», QUE HASTA HOY NADIE LEÍA. El borrado de cuenta suelta el vínculo y
+      // conserva el correo a propósito —«es la llave del vuelve_si», 0014:247—, y el 200 de
+      // ese borrado le promete a la paciente que su doctora puede traerla de vuelta con ese
+      // mismo correo. Si hay un vínculo suelto con este correo en ESTA consulta, es la misma
+      // persona: se reengancha su ficha y su expediente en vez de crear una segunda.
+      const returned = await this.relink(c, p.ficha.email, account.accountId);
+
+      const patientId = returned ?? (await this.insertFicha(c, p.ficha));
+      if (returned !== null) {
+        // Vuelve con los datos de contacto que la doctora acaba de escribir —son los de hoy— y
+        // activa: lo que NO se toca es su expediente, que es la razón de reengancharla.
+        await this.refreshFicha(c, returned, p.ficha);
+      }
+      if (returned === null) await this.insertLink(c, {
         patientId,
         accountId: account.accountId,
         email: p.ficha.email,
@@ -164,7 +176,11 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
         // relé falla, quien llama lo devuelve a nulo.
         markSent: p.via === 'correo',
       });
-      await this.insertHistory(c, patientId, p.history, p.written);
+      // Los antecedentes: una fila nueva en el alta normal, y en el regreso se MEZCLAN por
+      // campo sobre los que ya estaban —solo los que la doctora nombró ahora—. Un alta que
+      // pisara el expediente de vuelta sería peor que no reengancharlo (lección del `[]`).
+      if (returned === null) await this.insertHistory(c, patientId, p.history, p.written);
+      else await this.mergeHistory(c, patientId, p.history, p.written);
       await this.audit(c, p.owner, account.accountId, {
         via: p.via,
         alta: true,
@@ -375,6 +391,93 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     // `created` ↔ `false` y `ya_tiene_cuenta` ↔ `true`: el veredicto manda, y
     // `already_existed` se conservó para no romper lo que ya se leía.
     return { accountId: row.account_id, alreadyExisted: row.verdict === 'ya_tiene_cuenta' };
+  }
+
+  /** El vínculo suelto de esta consulta con ese correo, reenganchado. Nulo si no había. */
+  private async relink(c: PoolClient, email: string, accountId: string): Promise<string | null> {
+    const { rows } = await c.query<{ patient_id: string | null }>(
+      'select medskin_relink_patient($1, $2) as patient_id',
+      [email, accountId],
+    );
+    return rows[0]?.patient_id ?? null;
+  }
+
+  /** Los datos de CONTACTO del regreso, y nada más: el expediente no se toca. */
+  private async refreshFicha(c: PoolClient, patientId: string, ficha: PatientFicha): Promise<void> {
+    await c.query(
+      `update patient
+          set first_name = $2, last_name = $3, birth_date = $4, email = $5, phone = $6,
+              has_whatsapp = $7, reminders_via = $8, status = 'activa', archived_at = null,
+              updated_at = now()
+        where id = $1`,
+      [
+        patientId,
+        ficha.firstName,
+        ficha.lastName,
+        ficha.birthDate,
+        ficha.email,
+        ficha.phone,
+        ficha.hasWhatsapp,
+        ficha.remindersVia,
+      ],
+    );
+  }
+
+  /**
+   * LA MEZCLA POR CAMPO de los antecedentes del regreso. Solo lo que la doctora NOMBRÓ en este
+   * alta, con su fuente y su fecha; lo que no nombró se queda como estaba. Es la misma regla
+   * del `PUT` de antecedentes, y la razón es la lección del 28 de octubre: un normalizador que
+   * devuelve `[]` para un campo ausente BORRA.
+   */
+  private async mergeHistory(
+    c: PoolClient,
+    patientId: string,
+    history: HistoryDraft,
+    written: readonly HistoryField[],
+  ): Promise<void> {
+    const columns: Readonly<Record<string, unknown>> = {
+      has_allergies: history.hasAllergies,
+      allergies: history.allergies,
+      takes_medication: history.takesMedication,
+      medication: history.medication,
+      pregnancy_or_lactation: history.pregnancyOrLactation,
+      phototype: history.phototype,
+      past_conditions: history.pastConditions,
+      previous_treatments: history.previousTreatments,
+      notes: history.notes,
+    };
+    /** El campo del dominio que manda la fuente de cada columna. */
+    const sourceOf: Readonly<Record<string, HistoryField>> = {
+      has_allergies: 'allergies',
+      allergies: 'allergies',
+      takes_medication: 'medication',
+      medication: 'medication',
+      pregnancy_or_lactation: 'pregnancy_or_lactation',
+      phototype: 'phototype',
+      past_conditions: 'past_conditions',
+      previous_treatments: 'previous_treatments',
+      notes: 'notes',
+    };
+
+    const sets: string[] = [];
+    const values: unknown[] = [patientId];
+    const sources = new Set<HistoryField>();
+    for (const [column, value] of Object.entries(columns)) {
+      const field = sourceOf[column]!;
+      if (!written.includes(field)) continue;
+      values.push(value);
+      sets.push(`${column} = $${values.length}`);
+      sources.add(field);
+    }
+    for (const field of sources) {
+      sets.push(`${field}_source = 'doctora'`, `${field}_source_at = now()`);
+    }
+    if (sets.length === 0) return;
+
+    await c.query(
+      `update medical_history set ${sets.join(', ')}, updated_at = now() where patient_id = $1`,
+      values,
+    );
   }
 
   private async insertFicha(c: PoolClient, ficha: PatientFicha): Promise<string> {

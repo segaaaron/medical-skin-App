@@ -41,6 +41,7 @@ export class LotsRepository implements LotPort {
     caller: ClinicalCaller,
     draft: LotDraft,
     idempotency: IdempotencyRecord,
+    render: (row: LotRow) => unknown,
   ): Promise<{
     outcome: 'created' | 'duplicate_code' | 'no_product';
     row: LotRow | null;
@@ -98,7 +99,7 @@ export class LotsRepository implements LotPort {
         record: idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'created', row, replay: null };
     });

@@ -10,7 +10,12 @@ import { Pool } from 'pg';
 import { SystemClock } from './clock';
 import { config, type Config } from './config/config';
 import { FailureLog } from './failures/service-failure';
-import { IdempotencySweep, startIdempotencySweep } from './idempotency/idempotency-sweep';
+import {
+  IdempotencySweep,
+  RetentionSweep,
+  startIdempotencySweep,
+  startRetentionSweep,
+} from './idempotency/idempotency-sweep';
 import { SmtpMail } from './mail/mailer';
 import { Counters } from './security/counters';
 import { Argon2Passwords } from './security/passwords';
@@ -26,6 +31,13 @@ export const REDIS = Symbol('REDIS');
  * el módulo y se cierra en el apagado, igual que el trabajador de recuperación.
  */
 const IDEMPOTENCY_SWEEP = Symbol('IDEMPOTENCY_SWEEP');
+
+/**
+ * Y EL BARRIDO DEL PLAZO DE CONSERVACIÓN, diario. Vive aquí por lo mismo: la promesa es de la
+ * cuenta —«se conserva hasta 2036»— y lo que cumple el plazo no es de ningún módulo de
+ * recurso. Es el trabajo más delicado del sistema y por eso tiene sus dos cotas dentro.
+ */
+const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
 
 @Global()
 @Module({
@@ -77,6 +89,12 @@ const IDEMPOTENCY_SWEEP = Symbol('IDEMPOTENCY_SWEEP');
         startIdempotencySweep(redis, new IdempotencySweep(pool), failures),
       inject: [POOL, REDIS, FailureLog],
     },
+    {
+      provide: RETENTION_SWEEP,
+      useFactory: (pool: Pool, redis: Redis, failures: FailureLog) =>
+        startRetentionSweep(redis, new RetentionSweep(pool), failures),
+      inject: [POOL, REDIS, FailureLog],
+    },
   ],
   exports: [
     CONFIG,
@@ -95,6 +113,7 @@ export class SharedModule implements OnApplicationShutdown {
     @Inject(POOL) private readonly pool: Pool,
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(IDEMPOTENCY_SWEEP) private readonly sweep: { queue: Queue; worker: Worker },
+    @Inject(RETENTION_SWEEP) private readonly retention: { queue: Queue; worker: Worker },
   ) {}
 
   /**
@@ -103,7 +122,12 @@ export class SharedModule implements OnApplicationShutdown {
    * fallo registrado.
    */
   async onApplicationShutdown(): Promise<void> {
-    await Promise.allSettled([this.sweep.worker.close(), this.sweep.queue.close()]);
+    await Promise.allSettled([
+      this.sweep.worker.close(),
+      this.sweep.queue.close(),
+      this.retention.worker.close(),
+      this.retention.queue.close(),
+    ]);
     await Promise.allSettled([this.pool.end(), this.redis.quit()]);
   }
 }

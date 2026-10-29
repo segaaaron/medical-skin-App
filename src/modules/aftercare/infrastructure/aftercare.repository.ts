@@ -7,6 +7,8 @@
 import type { Pool, PoolClient } from 'pg';
 
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
+import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
 import type {
   AftercareCaller,
   AftercarePort,
@@ -99,8 +101,36 @@ export class AftercareRepository implements AftercarePort {
       perceived: string;
       photoIds: readonly string[];
     },
-  ): Promise<{ outcome: 'received' | 'no_session'; id: string | null; practitioner: string | null; phone: string | null }> {
+    idempotency: IdempotencyRecord,
+    render: (answer: { id: string; practitioner: string | null; phone: string | null }) => unknown,
+  ): Promise<{
+    outcome: 'received' | 'no_session';
+    id: string | null;
+    practitioner: string | null;
+    phone: string | null;
+    replay: unknown;
+  }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
+      // LA RESERVA ANTES DE ESCRIBIR NADA. El contrato declara `Idempotency-Key` en este
+      // `POST` y el tramo 7 no la leia: «la paciente reporta con mala senal, la respuesta se
+      // pierde y la app reintenta —que es lo que el diseno le pide—», y quedaban dos
+      // incidencias identicas en la pantalla de la urgencia.
+      const replay = await claim<unknown>(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        practiceId: caller.isPatient ? null : caller.practiceId,
+        unfinished: 'No pudimos registrar lo que nos contaste, y puede que sí se haya registrado.',
+      });
+      if (replay !== null) {
+        return {
+          outcome: 'received',
+          id: null,
+          practitioner: null,
+          phone: null,
+          replay: replay.response,
+        };
+      }
+
       // El `practice_id` sale de LA SESIÓN, nunca del cuerpo.
       const { rows: sessions } = await c.query<{
         practice_id: string;
@@ -119,7 +149,8 @@ export class AftercareRepository implements AftercarePort {
       );
       const session = sessions[0];
       if (session === undefined) {
-        return { outcome: 'no_session', id: null, practitioner: null, phone: null };
+        await release(c, { record: idempotency, accountId: caller.accountId });
+        return { outcome: 'no_session', id: null, practitioner: null, phone: null, replay: null };
       }
 
       const { rows } = await c.query<{ id: string }>(
@@ -137,19 +168,43 @@ export class AftercareRepository implements AftercarePort {
         );
       }
 
-      return {
-        outcome: 'received',
+      // EL AVISO A LA CONSULTA, EN LA MISMA TRANSACCIÓN QUE LA INCIDENCIA. Esto es lo que
+      // convierte en verdad la frase que lee la paciente —«Tu doctora lo recibió y te va a
+      // responder por el chat»—, que hasta hoy no la respaldaba una sola línea de código.
+      //
+      // Ni el texto de lo que reportó ni la gravedad viajan en el aviso: el push lleva el
+      // identificador y la frase neutra, y la doctora abre la app para leerlo (§11.1).
+      //
+      // La función resuelve la cuenta de la consulta: `app_patient` no lee `practice`.
+      await c.query(
+        `select medskin_notify_practice($1, 'incidencia', 'push', 'incidencia',
+                                        jsonb_build_object('incidencia_id', $2::text,
+                                                           'paciente_id', $3::text),
+                                        $4, now())`,
+        [session.practice_id, id, session.patient_id, `incidencia:${id}`],
+      );
+
+      const answer = {
+        outcome: 'received' as const,
         id,
         practitioner: session.practitioner_name,
         phone: session.phone,
       };
+      await complete(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        status: 201,
+        response: render(answer),
+      });
+      return { ...answer, replay: null };
     });
   }
 
   async thread(
     caller: AftercareCaller,
     p: { patientId: string; practiceId: string },
-  ): Promise<ThreadRow | 'revoked'> {
+    create: boolean,
+  ): Promise<ThreadRow | 'revoked' | null> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const { rows: links } = await c.query<{ status: string }>(
         `select status from patient_link where patient_id = $1 and practice_id = $2`,
@@ -157,6 +212,19 @@ export class AftercareRepository implements AftercarePort {
       );
       // «Ese chat está cerrado»: un vínculo revocado no tiene hilo.
       if (links[0]?.status === 'revocada') return 'revoked';
+
+      // UN `GET` NO ESCRIBE. Leer el hilo lo CREABA, y una lectura que inserta es una lectura
+      // que no se puede repetir en una replica ni cachear, y una fila que aparece porque
+      // alguien miró. Lo crea el `POST`, que es el que tiene algo que guardar.
+      if (!create) {
+        const { rows } = await c.query<{ id: string; closed_at: Date | null }>(
+          `select id, closed_at from message_thread
+            where practice_id = $2 and patient_id = $1`,
+          [p.patientId, p.practiceId],
+        );
+        const found = rows[0];
+        return found === undefined ? null : { id: found.id, closedAt: found.closed_at };
+      }
 
       const { rows } = await c.query<{ id: string; closed_at: Date | null }>(
         `insert into message_thread (practice_id, patient_id) values ($2, $1)
@@ -194,8 +262,18 @@ export class AftercareRepository implements AftercarePort {
     caller: AftercareCaller,
     threadId: string,
     body: string,
-  ): Promise<{ outcome: 'sent' | 'too_many'; id: string | null }> {
+    idempotency: IdempotencyRecord,
+  ): Promise<{ outcome: 'sent' | 'too_many'; id: string | null; replay: unknown }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
+      // Igual que la incidencia: sin clave, un reintento duplicaba el mensaje en el hilo.
+      const replay = await claim<unknown>(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        practiceId: caller.isPatient ? null : caller.practiceId,
+        unfinished: 'No pudimos enviar tu mensaje, y puede que sí se haya enviado.',
+      });
+      if (replay !== null) return { outcome: 'sent', id: null, replay: replay.response };
+
       // «Un hilo no es un canal de soporte en vivo»: 30 por hora y por hilo, en los DOS
       // sentidos. Se cuenta en la base y no en Redis porque el límite es del hilo, no del
       // correo ni de la IP, y la fila ya está aquí.
@@ -204,7 +282,10 @@ export class AftercareRepository implements AftercarePort {
           where thread_id = $1 and created_at > now() - interval '1 hour'`,
         [threadId],
       );
-      if (Number(recent[0]?.n ?? 0) >= 30) return { outcome: 'too_many', id: null };
+      if (Number(recent[0]?.n ?? 0) >= 30) {
+        await release(c, { record: idempotency, accountId: caller.accountId });
+        return { outcome: 'too_many', id: null, replay: null };
+      }
 
       const { rows } = await c.query<{ id: string }>(
         `insert into message (practice_id, thread_id, author, author_account_id, body)
@@ -213,7 +294,37 @@ export class AftercareRepository implements AftercarePort {
         [threadId, caller.isPatient ? 'paciente' : 'consulta', caller.accountId, body],
       );
       await c.query(`update message_thread set last_message_at = now() where id = $1`, [threadId]);
-      return { outcome: 'sent', id: rows[0]?.id ?? null };
+      const id = rows[0]?.id ?? null;
+      // «Tienes un mensaje», sin el texto: el de un mensaje clínico no viaja a una pantalla de
+      // bloqueo. Va a la otra parte del hilo, y el identificador del mensaje es la clave de
+      // deduplicación, así que un reintento no manda dos avisos.
+      if (id !== null) {
+        if (caller.isPatient) {
+          await c.query(
+            `select medskin_notify_practice(t.practice_id, 'mensaje', 'push', 'mensaje',
+                                            jsonb_build_object('hilo_id', t.id::text),
+                                            $2, now())
+               from message_thread t where t.id = $1`,
+            [threadId, `mensaje:${id}`],
+          );
+        } else {
+          await c.query(
+            `select medskin_notify_patient(t.practice_id, t.patient_id, 'mensaje', 'push',
+                                           'mensaje',
+                                           jsonb_build_object('hilo_id', t.id::text),
+                                           $2, now())
+               from message_thread t where t.id = $1`,
+            [threadId, `mensaje:${id}`],
+          );
+        }
+      }
+      await complete(c, {
+        record: idempotency,
+        accountId: caller.accountId,
+        status: 201,
+        response: { id, enviado: true },
+      });
+      return { outcome: 'sent', id, replay: null };
     });
   }
 

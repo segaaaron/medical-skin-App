@@ -1,0 +1,19 @@
+#!/bin/sh
+# EL SECRETO QUE NO SE SUBE · `servicios.md` §5.2: «gitleaks en el gancho de pre-commit y en
+# integración continua».
+#
+# Se activa una vez por copia del repositorio:
+#   git config core.hooksPath .githooks
+#
+# Si `gitleaks` no está instalado, el gancho AVISA Y DEJA PASAR. Un gancho que bloquea un
+# commit porque falta una herramienta se desactiva el mismo día, y entonces no protege nada;
+# el que avisa se instala. En integración continua sí es bloqueante, que es donde importa.
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks no está instalado, no se revisaron los secretos."
+  echo "            brew install gitleaks   (y la integración continua lo revisa igual)"
+  exit 0
+fi
+
+gitleaks protect --staged --redact --no-banner

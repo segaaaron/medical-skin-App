@@ -14,12 +14,22 @@
 
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Caller } from '../../access/application/caller';
+import type { IdempotencyGuardPort } from '../../../shared/idempotency/idempotency-guard';
 import { fingerprintOf } from '../../../shared/idempotency/idempotency-key';
 import type { Appointments } from './appointments';
 import { asRecord, asText } from './schedule';
 
 /** Las operaciones que un lote puede traer. Lo que no está aquí no se aplica. */
 const OPERATIONS = ['cita.crear', 'cita.mover', 'cita.cancelar', 'cita.asistencia'] as const;
+
+/**
+ * EL TOPE DEL LOTE, y no es un número redondo por gusto: cada operación es su propia
+ * transacción EN SERIE, así que un lote sin tope ocupa un trabajador tanto como operaciones
+ * traiga, y el límite de ritmo cuenta PETICIONES, no operaciones. Un día entero sin señal de
+ * una consulta ocupada no llega a doscientas; lo que no entra es un lote de diez mil, que es
+ * un minuto de un proceso por una sola petición.
+ */
+const MAX_OPERATIONS = 200;
 
 export type SyncResult = {
   aplicadas: number;
@@ -32,11 +42,17 @@ export type SyncResult = {
 };
 
 export class SyncBatch {
-  constructor(private readonly appointments: Appointments) {}
+  constructor(
+    private readonly appointments: Appointments,
+    private readonly guard: IdempotencyGuardPort,
+  ) {}
 
   async run(input: unknown, caller: Caller): Promise<SyncResult> {
     const body = asRecord(input);
     const operations = Array.isArray(body.operaciones) ? body.operaciones : [];
+    if (operations.length > MAX_OPERATIONS) {
+      throw new ContractError('lote_demasiado_grande', { maximo: MAX_OPERATIONS });
+    }
 
     let applied = 0;
     const rejected: { clave: string; codigo: string; mensaje: string; datos?: unknown }[] = [];
@@ -84,18 +100,36 @@ export class SyncBatch {
     caller: Caller,
   ): Promise<void> {
     const id = asText(payload.cita_id);
-    switch (kind) {
-      case 'cita.crear':
-        await this.appointments.book(payload, caller, { key, bodyHash: fingerprintOf(payload) });
-        return;
-      case 'cita.mover':
-        await this.appointments.reschedule(id, payload, caller);
-        return;
-      case 'cita.cancelar':
-        await this.appointments.cancel(id, caller);
-        return;
-      default:
-        await this.appointments.attendance(id, payload, caller);
+    const record = { key, bodyHash: fingerprintOf(payload) };
+
+    // `cita.crear` reserva la clave DENTRO de su propia transacción, que es donde mejor está:
+    // lo que serializa dos reservas simultáneas es la clave primaria de `idempotency_key`.
+    if (kind === 'cita.crear') {
+      await this.appointments.book(payload, caller, record);
+      return;
     }
+
+    // Las otras tres no tienen dónde reservarla —su endpoint no lleva clave, porque por la
+    // puerta de la app un `PATCH` o un `DELETE` son idempotentes por naturaleza—, y aquí sí
+    // hace falta: el contrato del lote promete la clave de CADA operación, y `cita.mover`
+    // reaplicada deshace un cambio posterior.
+    await this.guard.run(
+      {
+        record,
+        accountId: caller.accountId,
+        practiceId: caller.practiceId!,
+        unfinished: 'No pudimos aplicar esa operación, y puede que sí se haya aplicado.',
+      },
+      async () => {
+        switch (kind) {
+          case 'cita.mover':
+            return this.appointments.reschedule(id, payload, caller);
+          case 'cita.cancelar':
+            return this.appointments.cancel(id, caller);
+          default:
+            return this.appointments.attendance(id, payload, caller);
+        }
+      },
+    );
   }
 }

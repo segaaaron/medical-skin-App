@@ -1,5 +1,7 @@
 // Lo que los cuidados necesitan de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
+
 export type AftercareCaller = {
   accountId: string;
   practiceId: string | null;
@@ -55,16 +57,22 @@ export interface AftercarePort {
       perceived: string;
       photoIds: readonly string[];
     },
+    idempotency: IdempotencyRecord,
+    /** La MISMA vista de la respuesta: lo que se recuerda es lo que el cliente recibio. */
+    render: (answer: { id: string; practitioner: string | null; phone: string | null }) => unknown,
   ): Promise<{
     outcome: 'received' | 'no_session';
     id: string | null;
     practitioner: string | null;
     phone: string | null;
+    replay: unknown;
   }>;
+  /** `create: false` es la LECTURA, y no escribe: un `GET` no crea el hilo. */
   thread(
     caller: AftercareCaller,
     p: { patientId: string; practiceId: string },
-  ): Promise<ThreadRow | 'revoked'>;
+    create: boolean,
+  ): Promise<ThreadRow | 'revoked' | null>;
   messages(
     caller: AftercareCaller,
     threadId: string,
@@ -74,7 +82,8 @@ export interface AftercarePort {
     caller: AftercareCaller,
     threadId: string,
     body: string,
-  ): Promise<{ outcome: 'sent' | 'too_many'; id: string | null }>;
+    idempotency: IdempotencyRecord,
+  ): Promise<{ outcome: 'sent' | 'too_many'; id: string | null; replay: unknown }>;
   registerDevice(
     caller: AftercareCaller,
     p: {

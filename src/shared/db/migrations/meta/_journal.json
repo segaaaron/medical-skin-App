@@ -302,6 +302,97 @@
       "when": 1793239884197,
       "tag": "0042_tramo8_business",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793239944197,
+      "tag": "0043_promotion_redeem_and_photo_derivatives",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793240004197,
+      "tag": "0044_promotion_redeem_needs_select",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793240064197,
+      "tag": "0045_notification_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793240124197,
+      "tag": "0046_notify_practice_and_patient",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793240184197,
+      "tag": "0047_data_export_worker",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793240244197,
+      "tag": "0048_notify_waitlist_needs_select",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793240304197,
+      "tag": "0049_relink_patient_on_return",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793240364197,
+      "tag": "0050_license_decision_notifies",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793240424197,
+      "tag": "0051_retention_sweeper",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1793240484197,
+      "tag": "0052_delete_own_account_exact_body",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793240544197,
+      "tag": "0053_retention_sweeper_needs_write",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793240604197,
+      "tag": "0054_retention_purge_email_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1793240664197,
+      "tag": "0055_text_length_checks",
+      "breakpoints": true
     }
   ]
 }

@@ -85,6 +85,24 @@ export class PatientsWriteRepository implements PatientWritePort {
     archived: boolean,
   ): Promise<ArchiveResult> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
+      // «Una ficha archivada con una cita viva es una paciente que se presenta y no está en la
+      // agenda.» Se mira ANTES del `UPDATE` y en la misma transacción, y solo al archivar:
+      // reactivar no tiene nada que comprobar. Una cita viva es una por delante que no está
+      // cancelada ni atendida; la política de `appointment` ya la acota a esta consulta.
+      if (archived) {
+        const { rows: live } = await c.query<{ id: string }>(
+          `select a.id from appointment a
+            where a.patient_id = $1
+              and a.status in ('pendiente_de_sena', 'confirmada')
+              and a.starts_at > now()
+            limit 1`,
+          [patientId],
+        );
+        if (live.length > 0) {
+          return { outcome: 'future_appointment', status: '', archivedAt: null };
+        }
+      }
+
       const { rows } = await c.query<{ status: string; archived_at: Date | null }>(
         `update patient
             set status = $2,

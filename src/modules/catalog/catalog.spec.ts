@@ -41,7 +41,13 @@ function doctor(practice: string, account: string): Caller {
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
-    permissions: ['pacientes:leer', 'catalogo:editar', 'precios:editar', 'promociones:editar'],
+    permissions: [
+      'pacientes:leer',
+      'catalogo:leer',
+      'catalogo:editar',
+      'precios:editar',
+      'promociones:editar',
+    ],
   };
 }
 
@@ -150,11 +156,14 @@ describe('el catálogo de la doctora', () => {
       catalog.create(TOXIN, doctor(MINE.practice, MINE.doctor), key('t2')),
     ).rejects.toMatchObject({ code: 'nombre_repetido' });
 
-    // El reintento con LA MISMA clave repite la respuesta y no crea un segundo tratamiento.
+    // El reintento con LA MISMA clave repite la respuesta y no crea un segundo tratamiento. Y
+    // repite LA MISMA RESPUESTA, no la fila interna: antes se guardaba la fila con sus nombres
+    // en inglés, así que el reintento devolvía otro cuerpo que el primero.
     const again = (await catalog.create(TOXIN, doctor(MINE.practice, MINE.doctor), key('t1'))) as {
       id: string;
     };
     expect(again.id).toBe(toxin);
+    expect(again).toEqual(created);
   });
 
   it('un tratamiento que se repite exige su intervalo mínimo, que es la regla clínica', async () => {
@@ -249,6 +258,45 @@ describe('el catálogo de la doctora', () => {
         { tratamiento_id: toxin, zona: 'entrecejo', centavos: 70000, moneda: 'BOB' },
       ]),
     );
+  });
+
+  it('reactivar un tratamiento cuyo nombre ya está en uso es 409, no 500', async () => {
+    const taken = (await catalog.create(
+      { ...TOXIN, nombre: 'Hilos tensores' },
+      doctor(MINE.practice, MINE.doctor),
+      key('h1'),
+    )) as { id: string };
+
+    await catalog.archive(taken.id, doctor(MINE.practice, MINE.doctor), true);
+    // Otro activo se queda con el nombre: el índice único es PARCIAL, solo entre los activos.
+    await catalog.create(
+      { ...TOXIN, nombre: 'Hilos tensores' },
+      doctor(MINE.practice, MINE.doctor),
+      key('h2'),
+    );
+
+    // Reactivar es la operación que viola ese índice, y el resto del módulo da `nombre_repetido`.
+    await expect(
+      catalog.archive(taken.id, doctor(MINE.practice, MINE.doctor), false),
+    ).rejects.toMatchObject({ code: 'nombre_repetido' });
+  });
+
+  it('el PATCH que deja un tratamiento repetido sin intervalo da su código, no un 500', async () => {
+    // `peeling` tiene cuatro sesiones previstas y 21 días de intervalo.
+    await expect(
+      catalog.edit(peeling, { intervalo_minimo_dias: null }, doctor(MINE.practice, MINE.doctor)),
+    ).rejects.toMatchObject({ code: 'intervalo_necesario' });
+
+    // Y al revés: subir las sesiones de uno que no tiene intervalo rompe la misma regla.
+    await expect(
+      catalog.edit(toxin, { sesiones_previstas: 3 }, doctor(MINE.practice, MINE.doctor)),
+    ).rejects.toMatchObject({ code: 'intervalo_necesario' });
+
+    // La fila no se movió: la regla la sostiene la base y el mensaje lo pone el contrato.
+    const after = (await catalog.list(doctor(MINE.practice, MINE.doctor), {})) as {
+      tratamientos: { id: string; sesiones_previstas: number }[];
+    };
+    expect(after.tratamientos.find((t) => t.id === toxin)?.sesiones_previstas).toBe(1);
   });
 });
 

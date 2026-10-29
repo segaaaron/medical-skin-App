@@ -9,8 +9,11 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Caller } from '../access/application/caller';
+import { FailureLog } from '../../shared/failures/service-failure';
+import { signUrl, type StorageConfig } from '../../shared/storage/signed-url';
 import { Business } from './application/business';
 import { BusinessRepository } from './infrastructure/business.repository';
+import { ExportWorker } from './infrastructure/export-worker';
 
 const ownerUrl =
   process.env.DATABASE_URL_OWNER ??
@@ -19,7 +22,10 @@ const appUrl = process.env.DATABASE_URL ?? 'postgresql://medskin:dev_local_only@
 
 const owner = new Pool({ connectionString: ownerUrl, max: 1 });
 const app = new Pool({ connectionString: appUrl, max: 2 });
-const business = new Business(new BusinessRepository(app));
+// 450 MB por ficha: el valor por omisión de `ALMACENAMIENTO_POR_FICHA_MB`, que es
+// configuración del despliegue y no una constante del código (hallazgo H-13).
+const BYTES_PER_PATIENT = 450 * 1_000_000;
+const business = new Business(new BusinessRepository(app), BYTES_PER_PATIENT);
 
 const B = {
   practice: '44444444-0000-4000-8000-000000000001',
@@ -44,7 +50,15 @@ function staff(account: string, role: 'doctora' | 'asistente_clinico'): Caller {
     practiceId: B.practice,
     permissions:
       role === 'doctora'
-        ? ['cobros:registrar', 'margenes:leer', 'informes:leer', 'inventario:editar', 'equipo:crear']
+        ? [
+            'cobros:registrar',
+            'margenes:leer',
+            'informes:leer',
+            'inventario:editar',
+            'plan:leer',
+            'plan:ampliar',
+            'equipo:crear',
+          ]
         : ['inventario:editar'],
   };
 }
@@ -61,6 +75,28 @@ const ana: Caller = {
 };
 
 const key = (k: string) => ({ key: k, bodyHash: `huella-${k}` });
+
+/** El almacenamiento de desarrollo —LocalStack— y un buzón de mentira que guarda lo que sale. */
+const storage: StorageConfig = {
+  endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:4566',
+  region: process.env.S3_REGION ?? 'us-east-1',
+  bucket: process.env.S3_BUCKET ?? 'medskin-dev',
+  accessKey: process.env.S3_ACCESS_KEY ?? 'test',
+  secretKey: process.env.S3_SECRET_KEY ?? 'test',
+  forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
+};
+const mailbox: { to: string; subject: string; text: string }[] = [];
+const exportWorker = new ExportWorker(
+  app,
+  storage,
+  {
+    send: (message) => {
+      mailbox.push(message);
+      return Promise.resolve();
+    },
+  },
+  new FailureLog(owner),
+);
 
 beforeAll(async () => {
   await owner.query(`delete from practice where id = $1`, [B.practice]);
@@ -447,7 +483,8 @@ describe('informes, plan y exportación', () => {
       almacenamiento_limite: number;
     };
     expect(plan.limite_pacientes).toBe(5);
-    expect(plan.almacenamiento_limite).toBeGreaterThan(0);
+    // El límite sale del PESO POR FICHA DE LA CONFIGURACIÓN, no de una constante del código.
+    expect(plan.almacenamiento_limite).toBe(5 * BYTES_PER_PATIENT);
     // Una paciente de un límite de 5 todavía no llega al 80 %.
     expect(plan.aviso).toBeNull();
 
@@ -471,5 +508,61 @@ describe('informes, plan y exportación', () => {
 
     const status = (await business.exportStatus(asked.id, ana)) as { estado: string };
     expect(status.estado).toBe('pedida');
+
+    // Y AHORA EL TRABAJO LA ARMA DE VERDAD. Hasta hoy la fila nacía `pedida` y nadie la
+    // miraba: la respuesta decía «te llega por correo» y no llegaba nunca.
+    const armadas = await exportWorker.run();
+    expect(armadas).toBeGreaterThanOrEqual(1);
+
+    const ready = (await business.exportStatus(asked.id, ana)) as {
+      estado: string;
+      caduca_en: string | null;
+    };
+    expect(ready.estado).toBe('lista');
+    expect(ready.caduca_en).not.toBeNull();
+
+    // El correo salió, con el enlace y con la frase que no esconde lo que no lleva.
+    expect(mailbox).toHaveLength(1);
+    expect(mailbox[0]?.to).toBe('ana@tramo8.local');
+    expect(mailbox[0]?.text).toContain('24 horas');
+    expect(mailbox[0]?.text).toContain('notas de tu doctora');
+
+    // Y el archivo está en el almacenamiento, armado CON SU PROPIO ROL: lleva su cuenta y sus
+    // cobros, y ninguna nota clínica.
+    const { rows } = await owner.query<{ object_key: string }>(
+      `select object_key from data_export where id = $1`,
+      [asked.id],
+    );
+    const link = signUrl(storage, {
+      method: 'GET',
+      key: rows[0]!.object_key,
+      expiresInSeconds: 120,
+      now: new Date(),
+    });
+    const stored = await fetch(link.url);
+    expect(stored.ok).toBe(true);
+    const content = (await stored.json()) as {
+      cuenta: { email: string } | null;
+      cobros: unknown[];
+      que_no_lleva: string;
+    };
+    expect(content.cuenta?.email).toBe('ana@tramo8.local');
+    expect(content.cobros.length).toBeGreaterThanOrEqual(1);
+    expect(content.que_no_lleva).toContain('notas clínicas de tu doctora');
+    expect(JSON.stringify(content)).not.toContain('session_note');
+  });
+});
+
+describe('un informe que el servidor no reconoce', () => {
+  it('es un 400 y no `ingresos` en silencio', async () => {
+    // Devolver ingresos ante `?informe=margen_por_hora` es contestar otra pregunta, y la
+    // pantalla dibuja la respuesta equivocada con el título que pidió.
+    await expect(
+      business.report({ informe: 'margen_por_hora' }, staff(B.doctor, 'doctora')),
+    ).rejects.toMatchObject({ code: 'informe_desconocido' });
+
+    // Sin `informe` sigue siendo `ingresos`: eso es un valor por omisión, no un valor adivinado.
+    const income = (await business.report({}, staff(B.doctor, 'doctora'))) as { informe: string };
+    expect(income.informe).toBe('ingresos');
   });
 });

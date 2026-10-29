@@ -31,6 +31,13 @@ export function resolveRole(
  * informes; y lo de la consulta como negocio —catálogo, márgenes, equipo, licencia— es de
  * la doctora.
  *
+ * Los cuatro de LECTURA —`catalogo:leer`, `horarios:leer`, `plan:leer`, `plan:ampliar`— se
+ * añadieron el 29 de octubre de 2026 y son el arreglo de un hallazgo, no una función nueva:
+ * leer el catálogo pedía `pacientes:leer`, leer el protocolo pedía `catalogo:editar`, LEER el
+ * horario pedía `horarios:definir` y ver el plan pedía `equipo:crear`. Una tabla de permisos
+ * cuyo nombre no corresponde con lo que acota deja de significar nada en cuanto la dueña la
+ * edite, que es la única razón por la que existe la columna `practitioner.permissions`.
+ *
  * `inquilino:licencia:enviar` es «solo la dueña» y por eso NO está aquí: la dueña es la
  * `doctora` cuya cuenta está en `practice.owner_account_id`, que es una fila y no una
  * cadena, así que ese permiso no sale de una tabla por rol. Lo resuelve quien conozca esa
@@ -46,14 +53,18 @@ export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly str
     'citas:cancelar',
     'sesiones:registrar',
     'historia:leer',
+    'catalogo:leer',
     'catalogo:editar',
     'precios:editar',
     'promociones:editar',
+    'horarios:leer',
     'horarios:definir',
     'cobros:registrar',
     'inventario:editar',
     'informes:leer',
     'margenes:leer',
+    'plan:leer',
+    'plan:ampliar',
     'equipo:crear',
     'equipo:permisos',
   ],
@@ -66,6 +77,8 @@ export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly str
     'citas:cancelar',
     'sesiones:registrar',
     'historia:leer',
+    'catalogo:leer',
+    'horarios:leer',
     'inventario:editar',
   ],
   recepcion: [
@@ -73,6 +86,8 @@ export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly str
     'agenda:leer',
     'citas:crear',
     'citas:cancelar',
+    'catalogo:leer',
+    'horarios:leer',
     'horarios:definir',
     'cobros:registrar',
   ],

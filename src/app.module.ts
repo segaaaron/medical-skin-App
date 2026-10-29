@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AccessModule } from './modules/access/access.module';
 import { BusinessModule } from './modules/business/business.module';
 import { AftercareModule } from './modules/aftercare/aftercare.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PhotosModule } from './modules/photos/photos.module';
 import { ClinicalModule } from './modules/clinical/clinical.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
@@ -31,6 +32,7 @@ import { CONFIG, SharedModule } from './shared/shared.module';
 // metadatos de los que depender y las dos rutas de ejecución se comportan igual.
 @Module({
   imports: [
+    NotificationsModule,
     BusinessModule,
     AftercareModule,
     PhotosModule,

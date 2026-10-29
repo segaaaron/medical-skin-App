@@ -637,7 +637,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
     const fallo = (rechazadas[0] as PromiseRejectedResult).reason as ContractError;
     expect(fallo.code).toBe('fallo_de_servicio');
     expect(fallo.userMessage).toBe(
-      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
     );
 
     // Y LO QUE IMPORTA: una ficha, un vínculo, una historia y una clave. No dos.
@@ -739,7 +739,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
       .catch((e: unknown) => e);
     expect((reintento as ContractError).code).toBe('fallo_de_servicio');
     expect((reintento as ContractError).userMessage).toBe(
-      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+      'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
     );
     // Y sigue habiendo UNA sola ficha.
     const { rows } = await owner.query<{ total: string }>(
@@ -838,5 +838,80 @@ describe('la cuenta que ya existe no se toca', () => {
     expect(cred[0]?.hash).toBe(HASH);
 
     await owner.query('delete from patient where practice_id = $1', [CONSULTA]);
+  });
+});
+
+describe('el «vuelve_si» del borrado de cuenta, que ahora tiene quien lo lea', () => {
+  it('darla de alta otra vez con ese correo REENGANCHA su ficha, no crea una segunda', async () => {
+    // Primer alta: ficha, vínculo y expediente.
+    const primera = await caso().run(CUERPO, DOCTORA, clave(CUERPO));
+    const ficha = primera.paciente_id;
+    const { rows: cuenta } = await owner.query<{ id: string }>(
+      'select id from account where email = $1::citext',
+      [CORREO_PACIENTE],
+    );
+
+    // Ella borra su cuenta. El borrado SUELTA el vínculo y conserva el correo: «es la llave
+    // del vuelve_si». Y su expediente se queda en la consulta.
+    await owner.query(
+      `update patient_link set account_id = null, status = 'invitada' where patient_id = $1`,
+      [ficha],
+    );
+    await owner.query(
+      `update account set email = ('borrada+' || id::text || '@medskin.invalid')::citext,
+                          status = 'borrada', deleted_at = now()
+        where id = $1`,
+      [cuenta[0]!.id],
+    );
+
+    // Meses después, la misma doctora la da de alta con el mismo correo y añade un dato.
+    const vuelta = {
+      ...CUERPO,
+      celular: '+59170000001',
+      confirmar_duplicado: true,
+      antes_de_atenderla: { medicacion: { toma: true, cuales: ['warfarina'] } },
+    };
+    const segunda = await caso().run(vuelta, DOCTORA, clave(vuelta));
+
+    // LA MISMA FICHA. Esto es lo que el 200 del borrado le prometió por escrito.
+    expect(segunda.paciente_id).toBe(ficha);
+    const { rows: fichas } = await owner.query<{ n: string }>(
+      'select count(*)::text as n from patient where practice_id = $1',
+      [CONSULTA],
+    );
+    expect(fichas[0]?.n).toBe('1');
+
+    // Un solo vínculo, y reenganchado a su cuenta nueva.
+    const { rows: vinculos } = await owner.query<{ n: string; account_id: string | null }>(
+      `select count(*)::text as n, min(account_id::text) as account_id
+         from patient_link where patient_id = $1`,
+      [ficha],
+    );
+    expect(vinculos[0]?.n).toBe('1');
+    expect(vinculos[0]?.account_id).not.toBeNull();
+
+    // SU EXPEDIENTE SIGUE AHÍ: la alergia del primer alta no se pisó, y la medicación nueva
+    // entró. Un alta que borrara lo de antes sería peor que no reengancharla.
+    const { rows: historia } = await owner.query<{
+      allergies: string[];
+      medication: string[];
+      takes_medication: boolean | null;
+    }>(
+      'select allergies, medication, takes_medication from medical_history where patient_id = $1',
+      [ficha],
+    );
+    expect(historia).toHaveLength(1);
+    expect(historia[0]?.allergies).toEqual(['lidocaína']);
+    expect(historia[0]?.takes_medication).toBe(true);
+    expect(historia[0]?.medication).toEqual(['warfarina']);
+
+    // Y su celular es el de hoy: los datos de contacto son los que la doctora acaba de escribir.
+    const { rows: contacto } = await owner.query<{ phone: string; status: string }>(
+      'select phone, status from patient where id = $1',
+      [ficha],
+    );
+    expect(contacto[0]).toMatchObject({ phone: '+59170000001', status: 'activa' });
+
+    await limpiarFichas();
   });
 });

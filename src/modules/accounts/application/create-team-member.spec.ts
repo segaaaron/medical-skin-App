@@ -263,7 +263,7 @@ describe('POST /v1/team', () => {
       // una salida dentro del producto, y la frase la nombra en vez de prometer un reintento
       // del alta que daría `409 correo_no_disponible`.
       mensaje:
-        'No pudimos mandarle el acceso. Su cuenta ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+        'No pudimos mandarle el acceso. Su cuenta ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde Equipo.',
     });
     expect(fallo.userMessage).not.toContain('hola@medskin.app');
     // Ni el correo ni la contraseña en la causa que acaba en `service_failure`: solo la

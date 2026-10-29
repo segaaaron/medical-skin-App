@@ -24,20 +24,45 @@ export const QUEUE_NAMES = {
    * qué borrar («lo caducado») y el trabajo solo decide cuándo y cuántas veces.
    */
   idempotencySweep: 'idempotencia-barrido',
+  /**
+   * LOS TRES DE LOS AVISOS (0045 · hallazgo H-01). Lo que va en el trabajo es «mira la bandeja»
+   * y nada más: ni a quién avisar, ni de qué. La carga de un aviso vive en
+   * `notification_outbox`, que es una tabla con RLS forzada, y no en Redis —que no tiene
+   * políticas, no tiene inquilinos y guarda sus claves en disco sin cifrar—. Es la misma razón
+   * por la que el código de recuperación no viaja en su trabajo.
+   */
+  notificationsSend: 'avisos-enviar',
+  notificationsSchedule: 'avisos-programar',
+  notificationsHygiene: 'avisos-higiene',
+  /** «Armar la exportación · al pedirla» (`negocio.md`). Lo que viaja es «mira la tabla». */
+  dataExport: 'exportacion-datos',
+  /** «Purga por retención legal · diario» (`negocio.md`). El plazo que el borrado prometió. */
+  retentionSweep: 'retencion-barrido',
 } as const;
 
 /**
- * Retroceso exponencial con tope y cola de fallidos que se puede mirar.
+ * Retroceso exponencial con tope, y las DOS colas acotadas.
  *
- * `removeOnComplete` deja los últimos cien y `removeOnFail` NO borra: un trabajo fallido es
- * justo el que alguien tiene que ver. Y `attempts: 3` con 2 s de base da ~2 s, 4 s y 8 s,
- * que es lo que tarda un relé de correo en volver sin que la paciente deje de esperar.
+ * `removeOnComplete: 100` deja los últimos cien. Y `removeOnFail: 2_000` —no `false`, que era
+ * «no borres nunca»— por una razón medida: Redis es de 100 MB en esta VPS (`servicios.md`
+ * §6.3: «una cola que nunca se limpia es una fuga de disco lenta»), el trabajador de fotos
+ * reintenta hasta su tope sobre el mismo Redis, y una cola de fallidos sin cota crece hasta
+ * que el `maxmemory` empieza a rechazar escrituras. Cuando eso pasa, lo que deja de funcionar
+ * son los CONTADORES —el límite de intentos de acceso—, que viven en el mismo Redis.
+ *
+ * Dos mil trabajos fallidos son muchísimos más de los que alguien va a mirar, y son los dos
+ * mil MÁS RECIENTES: lo que se pierde al rebasar es el fallo más viejo, que ya está en
+ * `service_failure` con su causa —esa tabla es la que de verdad guarda el diagnóstico, y tiene
+ * su propia retención—.
+ *
+ * Y `attempts: 3` con 2 s de base da ~2 s, 4 s y 8 s, que es lo que tarda un relé de correo en
+ * volver sin que la paciente deje de esperar.
  */
 export const JOB_OPTIONS: JobsOptions = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 2_000 },
   removeOnComplete: 100,
-  removeOnFail: false,
+  removeOnFail: 2_000,
 };
 
 /**

@@ -38,6 +38,39 @@ const esquema = z.object({
   // a quien ya se borró. El número por país sigue siendo decisión abierta (§16.7).
   CONSERVACION_ANOS: z.coerce.number().int().positive().max(50),
 
+  // EL PESO DE UNA FICHA EN DISCO, en MB, para el `almacenamiento_limite` de `GET /v1/plan`.
+  //
+  // Sale de la configuración y NO de una constante del código, porque el número depende del
+  // despliegue: de lo que la app reduzca antes de subir y de si la maestra se recomprime. La
+  // constante anterior —120 fotos × 1,6 MB— venía del plan de JPEG XL q95, y el 28 de octubre
+  // de 2026 se midió que esta compilación de `sharp` NO trae libjxl: la maestra se guarda tal
+  // cual. O sea que la pantalla del plan mostraba un número medido —`almacenamiento_usado`,
+  // que son bytes reales— al lado de uno inventado.
+  //
+  // El valor por omisión, con los números de `servicios.md` §6.1: 120 fotos por ficha, cada
+  // una con su maestra original de ~3 MB (la app no sube nada de más de 3000 px) y sus tres
+  // derivadas en AVIF (~0,64 MB) ≈ 437 MB, redondeado a 450.
+  ALMACENAMIENTO_POR_FICHA_MB: z.coerce.number().int().positive().max(100_000).default(450),
+
+  // LOS AVISOS · APNs para iOS y FCM para Android (`servicios.md` §2). Los cinco de Apple y el
+  // de Google son OPCIONALES a propósito: sin credencial no se construye el remitente, y la
+  // bandeja de salida acumula los avisos en vez de gastar sus tres intentos contra un canal
+  // que no existe. En desarrollo no hay ninguna —el certificado de Apple cuesta 99 USD al año
+  // y no hace falta para encolar—, así que el valor por omisión es «no hay push» y se ve.
+  //
+  // El `.p8` de Apple y el JSON de la cuenta de servicio de Google son SECRETOS: en producción
+  // los pone el servicio de llaves, nunca el repositorio, igual que las llaves del token.
+  APNS_KEY_PATH: z.string().optional(),
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  /** El identificador del paquete de la app, que es el `apns-topic`. */
+  APNS_TOPIC: z.string().optional(),
+  // `api.sandbox.push.apple.com` hasta que la app esté en la tienda: un token de desarrollo
+  // contra el servidor de producción es un `BadDeviceToken`, y es el error que más tiempo
+  // cuesta la primera vez.
+  APNS_HOST: z.string().default('api.sandbox.push.apple.com'),
+  FCM_CUENTA_SERVICIO_PATH: z.string().optional(),
+
   JWT_PRIVATE_KEY_PATH: z.string().min(1),
   JWT_PUBLIC_KEY_PATH: z.string().min(1),
 
@@ -50,6 +83,18 @@ const esquema = z.object({
   // corre en la máquina de nadie y hace falta poder acuñar un token a mano. En producción no
   // se pone, y nada la lee.
   PLATFORM_JWT_PUBLIC_KEY_PATH: z.string().min(1),
+
+  // LA VENTANA DE ROTACIÓN DE LA LLAVE DE LA CONSOLA. Una lista de rutas separadas por coma,
+  // y puede estar vacía: son las llaves públicas que TAMBIÉN se aceptan además de la de
+  // arriba. Sin esto, rotar la llave del servicio de plataforma apagaba la consola: el
+  // momento en que la nueva se publica aquí y el momento en que el servicio empieza a firmar
+  // con ella no pueden ser el mismo instante en dos procesos distintos, y los tokens de
+  // quince minutos ya emitidos con la vieja se rechazaban todos.
+  //
+  // Cómo se usa una rotación, en orden: se añade la NUEVA aquí, se despliega, el servicio de
+  // plataforma empieza a firmar con ella, se mueve a `PLATFORM_JWT_PUBLIC_KEY_PATH` y la
+  // vieja se quita de aquí. En ningún paso hay un hueco sin llave válida.
+  PLATFORM_JWT_PUBLIC_KEYS_EXTRA: z.string().optional(),
   PLATFORM_JWT_PRIVATE_KEY_PATH: z.string().min(1).optional(),
 
   // La llave del servicio con la que se calcula el HMAC de los correos de las claves de

@@ -287,9 +287,14 @@ export class RegisterPatient {
       //
       // Ni el correo de la paciente ni la contraseña entran en la causa: solo la ficha. La
       // causa real del relé viaja encadenada y acaba en `service_failure` (§10.3).
+      // CON LOS IDENTIFICADORES DE LO QUE YA ESTÁ CREADO. El reenvío
+      // —`POST /v1/accounts/{account_id}/access`— pedía un identificador que solo viajaba en
+      // el 201 que nunca llegó: la doctora leía «vuelve a mandárselo» y no tenía con qué.
+      // Ahora viaja en el 500, y `GET /v1/patients` (tramo 2) es la otra salida.
       throw new ServiceFailure(
         existing ? FAILURE_PHRASES.createPatientNotice : FAILURE_PHRASES.createPatientMail,
         new Error(`no se pudo mandar el acceso de la ficha ${patientId}`, { cause }),
+        { paciente_id: patientId, cuenta_id: created.accountId },
       );
     }
   }

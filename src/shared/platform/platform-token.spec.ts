@@ -11,7 +11,7 @@
 // con la que se acuñan estos tokens es este archivo: el servicio que firma de verdad vive
 // fuera de la región.
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,6 +19,7 @@ import {
   SignJWT,
   calculateJwkThumbprint,
   exportJWK,
+  exportSPKI,
   generateKeyPair,
   importPKCS8,
   importSPKI,
@@ -168,6 +169,43 @@ describe('PlatformTokens · la firma y el `kid`', () => {
       permisos: [],
     });
     expect((await rechazo(token)).code).toBe('token_de_plataforma_no_valido');
+  });
+
+  it('la rotación tiene ventana: las DOS llaves valen mientras dura', async () => {
+    // Con una sola llave, rotar APAGABA LA CONSOLA: la nueva no puede publicarse aquí y
+    // empezar a usarse allá en el mismo instante —son dos procesos—, y los tokens de quince
+    // minutos ya firmados con la vieja se rechazaban todos.
+    const nueva = await generateKeyPair('Ed25519', { extractable: true });
+    const rutaNueva = join(carpeta, 'plataforma-nueva.pub');
+    writeFileSync(rutaNueva, await exportSPKI(nueva.publicKey));
+
+    const conVentana = await PlatformTokens.fromFiles(
+      loadConfig({
+        ...process.env,
+        NODE_ENV: 'development',
+        REGION: 'latam',
+        JWT_PRIVATE_KEY_PATH: join(carpeta, 'jwt.key'),
+        JWT_PUBLIC_KEY_PATH: join(carpeta, 'jwt.pub'),
+        PLATFORM_JWT_PRIVATE_KEY_PATH: PRIVADA,
+        PLATFORM_JWT_PUBLIC_KEY_PATH: PUBLICA,
+        PLATFORM_JWT_PUBLIC_KEYS_EXTRA: rutaNueva,
+      }),
+    );
+
+    const kidNuevo = await calculateJwkThumbprint(await exportJWK(nueva.publicKey));
+    // El de la llave VIEJA sigue entrando: es el que ya está en los teléfonos de soporte.
+    await expect(conVentana.verify(await acunar())).resolves.toMatchObject({ subject: SUB });
+    // Y el de la NUEVA también: el servicio de plataforma ya puede empezar a firmar con ella.
+    await expect(
+      conVentana.verify(await acunar({ clave: nueva.privateKey, kid: kidNuevo })),
+    ).resolves.toMatchObject({ subject: SUB });
+
+    // Lo que no cambia: una llave que no está en la ventana no entra.
+    const ajena = await generateKeyPair('Ed25519', { extractable: true });
+    const kidAjeno = await calculateJwkThumbprint(await exportJWK(ajena.publicKey));
+    await expect(
+      conVentana.verify(await acunar({ clave: ajena.privateKey, kid: kidAjeno })),
+    ).rejects.toMatchObject({ code: 'token_de_plataforma_no_valido' });
   });
 
   it('una cadena que no es un JWT no pasa', async () => {

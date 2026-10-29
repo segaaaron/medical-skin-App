@@ -60,8 +60,8 @@ export class EditPatient {
     const result = await this.patients.archive(asking, patientId, archived);
     if (result.outcome === 'no_patient') throw new ContractError('paciente_no_existe');
     // «Una ficha archivada con una cita viva es una paciente que se presenta y no está en la
-    // agenda.» La agenda es del tramo 4: hoy esta rama no se alcanza, y está aquí porque el
-    // día que `appointment` exista el camino ya la espera.
+    // agenda.» El repositorio lo comprueba contra `appointment` desde el 29 de octubre de
+    // 2026: hasta entonces esta rama existía y nadie la alcanzaba.
     if (result.outcome === 'future_appointment') throw new ContractError('cita_futura');
 
     // Idempotente: archivar lo archivado devuelve el mismo 200 con la fecha del archivado de

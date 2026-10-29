@@ -33,6 +33,7 @@ export class BusinessRepository implements BusinessPort {
     caller: BusinessCaller,
     draft: PaymentDraft,
     idempotency: IdempotencyRecord,
+    render: (row: PaymentRow) => unknown,
   ): Promise<{
     outcome: 'charged' | 'no_session' | 'already' | 'no_credit';
     row: PaymentRow | null;
@@ -107,11 +108,13 @@ export class BusinessRepository implements BusinessPort {
 
       const row = await this.readPayment(c, id);
       if (row === null) throw new Error(`el cobro ${id} no se pudo releer tras crearlo`);
+      // Lo que se guarda es lo que el cliente recibio, no la fila interna: un reintento de un
+      // COBRO tiene que devolver el MISMO 201, y la fila lleva campos que la paciente no ve.
       await complete(c, {
         record: idempotency,
         accountId: caller.accountId,
         status: 201,
-        response: row,
+        response: render(row),
       });
       return { outcome: 'charged', row, credit: 0, replay: null };
     });

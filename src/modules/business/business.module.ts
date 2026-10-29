@@ -1,9 +1,17 @@
 // El cableado del negocio.
 
-import { Module } from '@nestjs/common';
+import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
+import type { Queue, Worker } from 'bullmq';
+import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 
-import { POOL } from '../../shared/shared.module';
+import type { Config } from '../../shared/config/config';
+import { FailureLog } from '../../shared/failures/service-failure';
+import { SmtpMail } from '../../shared/mail/mailer';
+import { QUEUE_NAMES, createQueue, createWorker } from '../../shared/queues/queues';
+import { CONFIG, POOL, REDIS } from '../../shared/shared.module';
+import type { StorageConfig } from '../../shared/storage/signed-url';
+import { ExportWorker } from './infrastructure/export-worker';
 import { Business } from './application/business';
 import {
   ExportsController,
@@ -14,6 +22,12 @@ import {
   ReportsController,
 } from './business.controller';
 import { BusinessRepository } from './infrastructure/business.repository';
+
+const EXPORT_WORKER = Symbol('EXPORT_WORKER');
+const EXPORT_STORAGE = Symbol('EXPORT_STORAGE');
+
+/** Cada minuto: una exportación pedida se arma en el minuto siguiente, no en la hora. */
+const EXPORT_EVERY_MS = 60 * 1000;
 
 @Module({
   controllers: [
@@ -31,10 +45,71 @@ import { BusinessRepository } from './infrastructure/business.repository';
       inject: [POOL],
     },
     {
+      provide: EXPORT_STORAGE,
+      useFactory: (cfg: Config): StorageConfig => ({
+        endpoint: cfg.S3_ENDPOINT,
+        region: cfg.S3_REGION,
+        bucket: cfg.S3_BUCKET,
+        accessKey: cfg.S3_ACCESS_KEY,
+        secretKey: cfg.S3_SECRET_KEY,
+        forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
+      }),
+      inject: [CONFIG],
+    },
+    {
+      provide: ExportWorker,
+      useFactory: (pool: Pool, storage: StorageConfig, mail: SmtpMail, failures: FailureLog) =>
+        new ExportWorker(pool, storage, mail, failures),
+      inject: [POOL, EXPORT_STORAGE, SmtpMail, FailureLog],
+    },
+    {
+      provide: EXPORT_WORKER,
+      useFactory: (redis: Redis, worker: ExportWorker, failures: FailureLog) => {
+        const queue = createQueue(QUEUE_NAMES.dataExport, redis);
+        queue
+          .upsertJobScheduler(
+            QUEUE_NAMES.dataExport,
+            { every: EXPORT_EVERY_MS },
+            { name: QUEUE_NAMES.dataExport, opts: { attempts: 1, removeOnFail: 1_000 } },
+          )
+          .catch(() => undefined);
+        const running = createWorker(QUEUE_NAMES.dataExport, redis, async () => ({
+          armadas: await worker.run(),
+          vencidas: await worker.expire(),
+        }));
+        running.on('failed', (job, cause) => {
+          void failures.record({
+            service: 'worker',
+            operation: QUEUE_NAMES.dataExport,
+            severity: 'error',
+            errorCode: 'fallo_de_servicio',
+            cause,
+            traceId: job?.id ?? 'sin-traza',
+            requestId: job?.id ?? 'sin-peticion',
+            appVersion: null,
+            platform: null,
+            region: null,
+            context: null,
+          });
+        });
+        return { queue, worker: running };
+      },
+      inject: [REDIS, ExportWorker, FailureLog],
+    },
+    {
       provide: Business,
-      useFactory: (repo: BusinessRepository) => new Business(repo),
-      inject: [BusinessRepository],
+      useFactory: (repo: BusinessRepository, cfg: Config) =>
+        new Business(repo, cfg.ALMACENAMIENTO_POR_FICHA_MB * 1_000_000),
+      inject: [BusinessRepository, CONFIG],
     },
   ],
 })
-export class BusinessModule {}
+export class BusinessModule implements OnApplicationShutdown {
+  constructor(
+    @Inject(EXPORT_WORKER) private readonly running: { queue: Queue; worker: Worker },
+  ) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await Promise.allSettled([this.running.worker.close(), this.running.queue.close()]);
+  }
+}

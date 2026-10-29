@@ -99,6 +99,8 @@ export type ErrorCode =
   | 'sesion_anulada'
   | 'nota_vacia'
   | 'consentimiento_pendiente'
+  | 'consentimiento_desactualizado'
+  | 'practicante_no_activo'
   | 'conflictos_sin_resolver'
   | 'solo_la_doctora_firma'
   | 'nota_sin_firmar'
@@ -220,6 +222,11 @@ export type ErrorCode =
   | 'cuerpo_no_valido'
   | 'cuerpo_demasiado_grande'
   | 'formato_no_admitido'
+  | 'lote_demasiado_grande'
+  | 'numero_fuera_de_rango'
+  | 'gravedad_desconocida'
+  | 'permiso_desconocido'
+  | 'informe_desconocido'
   | 'demasiadas_peticiones'
   // transversales
   | 'clave_idempotencia_faltante'
@@ -593,6 +600,22 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   consentimiento_pendiente: {
     status: 409,
     message: 'Falta su consentimiento. Fírmalo con ella antes de cerrar la sesión.',
+    field: null,
+  },
+  // «Un consentimiento que apunta a un texto que cambio despues no prueba nada»
+  // (`sesiones.md`): si la consulta publico una version nueva porque anadio un riesgo, la
+  // firma vieja no abre la nota de hoy.
+  consentimiento_desactualizado: {
+    status: 409,
+    message:
+      'Su consentimiento es de una versión anterior del texto. Fírmalo de nuevo con ella antes de cerrar la sesión.',
+    field: null,
+  },
+  // El `CHECK` de `session_note` exige la identidad de quien firma. Sin ficha activa de
+  // profesional no hay identidad que guardar, y eso es un 403 con salida, no un 500.
+  practicante_no_activo: {
+    status: 403,
+    message: 'Tu ficha de profesional no está activa en esta consulta. Pídele a la doctora que la reactive.',
     field: null,
   },
   conflictos_sin_resolver: {
@@ -1172,6 +1195,40 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: null,
   },
   formato_no_admitido: { status: 415, message: '', field: null },
+  // El tope del lote de `POST /v1/sync`. Lleva el maximo en `datos` para que la app parta su
+  // bandeja de salida en vez de adivinar por cuanto la parte.
+  // Un numero que el contrato acota y el cuerpo trae fuera de rango —o que no es un numero—.
+  // Existe porque la alternativa era que lo decidiera la base: `margen_entre_citas_minutos:
+  // "x"` mandaba `NaN` a una columna `integer` y el 500 lo escribia Postgres.
+  numero_fuera_de_rango: {
+    status: 400,
+    message: 'Ese número está fuera de lo que admite. Revisa el valor.',
+    field: null,
+  },
+  lote_demasiado_grande: {
+    status: 400,
+    message: 'Son demasiadas operaciones de una vez. La app las manda en tandas.',
+    field: 'operaciones',
+  },
+  // LOS TRES DEL VALOR QUE EL SERVIDOR NO RECONOCE. Antes caian a un valor por omision en
+  // silencio —`leve`, `concedido`, `ingresos`—, y el dato que ordena la pantalla de urgencias
+  // quedaba bajado un nivel sin rastro. Una version de la app que manda `grave` tiene que
+  // enterarse, no acertar por casualidad.
+  gravedad_desconocida: {
+    status: 400,
+    message: 'Esa gravedad no existe. Elige: leve, me preocupa o urgente.',
+    field: 'gravedad_percibida',
+  },
+  permiso_desconocido: {
+    status: 400,
+    message: 'Ese permiso de avisos no existe.',
+    field: 'permiso',
+  },
+  informe_desconocido: {
+    status: 400,
+    message: 'Ese informe no existe.',
+    field: 'informe',
+  },
   demasiadas_peticiones: {
     status: 429,
     message: 'Vas muy rápido. Espera unos segundos.',
@@ -1324,11 +1381,19 @@ export class ContractError extends Error {
  * (OWASP A05: ni un stack trace sale de aquí).
  */
 export class ServiceFailure extends ContractError {
+  /**
+   * `data` existe por un caso concreto y es el arreglo de un hallazgo (29 de octubre de 2026):
+   * los dos 500 del alta mandan «vuelve a mandárselo», y el identificador para reenviar
+   * viajaba solo en el 201 que nunca llegó. Lo que va aquí son los identificadores de lo que
+   * YA SE CREÓ —nunca una contraseña, nunca un correo—, para que la app pueda ofrecer el
+   * reenvío en la misma pantalla en vez de mandar a buscarlo.
+   */
   constructor(
     phrase: string,
     override readonly cause?: unknown,
+    data?: Record<string, unknown>,
   ) {
-    super('fallo_de_servicio', undefined, phrase);
+    super('fallo_de_servicio', data, phrase);
     this.name = 'ServiceFailure';
   }
 }
@@ -1391,7 +1456,7 @@ export const FAILURE_PHRASES = {
    * obliga a un endpoint más»).
    */
   createTeamMemberMail:
-    'No pudimos mandarle el acceso. Su cuenta ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+    'No pudimos mandarle el acceso. Su cuenta ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde Equipo.',
   /**
    * El 500 del reenvío del acceso del equipo. **No dice «su ficha está intacta»**, al
    * contrario que el de pacientes: una recepcionista no tiene ficha, y es el mismo motivo
@@ -1547,7 +1612,7 @@ export const FAILURE_PHRASES = {
    * equipo, y por el mismo motivo (28 de octubre de 2026; anotado para `producto`).
    */
   createPatientMail:
-    'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo.',
+    'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
   /**
    * Y la del aviso a quien YA TENÍA CUENTA, que es un tercer caso: no se acuñó ninguna
    * temporal, así que no hay contraseña perdida ni acceso que volver a mandar —el reenvío le

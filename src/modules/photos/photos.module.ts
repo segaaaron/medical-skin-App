@@ -22,8 +22,17 @@ class PhotoWorkerLoop implements OnApplicationShutdown {
   constructor(private readonly worker: PhotoWorker) {
     // Cada cinco segundos, y una pasada a la vez: si una tanda tarda, la siguiente espera.
     // `unref()` para que no sostenga el proceso al apagar.
+    //
+    // Las tres pasadas EN SERIE y en este orden: procesar lo nuevo es lo que una doctora está
+    // esperando delante de la pantalla; borrar las derivadas de una ficha archivada y
+    // regenerar las de una reactivada pueden esperar cinco segundos más.
     this.timer = setInterval(() => {
-      void this.worker.run().catch(() => undefined);
+      void (async () => {
+        await this.worker.run();
+        await this.worker.purgeDerivatives();
+        await this.worker.rebuildDerivatives();
+        await this.worker.eraseDeleted();
+      })().catch(() => undefined);
     }, 5_000);
     this.timer.unref();
   }

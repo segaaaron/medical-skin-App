@@ -289,6 +289,43 @@ describe('editar, archivar y reactivar', () => {
     const back = await edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), false);
     expect(back).toMatchObject({ estado: 'activa', archivada_en: null });
   });
+
+  it('una ficha con una cita por delante NO se archiva', async () => {
+    // La cita viva la pone la base: lo que se prueba es el muro del archivado, no la agenda.
+    const { rows } = await owner.query<{ id: string }>(
+      `insert into treatment (practice_id, name, category, duration_minutes, planned_sessions)
+       values ($1, 'Valoración', 'valoracion', 30, 1) returning id`,
+      [MINE.practice],
+    );
+    const treatment = rows[0]!.id;
+    const { rows: made } = await owner.query<{ id: string }>(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents)
+       values ($1, $2, $3, now() + interval '5 days', now() + interval '5 days 30 minutes',
+               'confirmada', 0)
+       returning id`,
+      [MINE.practice, ANA.patient, treatment],
+    );
+
+    // «Una ficha archivada con una cita viva es una paciente que se presenta y no está en la
+    // agenda»: es el 409 que el contrato describe para justificar su existencia.
+    await expect(
+      edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), true),
+    ).rejects.toMatchObject({ code: 'cita_futura' });
+
+    // Cancelada, la ficha se archiva: lo que bloquea es la cita VIVA, no cualquier fila.
+    await owner.query(
+      `update appointment set status = 'cancelada', cancelled_at = now(), cancelled_by = 'consulta'
+        where id = $1`,
+      [made[0]!.id],
+    );
+    const archived = await edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), true);
+    expect(archived).toMatchObject({ estado: 'archivada' });
+    await edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), false);
+
+    await owner.query(`delete from appointment where patient_id = $1`, [ANA.patient]);
+    await owner.query(`delete from treatment where id = $1`, [treatment]);
+  });
 });
 
 describe('los vínculos, que son de la paciente', () => {

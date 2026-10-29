@@ -5,6 +5,7 @@ import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 
 import { SystemClock } from '../../shared/clock';
+import { IdempotencyGuard } from '../../shared/idempotency/idempotency-guard';
 import { POOL } from '../../shared/shared.module';
 import { Appointments } from './application/appointments';
 import { Schedule } from './application/schedule';
@@ -44,9 +45,15 @@ import {
       inject: [ScheduleRepository, SystemClock],
     },
     {
+      provide: IdempotencyGuard,
+      useFactory: (pool: Pool) => new IdempotencyGuard(pool),
+      inject: [POOL],
+    },
+    {
       provide: SyncBatch,
-      useFactory: (appointments: Appointments) => new SyncBatch(appointments),
-      inject: [Appointments],
+      useFactory: (appointments: Appointments, guard: IdempotencyGuard) =>
+        new SyncBatch(appointments, guard),
+      inject: [Appointments, IdempotencyGuard],
     },
   ],
 })

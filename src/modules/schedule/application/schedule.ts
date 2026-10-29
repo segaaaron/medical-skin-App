@@ -1,5 +1,7 @@
 // Los horarios y la disponibilidad. Los dos leen lo mismo; lo que cambia es quién pregunta.
 
+import { z } from 'zod';
+
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Caller } from '../../access/application/caller';
 import type { ScheduleCaller, SchedulePort } from '../domain/ports';
@@ -22,7 +24,9 @@ export class Schedule {
   ) {}
 
   async read(caller: Caller): Promise<unknown> {
-    const asking = practiceOf(caller, 'horarios:definir');
+    // LEER el horario es `horarios:leer`: definirlo es otra cosa, y hasta hoy el asistente
+    // clínico no podía ver a qué hora abre la consulta en la que trabaja.
+    const asking = practiceOf(caller, 'horarios:leer');
     const config = await this.schedule.config(asking, asking.practiceId!);
     if (config === null) throw new ContractError('inquilino_no_existe');
 
@@ -71,7 +75,7 @@ export class Schedule {
       }
     }
 
-    const slotMinutes = Number(body.paso_de_agenda_minutos ?? 30);
+    const slotMinutes = integerIn(body.paso_de_agenda_minutos, 30, 'paso_de_agenda_minutos');
     if (!SLOTS.includes(slotMinutes)) throw new ContractError('paso_no_valido');
 
     const zone = asText(body.zona_horaria);
@@ -90,10 +94,15 @@ export class Schedule {
     const saved = await this.schedule.saveConfig(asking, {
       rules,
       holidays,
-      gapMinutes: Number(body.margen_entre_citas_minutos ?? 15),
+      // LOS TRES NÚMEROS, CON SU RANGO Y EN EL BORDE. `Number("x")` daba `NaN`, `NaN` iba a
+      // una columna `integer` y el 500 lo escribía Postgres: el error de forma de este
+      // endpoint lo decidía la base en vez del contrato. Los topes son los del propio
+      // dominio: un margen de más de dos horas no es un margen, y una reserva a dos años no
+      // es una agenda.
+      gapMinutes: integerIn(body.margen_entre_citas_minutos, 15, 'margen', 0, 120),
       slotMinutes,
-      minNoticeHours: Number(body.aviso_minimo_horas ?? 12),
-      maxBookingDays: Number(body.reserva_maxima_dias ?? 90),
+      minNoticeHours: integerIn(body.aviso_minimo_horas, 12, 'aviso', 0, 720),
+      maxBookingDays: integerIn(body.reserva_maxima_dias, 90, 'reserva', 1, 730),
     });
     if (saved.outcome === 'holiday_with_appointments') {
       throw new ContractError('feriado_con_citas', { citas: saved.conflicts });
@@ -177,6 +186,18 @@ export class Schedule {
     return { asking, practiceId: asking.practiceId!, patientId: null };
   }
 
+}
+
+/**
+ * UN ENTERO DE VERDAD Y DENTRO DE SU RANGO, con zod, que es la regla del proyecto para los
+ * bordes (`servicios.md` §5.1 · A03). Ausente devuelve el valor por omisión declarado; lo que
+ * no es un entero del rango es el `400` del contrato y no un `NaN` camino de la base.
+ */
+function integerIn(value: unknown, fallback: number, field: string, min = 0, max = 10_000): number {
+  if (value === undefined || value === null) return fallback;
+  const parsed = z.coerce.number().int().min(min).max(max).safeParse(value);
+  if (!parsed.success) throw new ContractError('numero_fuera_de_rango', { campo: field });
+  return parsed.data;
 }
 
 export function practiceOf(caller: Caller, permission: string): ScheduleCaller {

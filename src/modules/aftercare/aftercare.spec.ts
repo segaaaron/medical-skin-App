@@ -69,7 +69,11 @@ beforeAll(async () => {
   await owner.query(`delete from account where id = any($1::uuid[])`, [
     [A.doctor, A.otherDoctor, A.account],
   ]);
-  await owner.query(`delete from idempotency_key where account_id = any($1::uuid[])`, [[A.doctor]]);
+  // La cuenta de la PACIENTE también: desde el 29 de octubre de 2026 la incidencia y el
+  // mensaje llevan clave, y sin este borrado la segunda corrida replicaría la primera.
+  await owner.query(`delete from idempotency_key where account_id = any($1::uuid[])`, [
+    [A.doctor, A.otherDoctor, A.account],
+  ]);
 
   for (const [id, name, account] of [
     [A.practice, 'Clínica Paz', A.doctor],
@@ -297,6 +301,7 @@ describe('el semáforo y «algo no va bien»', () => {
         gravedad_percibida: 'leve',
       },
       ana,
+      key('incidencia-1'),
     )) as { estado: string; avisamos_a: string; si_es_urgente: string };
 
     expect(reported.estado).toBe('recibida');
@@ -317,8 +322,16 @@ describe('el semáforo y «algo no va bien»', () => {
 
 describe('el hilo, los dispositivos y los avisos', () => {
   it('dos doctoras, dos hilos que no se ven entre sí', async () => {
-    await aftercare.send({ practice_id: A.practice, texto: 'Hola doctora Paz.' }, ana);
-    await aftercare.send({ practice_id: A.other, texto: 'Hola doctora Sur.' }, ana);
+    await aftercare.send(
+      { practice_id: A.practice, texto: 'Hola doctora Paz.' },
+      ana,
+      key('msg-paz'),
+    );
+    await aftercare.send(
+      { practice_id: A.other, texto: 'Hola doctora Sur.' },
+      ana,
+      key('msg-sur'),
+    );
 
     const paz = (await aftercare.messages(
       { patient_id: A.patient },
@@ -335,10 +348,10 @@ describe('el hilo, los dispositivos y los avisos', () => {
 
   it('un mensaje vacío y uno de 2001 caracteres no entran', async () => {
     await expect(
-      aftercare.send({ practice_id: A.practice, texto: '   ' }, ana),
+      aftercare.send({ practice_id: A.practice, texto: '   ' }, ana, key('msg-vacio')),
     ).rejects.toMatchObject({ code: 'mensaje_vacio' });
     await expect(
-      aftercare.send({ practice_id: A.practice, texto: 'x'.repeat(2001) }, ana),
+      aftercare.send({ practice_id: A.practice, texto: 'x'.repeat(2001) }, ana, key('msg-largo')),
     ).rejects.toMatchObject({ code: 'mensaje_demasiado_largo' });
   });
 
@@ -349,7 +362,7 @@ describe('el hilo, los dispositivos y los avisos', () => {
     // «Ese chat está cerrado»: un vínculo revocado tiene su propio código, distinto de
     // «todavía no aceptaste», que manda a otra pantalla.
     await expect(
-      aftercare.send({ practice_id: A.other, texto: 'hola' }, ana),
+      aftercare.send({ practice_id: A.other, texto: 'hola' }, ana, key('msg-revocado')),
     ).rejects.toMatchObject({ code: 'vinculo_revocado' });
     await owner.query(`update patient_link set status = 'vinculada' where patient_id = $1`, [
       A.otherPatient,
@@ -404,5 +417,94 @@ describe('el hilo, los dispositivos y los avisos', () => {
       silencio_desde: '22:00',
       silencio_hasta: '07:00',
     });
+  });
+});
+
+describe('lo que el 29 de octubre de 2026 dejó de perderse', () => {
+  it('reintentar una incidencia con la misma clave no la duplica', async () => {
+    const body = {
+      session_id: session,
+      que_pasa: 'Me salió una roncha donde el pinchazo.',
+      gravedad_percibida: 'me_preocupa',
+    };
+    const first = (await aftercare.reportIncident(body, ana, key('inc-retry'))) as { id: string };
+    // La app reintenta porque la respuesta se perdió, que es lo que el diseño le pide hacer.
+    const again = (await aftercare.reportIncident(body, ana, key('inc-retry'))) as { id: string };
+
+    // El MISMO cuerpo, no un segundo reporte en la pantalla de la urgencia.
+    expect(again).toEqual(first);
+    const { rows } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from incident where what = $1`,
+      [body.que_pasa],
+    );
+    expect(rows[0]?.n).toBe('1');
+  });
+
+  it('reintentar un mensaje con la misma clave no lo duplica', async () => {
+    const body = { practice_id: A.practice, texto: '¿Puedo mojarme la cara hoy?' };
+    const first = (await aftercare.send(body, ana, key('msg-retry'))) as { id: string };
+    const again = (await aftercare.send(body, ana, key('msg-retry'))) as { id: string };
+    expect(again).toEqual(first);
+
+    const { rows } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from message where body = $1`,
+      [body.texto],
+    );
+    expect(rows[0]?.n).toBe('1');
+  });
+
+  it('una gravedad o un permiso que el servidor no reconoce es un 400, no un valor por omisión', async () => {
+    // Una versión de la app que manda `grave` —que no está en la lista— guardaba `leve` y no
+    // lo mencionaba. Es el dato que ordena la pantalla de urgencias.
+    await expect(
+      aftercare.reportIncident(
+        { session_id: session, que_pasa: 'Duele mucho.', gravedad_percibida: 'grave' },
+        ana,
+        key('inc-grave'),
+      ),
+    ).rejects.toMatchObject({ code: 'gravedad_desconocida' });
+
+    await expect(
+      aftercare.registerDevice(
+        { device_id: 'dev-x', token: 'tok-x', plataforma: 'ios', permiso: 'quizas' },
+        ana,
+      ),
+    ).rejects.toMatchObject({ code: 'permiso_desconocido' });
+  });
+
+  it('leer el hilo no lo crea: un GET no escribe', async () => {
+    // Una ficha sin hilo todavía: leerlo devuelve el hilo vacío y NO inserta la fila.
+    const { rows: made } = await owner.query<{ id: string }>(
+      `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived)
+       values ($1, 'Sin', 'Hilo', '1995-05-05', 'sinhilo@tramo7.local', 'instagram')
+       returning id`,
+      [A.practice],
+    );
+    const patient = made[0]!.id;
+
+    const empty = (await aftercare.messages(
+      { patient_id: patient },
+      doctor(A.practice, A.doctor),
+    )) as { hilo: { id: string | null }; mensajes: unknown[] };
+    expect(empty.hilo.id).toBeNull();
+    expect(empty.mensajes).toEqual([]);
+
+    const { rows } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from message_thread where patient_id = $1`,
+      [patient],
+    );
+    expect(rows[0]?.n).toBe('0');
+
+    // Y escribir sí lo crea: el hilo nace cuando alguna de las dos tiene algo que decir.
+    await aftercare.send(
+      { patient_id: patient, texto: 'Te escribo por tu control.' },
+      doctor(A.practice, A.doctor),
+      key('msg-nace'),
+    );
+    const { rows: after } = await owner.query<{ n: string }>(
+      `select count(*)::text as n from message_thread where patient_id = $1`,
+      [patient],
+    );
+    expect(after[0]?.n).toBe('1');
   });
 });
