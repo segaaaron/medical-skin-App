@@ -154,6 +154,41 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `sesiones.md` · el expediente. `POST /v1/consents` lo llaman las dos puertas —la paciente
+  // firma el suyo, o la consulta con ella presente— y el rol lo resuelve el caso de uso.
+  'POST /v1/clinical-sessions': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveSession,
+  },
+  'PUT /v1/clinical-sessions/:id/note-draft': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveNoteDraft,
+  },
+  'POST /v1/clinical-sessions/:id/note/sign': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.signNote,
+  },
+  'POST /v1/clinical-sessions/:id/correction': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveCorrection,
+  },
+  'POST /v1/clinical-sessions/:id/adverse-event': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveAdverseEvent,
+  },
+  'POST /v1/clinical-sessions/:id/void': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.voidSession,
+  },
+  'GET /v1/lots': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readLots },
+  'POST /v1/lots': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveLot },
+  'GET /v1/lots/:id/patients': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readLots },
+  'GET /v1/consents/:treatment_id/text': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readConsentText,
+  },
+  'POST /v1/consents': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveConsent },
+
   // `agenda.md` · la agenda. `GET /v1/availability`, `POST /v1/appointments` y los de la seña
   // los llaman LAS DOS puertas —la consulta y la paciente—, y quien decide cual es el caso de
   // uso: el rol sale del token, nunca del cuerpo.

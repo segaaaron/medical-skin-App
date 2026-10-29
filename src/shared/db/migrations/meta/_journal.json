@@ -246,6 +246,20 @@
       "when": 1793237537805,
       "tag": "0034_booking_reads",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793237880273,
+      "tag": "0035_tramo5_clinical_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793238184715,
+      "tag": "0036_consent_answer_check",
+      "breakpoints": true
     }
   ]
 }

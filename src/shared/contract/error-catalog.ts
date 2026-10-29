@@ -51,6 +51,33 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `sesiones.md` · sesiones clinicas, lotes y consentimientos
+  | 'unidades_no_cuadran'
+  | 'sin_aplicaciones'
+  | 'punto_fuera_de_rango'
+  | 'lote_no_existe'
+  | 'cita_sin_atender'
+  | 'cita_ya_tiene_sesion'
+  | 'lote_vencido'
+  | 'stock_insuficiente'
+  | 'sesion_clinica_no_existe'
+  | 'nota_ya_firmada'
+  | 'sesion_anulada'
+  | 'nota_vacia'
+  | 'consentimiento_pendiente'
+  | 'conflictos_sin_resolver'
+  | 'solo_la_doctora_firma'
+  | 'nota_sin_firmar'
+  | 'nota_firmada'
+  | 'texto_vacio'
+  | 'motivo_desconocido'
+  | 'motivo_muy_corto'
+  | 'respuestas_incorrectas'
+  | 'version_desactualizada'
+  | 'respuestas_incompletas'
+  | 'ya_firmado'
+  | 'codigo_de_lote_repetido'
+  | 'vencimiento_en_el_pasado'
   // `agenda.md` · la agenda
   | 'franja_al_reves'
   | 'franjas_que_se_cruzan'
@@ -355,6 +382,109 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `sesiones.md`. Lo que este bloque protege es un EXPEDIENTE: casi todos sus 409 bloquean en
+  // vez de avisar, y eso es deliberado.
+  // -------------------------------------------------------------------------------------
+  // La frase lleva los dos números dentro, así que la pone quien los tiene.
+  unidades_no_cuadran: {
+    status: 400,
+    message: 'Los puntos no suman lo que registraste. Revisa antes de guardar.',
+    field: 'aplicaciones',
+  },
+  sin_aplicaciones: {
+    status: 400,
+    message: 'Registra al menos qué se aplicó.',
+    field: 'aplicaciones',
+  },
+  punto_fuera_de_rango: {
+    status: 400,
+    message: 'Ese punto cae fuera de la imagen.',
+    field: 'puntos',
+  },
+  lote_no_existe: { status: 404, message: 'Ese lote no está en tu inventario.', field: null },
+  cita_sin_atender: { status: 409, message: 'Marca primero que llegó.', field: null },
+  cita_ya_tiene_sesion: {
+    status: 409,
+    message: 'Esa cita ya tiene su sesión registrada.',
+    field: null,
+  },
+  // BLOQUEA y no avisa, al contrario que casi todo lo demás: «registrar un producto vencido en
+  // un expediente es documentar una mala práctica».
+  lote_vencido: { status: 409, message: 'Ese lote está vencido. Elige otro.', field: null },
+  stock_insuficiente: {
+    status: 409,
+    message: 'Ese lote no tiene tantas unidades. Revisa el lote o el inventario.',
+    field: null,
+  },
+  // `sesion_no_existe` ya era la del DISPOSITIVO (tramo 1, «esa sesión ya no está abierta»).
+  // Son dos cosas distintas y el codigo es contrato: la clinica lleva el suyo.
+  sesion_clinica_no_existe: { status: 404, message: 'Esa sesión no está.', field: null },
+  nota_ya_firmada: {
+    status: 409,
+    message: 'Esa nota ya está firmada. Para corregirla, agrega una corrección.',
+    field: null,
+  },
+  sesion_anulada: { status: 409, message: 'Esa sesión está anulada.', field: null },
+  nota_vacia: { status: 409, message: 'Escribe la nota antes de firmarla.', field: null },
+  consentimiento_pendiente: {
+    status: 409,
+    message: 'Falta su consentimiento. Fírmalo con ella antes de cerrar la sesión.',
+    field: null,
+  },
+  conflictos_sin_resolver: {
+    status: 409,
+    message: 'Resuelve los dos textos antes de firmar.',
+    field: null,
+  },
+  solo_la_doctora_firma: {
+    status: 403,
+    message: 'La nota la firma la doctora.',
+    field: null,
+  },
+  nota_sin_firmar: {
+    status: 409,
+    message: 'Esa nota aún no está firmada: edítala.',
+    field: null,
+  },
+  nota_firmada: {
+    status: 409,
+    message: 'Esa sesión ya está firmada. Agrega una corrección en vez de anularla.',
+    field: null,
+  },
+  texto_vacio: { status: 400, message: 'Escribe la corrección.', field: 'texto' },
+  motivo_desconocido: { status: 400, message: 'Elige un motivo de la lista.', field: 'motivo' },
+  motivo_muy_corto: {
+    status: 400,
+    message: 'Explica por qué se anula: va al expediente.',
+    field: 'motivo',
+  },
+  // NO ES UN MURO: la app vuelve al párrafo de la pregunta fallada, no al principio. «El
+  // objetivo no es aprobar un examen: es que entienda.»
+  respuestas_incorrectas: {
+    status: 409,
+    message: 'Vamos a repasar esto juntas.',
+    field: null,
+  },
+  version_desactualizada: {
+    status: 409,
+    message: 'El texto cambió. Vuelve a leerlo antes de firmar.',
+    field: 'version',
+  },
+  respuestas_incompletas: { status: 400, message: 'Contesta las tres.', field: 'respuestas' },
+  // Mensaje vacio: «nada, la app sigue».
+  ya_firmado: { status: 409, message: '', field: null },
+  codigo_de_lote_repetido: {
+    status: 409,
+    message: 'Ya tienes un lote con ese código.',
+    field: 'codigo',
+  },
+  vencimiento_en_el_pasado: {
+    status: 400,
+    message: 'Ese lote ya está vencido. Si es correcto, no lo cargues.',
+    field: 'vence_en',
+  },
+
   // -------------------------------------------------------------------------------------
   // `agenda.md`. Las frases son las del contrato, literales.
   //
@@ -1119,6 +1249,27 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `sesiones.md` · lo que se registra en la sala. */
+  saveSession:
+    'No pudimos guardar la sesión. El servidor no respondió. Todo lo que registraste está guardado en este teléfono y se envía solo cuando vuelva la señal.',
+  saveNoteDraft:
+    'No pudimos guardar el borrador. El servidor no respondió. Lo que escribiste está guardado en este teléfono: se envía solo.',
+  signNote:
+    'No pudimos firmar la nota. El servidor no respondió. El borrador está a salvo: puedes volver a intentarlo.',
+  saveCorrection:
+    'No pudimos guardar la corrección. El servidor no respondió. La nota sigue como estaba: puedes volver a intentarlo.',
+  saveAdverseEvent:
+    'No pudimos registrar el evento. El servidor no respondió. Lo que escribiste está guardado en este teléfono: puedes volver a intentarlo.',
+  saveConsent:
+    'No pudimos guardar el consentimiento. El servidor no respondió. No se firmó nada: puedes volver a intentarlo.',
+  readConsentText:
+    'No pudimos cargar el consentimiento. El servidor no respondió: puedes volver a intentarlo.',
+  saveLot: 'No pudimos guardar el lote. El servidor no respondió: puedes volver a intentarlo.',
+  readLots:
+    'No pudimos cargar tus lotes. El servidor no respondió. Te mostramos los últimos guardados: puedes volver a intentarlo.',
+  voidSession:
+    'No pudimos anular la sesión. El servidor no respondió. Sigue como estaba: puedes volver a intentarlo.',
 
   /** `agenda.md` · los horarios y la agenda. */
   saveSchedule:
