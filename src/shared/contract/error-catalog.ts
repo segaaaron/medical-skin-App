@@ -51,6 +51,28 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `tratamientos.md` · el catalogo de la consulta
+  | 'categoria_desconocida'
+  | 'duracion_fuera_de_rango'
+  | 'precio_no_valido'
+  | 'intervalo_necesario'
+  | 'producto_no_existe'
+  | 'nombre_repetido'
+  | 'tratamiento_no_existe'
+  | 'desfase_sin_sentido'
+  | 'paso_sin_texto'
+  | 'demasiados_pasos'
+  | 'semaforo_dia_repetido'
+  | 'clave_desconocida'
+  | 'valor_necesario'
+  | 'falta_precio_base'
+  | 'zona_desconocida'
+  | 'vigencia_al_reves'
+  | 'vigencia_en_el_pasado'
+  | 'descuento_fuera_de_rango'
+  | 'segmento_desconocido'
+  | 'codigo_repetido'
+  | 'promocion_no_existe'
   // GET /v1/patients · `pacientes.md`
   | 'busqueda_muy_corta'
   | 'nada_que_cambiar'
@@ -310,6 +332,113 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `tratamientos.md`. Las frases son las del contrato, literales.
+  // -------------------------------------------------------------------------------------
+  categoria_desconocida: {
+    status: 400,
+    message: 'Elige una categoría de la lista.',
+    field: 'categoria',
+  },
+  duracion_fuera_de_rango: {
+    status: 400,
+    message: 'La duración va de 5 minutos a 8 horas.',
+    field: 'duracion_minutos',
+  },
+  precio_no_valido: {
+    status: 400,
+    message: 'El precio tiene que ser un número entero.',
+    field: 'precio',
+  },
+  // La frase dice POR QUE hace falta: es la regla clinica, no un campo mas del formulario.
+  intervalo_necesario: {
+    status: 400,
+    message:
+      'Dinos cada cuántos días se puede repetir: es lo que evita agendarlo antes de tiempo.',
+    field: 'intervalo_minimo_dias',
+  },
+  producto_no_existe: {
+    status: 404,
+    message: 'Ese producto no está en tu inventario.',
+    field: 'insumos',
+  },
+  nombre_repetido: {
+    status: 409,
+    message: 'Ya tienes un tratamiento con ese nombre.',
+    field: 'nombre',
+  },
+  tratamiento_no_existe: {
+    status: 404,
+    message: 'Ese tratamiento no está en tu catálogo.',
+    field: null,
+  },
+  desfase_sin_sentido: {
+    status: 400,
+    message: 'Un paso de antes va con horas negativas y uno de después con positivas.',
+    field: 'pasos',
+  },
+  paso_sin_texto: {
+    status: 400,
+    message: 'Escribe qué tiene que hacer, o quita el paso.',
+    field: 'pasos',
+  },
+  demasiados_pasos: {
+    status: 400,
+    message: 'Veinte pasos son muchos para recordar. Junta los que puedas.',
+    field: 'pasos',
+  },
+  semaforo_dia_repetido: {
+    status: 400,
+    message: 'Ya tienes una indicación para ese día.',
+    field: 'semaforo',
+  },
+  clave_desconocida: {
+    status: 400,
+    message: 'Esa contraindicación no está en la lista.',
+    field: 'contraindicaciones',
+  },
+  valor_necesario: {
+    status: 400,
+    message: 'Dinos a qué, exactamente.',
+    field: 'contraindicaciones',
+  },
+  falta_precio_base: {
+    status: 400,
+    message: 'Ponle primero un precio base al tratamiento.',
+    field: 'precios',
+  },
+  zona_desconocida: { status: 400, message: 'Esa zona no está en la lista.', field: 'precios' },
+  vigencia_al_reves: {
+    status: 400,
+    message: 'La fecha de fin va después de la de inicio.',
+    field: 'vigencia',
+  },
+  vigencia_en_el_pasado: {
+    status: 400,
+    message: 'Esa promoción ya habría terminado.',
+    field: 'vigencia',
+  },
+  descuento_fuera_de_rango: {
+    status: 400,
+    message: 'Un descuento va del 1 % al 90 %.',
+    field: 'descuento',
+  },
+  segmento_desconocido: {
+    status: 400,
+    message: 'Elige un segmento de la lista.',
+    field: 'segmento',
+  },
+  promocion_no_existe: {
+    status: 404,
+    message: 'Esa promoción ya no está en tu lista.',
+    field: null,
+  },
+  codigo_repetido: {
+    status: 409,
+    message: 'Ya tienes una promoción con ese código.',
+    field: 'codigo',
+  },
+
   busqueda_muy_corta: { status: 400, message: '', field: 'busca' },
   // Un `PATCH` sin un solo campo no es una edicion. Mensaje vacio: es un error DE LA APP,
   // igual que la clave de idempotencia que falta.
@@ -879,6 +1008,23 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `tratamientos.md` · el catalogo de la doctora. */
+  saveTreatment:
+    'No pudimos guardar el tratamiento. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+  readTreatments:
+    'No pudimos cargar tu catálogo. El servidor no respondió. Te mostramos el último guardado: puedes volver a intentarlo.',
+  saveProtocol:
+    'No pudimos guardar el protocolo. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+  saveContraindications:
+    'No pudimos guardar las contraindicaciones. El servidor no respondió: puedes volver a intentarlo.',
+  savePrices:
+    'No pudimos guardar los precios. El servidor no respondió. Siguen los de antes: puedes volver a intentarlo.',
+  savePromotion:
+    'No pudimos crear la promoción. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+  /** `tratamientos.md` · `GET /v1/catalog`, el de la paciente. */
+  readCatalog:
+    'No pudimos cargar el catálogo. El servidor no respondió. Te mostramos el último guardado: puedes volver a intentarlo.',
 
   /** `pacientes.md` · los vinculos de la paciente. */
   patientLinks:

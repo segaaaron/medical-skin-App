@@ -124,11 +124,12 @@ describe('GuardiaDeAlcance · la lista blanca', () => {
   });
 
   it('una ruta NO listada se deniega aunque el token sea perfecto', async () => {
-    // Una del tramo 3, que todavia no se sirve: el ejemplo tiene que ser una ruta que NO
-    // este en la lista, y `GET /v1/patients` dejo de serlo cuando entro el tramo 2.
+    // Una ruta que NINGUN contrato va a definir nunca: usar una del tramo siguiente obliga a
+    // cambiar esta prueba cada vez que se sirve ese tramo, y ya pasó dos veces —con
+    // `/v1/patients` y con `/v1/treatments`—.
     const error = await denegar(
       'GET',
-      '/v1/treatments',
+      '/v1/ninguna-ruta-de-ningun-contrato',
       await comoDoctora('completo'),
     );
     // Falla cerrada y con su causa registrable: la frase no está en ningún contrato y queda

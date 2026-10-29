@@ -1,0 +1,15 @@
+-- =======================================================================================
+-- EL PRIVILEGIO QUE LE FALTABA A `medskin_access` SOBRE `patient`
+--
+-- La política `patient_access` existe desde la 0006 y el PRIVILEGIO no: `medskin_access` no
+-- tenía ni un `GRANT` sobre esa tabla, y en Postgres **el privilegio se comprueba ANTES que la
+-- política**, así que la función de la 0028 moría con «permission denied for table patient»
+-- aunque su política la admitiera. Es la misma lección que §5.7 del napkin, al revés: allí
+-- faltaba el privilegio de columna y aquí faltaba el de tabla.
+--
+-- DOS COLUMNAS Y NINGUNA MÁS, y por eso es un `GRANT` por columna: la función solo necesita
+-- cruzar el vínculo con la ficha y leer la fecha de nacimiento. Con `SELECT` a secas,
+-- `medskin_access` podría leer el nombre, el correo y el celular de todas las pacientes de
+-- todas las consultas, que es exactamente el padrón que este proyecto no deja construir.
+-- =======================================================================================
+GRANT SELECT (id, birth_date) ON "patient" TO medskin_access;

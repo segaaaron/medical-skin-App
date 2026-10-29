@@ -183,6 +183,34 @@
       "when": 1793220194097,
       "tag": "0025_purge_without_for_update",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793235874748,
+      "tag": "0026_tramo3_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793236420074,
+      "tag": "0027_patient_reads_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793236463875,
+      "tag": "0028_patient_birth_date_for_age_rule",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793236500819,
+      "tag": "0029_access_reads_birth_date",
+      "breakpoints": true
     }
   ]
 }

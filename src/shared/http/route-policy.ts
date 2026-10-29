@@ -154,6 +154,46 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `tratamientos.md` · el catalogo de la doctora. El permiso lo comprueba el caso de uso:
+  // `catalogo:editar` para el catalogo, `precios:editar` para el dinero, `promociones:editar`
+  // para las promociones. Son tres porque una asistente ve el catalogo y no toca el dinero.
+  'GET /v1/treatments': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readTreatments },
+  'POST /v1/treatments': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveTreatment },
+  'PATCH /v1/treatments/:id': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveTreatment },
+  'POST /v1/treatments/:id/archive': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveTreatment,
+  },
+  'POST /v1/treatments/:id/reactivate': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveTreatment,
+  },
+  'GET /v1/treatments/:id/protocol': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveProtocol,
+  },
+  'PUT /v1/treatments/:id/protocol': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveProtocol,
+  },
+  'GET /v1/treatments/:id/contraindications': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveContraindications,
+  },
+  'PUT /v1/treatments/:id/contraindications': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveContraindications,
+  },
+  'GET /v1/prices': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.savePrices },
+  'PUT /v1/prices': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.savePrices },
+  'GET /v1/promotions': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.savePromotion },
+  'POST /v1/promotions': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.savePromotion },
+  'PATCH /v1/promotions/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.savePromotion,
+  },
+  // Y el de la PACIENTE, que es donde se cumple la regla clinica.
+  'GET /v1/catalog': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readCatalog },
   'GET /v1/tenants/mine': {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.readOwnPractice,
