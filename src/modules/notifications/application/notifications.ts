@@ -35,7 +35,36 @@ export const MAX_ATTEMPTS = 3;
 /** «Lotes de 500» (`cuidados.md`). Es el tope de una pasada, no de la cola. */
 export const BATCH = 500;
 
-export type SendResult = { sent: number; failed: number; dropped: number };
+/**
+ * Lo que se aplaza una fila que NO SE PUDO INTENTAR: su canal no tiene remitente configurado.
+ *
+ * No se marca fallida —eso la perdería, y lo que falta es una credencial, no el aviso— pero
+ * tampoco puede quedarse como estaba: `medskin_notifications_due` no toca `attempts`, solo
+ * arrienda cinco minutos, así que la fila volvía cada cinco minutos **para siempre** y la purga
+ * solo borra lo cerrado. Hoy, sin APNs ni FCM, eso serían TODOS los push.
+ *
+ * Una hora: el aviso sigue vivo y sale solo el día que la credencial exista, con un retraso que
+ * para un recordatorio o un cuidado no cambia nada.
+ */
+export const POSTPONE_MINUTES = 60;
+
+/**
+ * LA VENTANA DE CADA RECORDATORIO, que es la TOLERANCIA A ESTAR CAÍDO y no un detalle.
+ *
+ * La consulta trae las citas en `[ahora + h, ahora + h + ventana]`, así que una cita se pierde
+ * si el proceso no corre durante toda su ventana. Con los diez minutos de antes, veinte minutos
+ * sin trabajador —un despliegue, un reinicio de Redis— y ese recordatorio no salía nunca, en
+ * silencio: la pasada siguiente ya tiene la cita por debajo del rango.
+ *
+ * Lo que se paga por ensanchar es que el aviso sale ANTES de la hora nominal, hasta la ventana
+ * entera, y por eso cada uno lleva la suya en proporción a su aviso: dos horas de adelanto sobre
+ * un día no se notan; media hora sobre dos horas sigue siendo «esta tarde tienes cita». Repetir
+ * no es un riesgo: la clave de deduplicación lleva la cita y las horas, así que la segunda
+ * pasada no encola nada.
+ */
+export const REMIND_WINDOWS: Readonly<Record<24 | 2, number>> = { 24: 120, 2: 30 };
+
+export type SendResult = { sent: number; failed: number; dropped: number; postponed: number };
 
 export class Notifications {
   /** Los remitentes de push por plataforma. Vacío en desarrollo: no hay credenciales. */
@@ -61,15 +90,21 @@ export class Notifications {
    */
   async send(limit = BATCH): Promise<SendResult> {
     const due = await this.outbox.due(limit, MAX_ATTEMPTS);
-    const result: SendResult = { sent: 0, failed: 0, dropped: 0 };
+    const result: SendResult = { sent: 0, failed: 0, dropped: 0, postponed: 0 };
 
     for (const notification of due) {
       if (notification.channel === 'correo') {
-        if (this.mail === null) continue;
+        if (this.mail === null) {
+          await this.postpone(notification.id, result);
+          continue;
+        }
         await this.sendMail(notification, result);
         continue;
       }
-      if (this.push.size === 0) continue;
+      if (this.push.size === 0) {
+        await this.postpone(notification.id, result);
+        continue;
+      }
       await this.sendPush(notification, result);
     }
     return result;
@@ -83,10 +118,10 @@ export class Notifications {
    * quitar el WhatsApp de MedSkin: «es el que genera la re-reserva, y por eso se le da a la
    * doctora la vía que de verdad se lee».
    */
-  async remind(windowMinutes = 10): Promise<number> {
+  async remind(windows: Readonly<Record<24 | 2, number>> = REMIND_WINDOWS): Promise<number> {
     let queued = 0;
     for (const hours of [24, 2] as const) {
-      const pending = await this.outbox.appointmentsToRemind(hours, windowMinutes);
+      const pending = await this.outbox.appointmentsToRemind(hours, windows[hours]);
       for (const appointment of pending) {
         const data = { cita_id: appointment.appointmentId, empieza_en: appointment.startsAt.toISOString() };
         const subject = hours === 24 ? 'cita_24h' : 'cita_2h';
@@ -167,6 +202,38 @@ export class Notifications {
     return this.outbox.purgeSent(days, 5_000);
   }
 
+  /**
+   * LA HIGIENE DIARIA · las tres pasadas, INDEPENDIENTES.
+   *
+   * Estaban encadenadas con `await` detrás de `await` en el trabajo de la cola, y con
+   * `attempts: 1`: un fallo en «toca volver» —el que ya se cayó una vez por un privilegio que
+   * faltaba— dejaba sin ejecutar el barrido de tokens y la purga de la bandeja, **ese día
+   * entero**. Tres pasadas sin relación entre ellas no tienen por qué compartir la suerte de la
+   * primera.
+   *
+   * Y falla igual, pero DESPUÉS: lo que relanza al final es lo que pone la causa en
+   * `bull:avisos-higiene:failed`, que es la cola que alguien mira, y el mensaje nombra las que
+   * se cayeron. Lo que devuelve son las que sí corrieron.
+   */
+  async hygiene(): Promise<Record<string, number>> {
+    const passes = [
+      ['volver', () => this.callBack()],
+      ['tokens', () => this.sweepTokens()],
+      ['bandeja', () => this.purgeSent()],
+    ] as const;
+
+    const settled = await Promise.allSettled(passes.map(([, run]) => run()));
+    const done: Record<string, number> = {};
+    const broken: string[] = [];
+    settled.forEach((outcome, i) => {
+      const name = passes[i]![0];
+      if (outcome.status === 'fulfilled') done[name] = outcome.value;
+      else broken.push(`${name}: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`);
+    });
+    if (broken.length > 0) throw new Error(broken.join(' · '));
+    return done;
+  }
+
   // -----------------------------------------------------------------------------------
 
   private async enqueue(
@@ -180,6 +247,11 @@ export class Notifications {
       accountId,
       sendAfter: this.clock.now(),
     });
+  }
+
+  private async postpone(id: string, result: SendResult): Promise<void> {
+    await this.outbox.postpone(id, POSTPONE_MINUTES);
+    result.postponed += 1;
   }
 
   private async sendPush(notification: Notification, result: SendResult): Promise<void> {
@@ -221,10 +293,12 @@ export class Notifications {
       result.sent += 1;
       return;
     }
-    // Ni un intento: la fila se queda pendiente tal cual, sin gastar nada. El arrendamiento de
-    // `medskin_notifications_due` la devuelve en cinco minutos, y cuando la credencial exista
-    // saldrá sola.
-    if (tried === 0) return;
+    // Ni un intento —ningún dispositivo de una plataforma con credencial—: la fila sigue
+    // pendiente y sin gastar nada, pero APLAZADA, para que no vuelva cada cinco minutos.
+    if (tried === 0) {
+      await this.postpone(notification.id, result);
+      return;
+    }
 
     await this.outbox.failed(notification.id, lastReason, MAX_ATTEMPTS);
     result.failed += 1;

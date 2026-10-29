@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Caller } from '../access/application/caller';
 import { Appointments } from './application/appointments';
-import { Schedule } from './application/schedule';
+import { Schedule, asText } from './application/schedule';
 import { SyncBatch } from './application/sync';
 import { IdempotencyGuard } from '../../shared/idempotency/idempotency-guard';
 import { ScheduleRepository } from './infrastructure/schedule.repository';
@@ -221,6 +221,29 @@ describe('los horarios y los huecos', () => {
         [MINE.practice, ANA.patient, treatment, 'x'.repeat(2001)],
       ),
     ).rejects.toThrow(/appointment_note_len_ck/);
+  });
+
+  it('y por el BORDE da un 400 con su frase, no el 500 del CHECK', async () => {
+    // La prueba de arriba escribe con el dueño: comprueba el `CHECK` y no el camino de la app.
+    // Por el camino de la app, el `CHECK` que salta es una excepción de `pg` —un 500— y lo que
+    // la paciente tiene que leer es «es muy largo», que es lo que el contrato promete.
+    await expect(
+      appointments.book(
+        {
+          paciente_id: ANA.patient,
+          tratamiento_id: treatment,
+          empieza_en: '2026-11-05T13:00:00.000Z',
+          nota_de_la_paciente: 'x'.repeat(2001),
+        },
+        doctor(MINE.practice, MINE.doctor),
+        key('nota-larga'),
+      ),
+    ).rejects.toMatchObject({ code: 'texto_demasiado_largo' });
+
+    // Y el tope es EL DE LA BASE y no uno más estricto por si acaso: 2000 justos pasan, 2001 no.
+    // El límite se mide aquí y no con otra cita porque lo que se comprueba es el número.
+    expect(() => asText('x'.repeat(2000), 2000)).not.toThrow();
+    expect(() => asText('x'.repeat(2001), 2000)).toThrow();
   });
 
   it('un feriado sobre un día con citas NO se impone', async () => {
@@ -754,6 +777,49 @@ describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
 
     await owner.query(`delete from waitlist_entry where patient_id = $1`, [sola[0]!.id]);
     await owner.query(`delete from patient where id = $1`, [sola[0]!.id]);
+  });
+
+  it('el hueco se ofrece a quien esperaba ESE DÍA, no a quien esperaba HOY', async () => {
+    // Lo que se comparaba con `from_date`/`to_date` era HOY y no el día del hueco que se
+    // liberó. Y ese rango es «avísame si se libera algo esos días» (`agenda.md`), así que el
+    // aviso estrella del tramo 4 disparaba a la persona equivocada: quien esperaba el 15 no se
+    // enteraba del hueco del 15, y quien esperaba el 1 recibía uno del 20 que no le servía.
+    const hueco = '2026-11-03T13:00:00.000Z';
+
+    for (const [desde, hasta, avisados] of [
+      // Espera HOY (el reloj de esta prueba es el 2 de noviembre) y el hueco es del 3: nada.
+      ['2026-11-02', '2026-11-02', 0],
+      // Espera el día del hueco: ahí sí.
+      ['2026-11-03', '2026-11-03', 1],
+    ] as const) {
+      await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+      await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
+      await owner.query(`delete from notification_outbox where practice_id = $1`, [MINE.practice]);
+
+      const booked = (await appointments.book(
+        { paciente_id: BEA.patient, tratamiento_id: treatment, empieza_en: hueco },
+        doctor(MINE.practice, MINE.doctor),
+        key(`dia-${desde}`),
+      )) as { id: string };
+
+      await appointments.joinWaitlist(
+        { practice_id: MINE.practice, tratamiento_id: treatment, desde, hasta },
+        patient(ANA.account),
+      );
+
+      const cancelled = (await appointments.cancel(
+        booked.id,
+        doctor(MINE.practice, MINE.doctor),
+      )) as { lista_de_espera_avisada: number };
+      expect(cancelled.lista_de_espera_avisada).toBe(avisados);
+
+      const { rows } = await owner.query<{ n: string }>(
+        `select count(*)::text as n from notification_outbox
+          where practice_id = $1 and kind = 'hueco_libre'`,
+        [MINE.practice],
+      );
+      expect(rows[0]?.n).toBe(String(avisados));
+    }
   });
 
   it('CUANDO CANCELA LA PACIENTE y hay alguien esperando CON cuenta, la cita se cancela', async () => {

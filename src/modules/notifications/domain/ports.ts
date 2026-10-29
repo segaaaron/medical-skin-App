@@ -61,6 +61,8 @@ export interface OutboxPort {
   sent(id: string): Promise<void>;
   failed(id: string, reason: string, maxAttempts: number): Promise<number>;
   dropped(id: string, reason: string): Promise<void>;
+  /** APLAZA una fila que no se intentó: sigue pendiente, pero deja de dar vueltas. */
+  postpone(id: string, minutes: number): Promise<void>;
   deviceFailed(deviceId: string): Promise<void>;
   deviceGone(deviceId: string): Promise<void>;
   sweepStaleDevices(days: number, limit: number): Promise<number>;

@@ -32,7 +32,9 @@ export class Appointments {
     const { asking, practiceId, patientId } = await this.whoBooks(caller, body);
 
     const treatmentId = asText(body.tratamiento_id);
-    const zone = body.zona === undefined || body.zona === null ? null : asText(body.zona);
+    const zone = body.zona === undefined || body.zona === null ? null : asText(body.zona, 64);
+    const patientNote =
+      body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente, 2000);
     const startsAt = new Date(asText(body.empieza_en));
     if (Number.isNaN(startsAt.getTime())) throw new ContractError('fuera_de_horario');
 
@@ -94,8 +96,7 @@ export class Appointments {
         zone,
         priceCents: price.cents,
         promotionId: price.promotionId,
-        patientNote:
-          body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente),
+        patientNote,
         forced,
         depositCents,
         depositDueAt:
@@ -195,8 +196,8 @@ export class Appointments {
     const moved = await this.appointments.reschedule(asking, appointmentId, {
       startsAt,
       endsAt: new Date(startsAt.getTime() + duration * 60_000),
-      zone: body.zona === undefined ? null : asText(body.zona),
-      note: body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente),
+      zone: body.zona === undefined ? null : asText(body.zona, 64),
+      note: body.nota_de_la_paciente === undefined ? null : asText(body.nota_de_la_paciente, 2000),
       gapMinutes: config.gapMinutes,
     });
 
@@ -249,7 +250,7 @@ export class Appointments {
     const body = asRecord(input);
 
     const result = await this.appointments.deposit(asking, appointmentId, {
-      receiptKey: body.comprobante_clave === undefined ? null : asText(body.comprobante_clave),
+      receiptKey: body.comprobante_clave === undefined ? null : asText(body.comprobante_clave, 256),
       paidAt: body.pagado_en === undefined ? null : new Date(asText(body.pagado_en)),
       now: this.clock.now(),
     });

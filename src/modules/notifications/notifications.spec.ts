@@ -14,7 +14,7 @@ import type { Caller } from '../access/application/caller';
 import { Aftercare } from '../aftercare/application/aftercare';
 import { AftercareRepository } from '../aftercare/infrastructure/aftercare.repository';
 import { Notifications } from './application/notifications';
-import type { DeviceRow, PushPort, PushResult } from './domain/ports';
+import type { DeviceRow, OutboxPort, PushPort, PushResult } from './domain/ports';
 import { NotificationsRepository } from './infrastructure/notifications.repository';
 
 const ownerUrl =
@@ -436,12 +436,25 @@ describe('la bandeja con dos trabajadores, y su retención', () => {
 
     // Solo hay remitente de iOS y el token es de Android: el canal NO se intentó. Eso no es un
     // fallo, es que falta una credencial —y contarlo mataba el aviso en tres pasadas—.
-    await new Notifications(outbox, [new FakePush('ios')], null, clock).send();
+    const result = await new Notifications(outbox, [new FakePush('ios')], null, clock).send();
+    expect(result).toMatchObject({ sent: 0, failed: 0, postponed: 1 });
 
-    const { rows } = await owner.query<{ status: string; attempts: number }>(
-      `select status, attempts from notification_outbox where dedupe_key = 'sin-remitente'`,
+    // PERO SE APLAZA, y esta es la otra mitad: `medskin_notifications_due` no toca `attempts`,
+    // solo arrienda cinco minutos, así que sin esto la fila volvía cada cinco minutos para
+    // siempre —y hoy, sin credenciales, serían TODOS los push— mientras la purga solo borra lo
+    // cerrado. Aplazada sigue viva: sale sola el día que la credencial exista.
+    const { rows } = await owner.query<{ status: string; attempts: number; falta: number }>(
+      `select status, attempts,
+              round(extract(epoch from (send_after - now())) / 60) as falta
+         from notification_outbox where dedupe_key = 'sin-remitente'`,
     );
     expect(rows[0]).toMatchObject({ status: 'pendiente', attempts: 0 });
+    expect(Number(rows[0]!.falta)).toBeGreaterThan(50);
+
+    // Y la pasada siguiente NO la vuelve a ver, que es justo lo que se quería.
+    expect(await new Notifications(outbox, [new FakePush('ios')], null, clock).send()).toMatchObject(
+      { postponed: 0 },
+    );
   });
 
   it('una fila cerrada hace 100 días se va; una de ayer se queda', async () => {
@@ -464,6 +477,47 @@ describe('la bandeja con dos trabajadores, y su retención', () => {
     );
     // Noventa días es lo que hace falta para responder «esto se te mandó el día 3 a las 9:14».
     expect(rows.map((r) => r.dedupe_key)).toEqual(['retencion-nueva']);
+  });
+});
+
+describe('la higiene diaria no comparte la suerte de su primera pasada', () => {
+  // Las tres estaban encadenadas con `await` detrás de `await`, en un trabajo con `attempts: 1`:
+  // un fallo en «toca volver» —el que YA se cayó una vez, por el privilegio que la 0058 tuvo que
+  // dar— dejaba sin barrer los tokens y sin purgar la bandeja ese día entero. Y el síntoma es
+  // mudo: la cola solo dice que el trabajo falló, no que dos pasadas no llegaron a correr.
+  it('si «toca volver» revienta, las otras dos corren igual y el fallo sale con nombre', async () => {
+    const corridas: string[] = [];
+    const roto = {
+      patientsToReturn: () => Promise.reject(new Error('permission denied for table treatment')),
+      sweepStaleDevices: () => {
+        corridas.push('tokens');
+        return Promise.resolve(7);
+      },
+      purgeSent: () => {
+        corridas.push('bandeja');
+        return Promise.resolve(42);
+      },
+    } as unknown as OutboxPort;
+
+    await expect(new Notifications(roto, [], null, clock).hygiene()).rejects.toThrow(
+      /volver: permission denied/,
+    );
+    // Las dos que no tienen nada que ver con la que falló SÍ corrieron.
+    expect(corridas).toEqual(['tokens', 'bandeja']);
+  });
+
+  it('con las tres sanas devuelve lo que hizo cada una', async () => {
+    const sano = {
+      patientsToReturn: () => Promise.resolve([]),
+      sweepStaleDevices: () => Promise.resolve(3),
+      purgeSent: () => Promise.resolve(5),
+    } as unknown as OutboxPort;
+
+    expect(await new Notifications(sano, [], null, clock).hygiene()).toEqual({
+      volver: 0,
+      tokens: 3,
+      bandeja: 5,
+    });
   });
 });
 

@@ -106,6 +106,7 @@ export type ErrorCode =
   | 'nota_sin_firmar'
   | 'nota_firmada'
   | 'texto_vacio'
+  | 'texto_demasiado_largo'
   | 'motivo_desconocido'
   | 'motivo_muy_corto'
   | 'respuestas_incorrectas'
@@ -639,6 +640,9 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: null,
   },
   texto_vacio: { status: 400, message: 'Escribe la corrección.', field: 'texto' },
+  // EL TOPE QUE LA BASE YA EXIGE (0055), dicho en el borde. Sin esto, un texto de más de lo
+  // que cabe revienta el `CHECK` y la paciente ve un 500 en vez de «es muy largo».
+  texto_demasiado_largo: { status: 400, message: 'Es muy largo. Resúmelo un poco.', field: 'texto' },
   motivo_desconocido: { status: 400, message: 'Elige un motivo de la lista.', field: 'motivo' },
   motivo_muy_corto: {
     status: 400,

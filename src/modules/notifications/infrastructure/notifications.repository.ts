@@ -111,6 +111,12 @@ export class NotificationsRepository implements OutboxPort {
     });
   }
 
+  async postpone(id: string, minutes: number): Promise<void> {
+    await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      await c.query('select medskin_notification_postpone($1, $2)', [id, minutes]);
+    });
+  }
+
   async deviceFailed(deviceId: string): Promise<void> {
     await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
       await c.query('select medskin_device_failed($1)', [deviceId]);

@@ -221,10 +221,17 @@ export function practiceOf(caller: Caller, permission: string): ScheduleCaller {
  * da `[object Object]`, que después viaja a una consulta como si fuera una fecha o un
  * identificador: el mismo error que el catálogo ya pagó una vez.
  */
-export function asText(value: unknown): string {
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return '';
+export function asText(value: unknown, max?: number): string {
+  const text =
+    typeof value === 'string'
+      ? value.trim()
+      : typeof value === 'number' && Number.isFinite(value)
+        ? String(value)
+        : '';
+  // EL TOPE QUE LA BASE YA EXIGE (0055), dicho en el borde: un `CHECK` roto es un 500, y lo que
+  // la paciente tiene que leer es «es muy largo».
+  if (max !== undefined && text.length > max) throw new ContractError('texto_demasiado_largo');
+  return text;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

@@ -506,6 +506,36 @@ describe('lo que el 29 de octubre de 2026 dejó de perderse', () => {
     ).rejects.toMatchObject({ code: 'permiso_desconocido' });
   });
 
+  it('un texto más largo de lo que cabe es un 400 con su frase, no el 500 del CHECK', async () => {
+    // Los topes de la 0055 viven en la base, y un `CHECK` que salta por el camino de la app es
+    // una excepción de `pg`: un 500 y la frase «algo salió mal». Lo que la paciente tiene que
+    // leer es «es muy largo», y lo que el token de un dispositivo de un megabyte tiene que
+    // recibir es un 400, no una fila a medias.
+    await expect(
+      aftercare.reportIncident(
+        { session_id: session, que_pasa: 'x'.repeat(2001) },
+        ana,
+        key('inc-larga'),
+      ),
+    ).rejects.toMatchObject({ code: 'texto_demasiado_largo' });
+
+    for (const body of [
+      { device_id: 'dev-x', token: 'x'.repeat(513), plataforma: 'ios' },
+      { device_id: 'x'.repeat(129), token: 'tok-x', plataforma: 'ios' },
+      { device_id: 'dev-x', token: 'tok-x', plataforma: 'ios', version_app: 'x'.repeat(41) },
+    ]) {
+      await expect(aftercare.registerDevice(body, ana)).rejects.toMatchObject({
+        code: 'texto_demasiado_largo',
+      });
+    }
+
+    // Y el tope justo entra: es el de la base, no uno más estricto por si acaso.
+    await aftercare.registerDevice(
+      { device_id: 'dev-justo', token: 'x'.repeat(512), plataforma: 'ios' },
+      ana,
+    );
+  });
+
   it('leer el hilo no lo crea: un GET no escribe', async () => {
     // Una ficha sin hilo todavía: leerlo devuelve el hilo vacío y NO inserta la fila.
     const { rows: made } = await owner.query<{ id: string }>(

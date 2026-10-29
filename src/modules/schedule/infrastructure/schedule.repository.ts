@@ -21,7 +21,7 @@ import type {
   SchedulePort,
 } from '../domain/ports';
 import type { Window } from '../domain/slots';
-import { depositOnCancel } from '../domain/slots';
+import { dayOf, depositOnCancel } from '../domain/slots';
 
 function contextOf(caller: ScheduleCaller): TenantContext {
   // La paciente no fija inquilino: sus políticas son por `account_id` y por su vínculo.
@@ -572,7 +572,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       // «Cancelar libera el hueco y avisa a la lista de espera en el acto, en orden de
       // llegada.» Una a la vez, treinta minutos.
       //
-      // TODO EN UNA FUNCIÓN (0061), y no es comodidad: **quien cancela no puede ver la lista**.
+      // ENTERO EN UNA FUNCIÓN (0061), y no es comodidad: **quien cancela no puede ver la lista**.
       // La política de `app_patient` sobre `waitlist_entry` la acota a sus propios asientos, así
       // que el `select` que buscaba a quién avisar no veía a nadie cuando cancelaba una
       // paciente —que es quien más cancela—: con otra persona esperando, cero avisos y nadie se
@@ -583,6 +583,15 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       // —«function medskin_waitlist_offer(unknown, unknown, …) does not exist»— y el mismo
       // instante viaja dos veces, como texto para la carga del aviso y como `timestamptz` para
       // la reserva, así que son dos parámetros y no uno.
+      // EL DÍA QUE SE PREGUNTA ES EL DEL HUECO, no hoy. `desde`/`hasta` del asiento es el rango
+      // en el que ELLA quiere cita («avísame si se libera algo esa semana», `agenda.md`), así
+      // que comparar con hoy ofrecía el hueco del 20 a quien espera del 1 al 5 y lo escondía a
+      // quien espera del 15 al 25. Y el día se resuelve en la zona de la consulta: un hueco de
+      // las 21:00 en La Paz es del día siguiente en UTC, que es lo que un `::date` sobre el
+      // instante habría contestado.
+      const zone = await this.timeZone(c, caller, found.practice_id);
+      const gapDay = dayOf(found.starts_at, zone ?? 'UTC');
+
       const until = new Date(now.getTime() + 30 * 60_000);
       const { rows: offered } = await c.query<{ id: string | null }>(
         `select medskin_waitlist_offer($1::uuid, $2::uuid, $3::date,
@@ -593,7 +602,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         [
           found.practice_id,
           found.treatment_id,
-          now,
+          gapDay,
           found.starts_at.toISOString(),
           until.toISOString(),
           `hueco:${appointmentId}`,

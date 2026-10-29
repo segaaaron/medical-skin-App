@@ -442,6 +442,20 @@
       "when": 1793312412302,
       "tag": "0062_la_deuda_de_retencion_por_funcion",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1793315765565,
+      "tag": "0063_indices_medidos_y_dos_trabajos_que_se_apagaban",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1793315898582,
+      "tag": "0064_aplazar_un_aviso_sin_remitente",
+      "breakpoints": true
     }
   ]
 }

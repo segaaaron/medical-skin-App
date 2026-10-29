@@ -75,7 +75,7 @@ export class Aftercare {
     if (sessionId === null || !UUID.test(sessionId)) {
       throw new ContractError('sesion_clinica_no_existe');
     }
-    const what = text(body.que_pasa);
+    const what = text(body.que_pasa, 2000);
     if (what === null) throw new ContractError('texto_vacio');
     // SIN VALOR POR OMISION: una gravedad que el servidor no reconoce es un 400, no un `leve`
     // en silencio. Es el dato que ordena la pantalla de urgencias de la doctora.
@@ -156,8 +156,8 @@ export class Aftercare {
     const asking = this.who(caller, 'historia:leer');
     const body = asRecord(input);
 
-    const token = text(body.token);
-    const deviceId = text(body.device_id ?? body.dispositivo_id);
+    const token = text(body.token, 512);
+    const deviceId = text(body.device_id ?? body.dispositivo_id, 128);
     if (token === null || deviceId === null) throw new ContractError('formato_no_admitido');
     const platform = PLATFORMS.includes(String(body.plataforma))
       ? String(body.plataforma)
@@ -173,7 +173,7 @@ export class Aftercare {
       deviceId,
       token,
       platform,
-      appVersion: text(body.version_app),
+      appVersion: text(body.version_app, 40),
       permission,
     });
     return { registrado: true };
@@ -332,10 +332,17 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function text(value: unknown): string | null {
+/**
+ * Texto del cliente, y con `max` el TOPE QUE LA BASE YA EXIGE (0055). El tope se comprueba aquí
+ * y no solo allí porque un `CHECK` roto es un 500: la paciente tiene que leer «es muy largo»,
+ * no «algo salió mal». Y se compara después de recortar, que es lo que se guarda.
+ */
+function text(value: unknown, max?: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
+  if (trimmed === '') return null;
+  if (max !== undefined && trimmed.length > max) throw new ContractError('texto_demasiado_largo');
+  return trimmed;
 }
 
 /**

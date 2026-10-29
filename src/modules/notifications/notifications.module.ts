@@ -26,7 +26,23 @@ import { NotificationsRepository } from './infrastructure/notifications.reposito
 /** Cada minuto la bandeja, cada cinco los recordatorios, cada día la higiene. */
 const SEND_EVERY_MS = 60 * 1000;
 const SCHEDULE_EVERY_MS = 5 * 60 * 1000;
-const HYGIENE_EVERY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * LA DIARIA VA POR RELOJ, no por intervalo. Un `{ every: 24h }` cuenta desde que la
+ * programación se escribió, así que la hora a la que corre la higiene la decidía el último
+ * despliegue: si el proceso arrancaba a las siete de la tarde, el barrido de tokens y la purga
+ * de la bandeja —miles de filas— caían a las siete de la tarde todos los días, en medio de la
+ * consulta. Con un patrón corre siempre a la misma hora y reiniciar no la mueve.
+ *
+ * Y LA ZONA VA ESCRITA, medida y no supuesta: BullMQ resuelve el patrón con la zona DEL PROCESO
+ * cuando no se le dice ninguna. Comprobado arrancando la API: con `20 7 * * *` a secas, el
+ * próximo disparo quedó en `1793359200000` —las 07:20 de La Paz, 11:20 UTC—, o sea la hora del
+ * portátil. En el servidor, que va en UTC, la misma línea habría corrido a otra hora: la purga
+ * de la bandeja cambiando de hora según dónde esté desplegada es justo lo que un patrón venía a
+ * quitar. Con `tz` puesto son las 07:20 UTC en los dos sitios, que son las 03:20 en Bolivia
+ * (UTC−4 todo el año, no cambia la hora): la franja vacía.
+ */
+const HYGIENE_AT = { pattern: '20 7 * * *', tz: 'UTC' } as const;
 
 const NOTIFICATION_WORKERS = Symbol('NOTIFICATION_WORKERS');
 
@@ -74,12 +90,10 @@ export function startNotifications(
     },
     {
       name: QUEUE_NAMES.notificationsHygiene,
-      every: HYGIENE_EVERY_MS,
-      run: async () => ({
-        volver: await notifications.callBack(),
-        tokens: await notifications.sweepTokens(),
-        bandeja: await notifications.purgeSent(),
-      }),
+      // Las tres pasadas van INDEPENDIENTES, y eso se decide en `Notifications.hygiene()`:
+      // aquí solo vive el cableado.
+      at: HYGIENE_AT,
+      run: () => notifications.hygiene(),
     },
   ] as const;
 
@@ -91,7 +105,7 @@ export function startNotifications(
     queue
       .upsertJobScheduler(
         job.name,
-        { every: job.every },
+        'at' in job ? job.at : { every: job.every },
         { name: job.name, opts: { attempts: 1, removeOnFail: 1_000 } },
       )
       .catch((cause: unknown) => record(failures, job.name, cause, 'programacion'));
