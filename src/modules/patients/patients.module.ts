@@ -12,6 +12,7 @@ import { WritePatientHistory } from './application/write-patient-history';
 import { ListPatients } from './application/list-patients';
 import { ReadPatient } from './application/read-patient';
 import { PatientsReadRepository } from './infrastructure/patients-read.repository';
+import { HistoryWriteRepository } from './infrastructure/history-write.repository';
 import { PatientsWriteRepository } from './infrastructure/patients-write.repository';
 import { PatientHistoryRepository } from './infrastructure/patient-history.repository';
 import { PatientLinksRepository } from './infrastructure/patient-links.repository';
@@ -64,10 +65,15 @@ import { PatientsController } from './patients.controller';
       inject: [PatientHistoryRepository],
     },
     {
+      provide: HistoryWriteRepository,
+      useFactory: (pool: Pool) => new HistoryWriteRepository(pool),
+      inject: [POOL],
+    },
+    {
       provide: ReadPatient,
-      useFactory: (repo: PatientsReadRepository, clock: SystemClock) =>
-        new ReadPatient(repo, clock),
-      inject: [PatientsReadRepository, SystemClock],
+      useFactory: (repo: PatientsReadRepository, clock: SystemClock, history: HistoryWriteRepository) =>
+        new ReadPatient(repo, clock, history),
+      inject: [PatientsReadRepository, SystemClock, HistoryWriteRepository],
     },
   ],
 })

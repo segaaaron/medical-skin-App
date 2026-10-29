@@ -7,7 +7,9 @@
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Caller } from '../../access/application/caller';
 import { ageOn, calendarDay } from '../../accounts/domain/patient-registration';
+import { PATIENT_CREATE_PERMISSION, readHistory } from '../../accounts/domain/patient-registration';
 import { emptyHistoryView, historyView, type HistoryView } from '../domain/history-view';
+import type { HistoryWriteRepository } from '../infrastructure/history-write.repository';
 import type { PatientFileRow, PatientReadPort } from '../domain/ports';
 import { practiceCallerOf, type ClockPort } from './list-patients';
 
@@ -42,6 +44,7 @@ export class ReadPatient {
   constructor(
     private readonly patients: PatientReadPort,
     private readonly clock: ClockPort,
+    private readonly historyWriter: HistoryWriteRepository,
   ) {}
 
   /** La ficha entera. */
@@ -72,6 +75,29 @@ export class ReadPatient {
       // regla que la lista: la clave viaja para que la app no tenga que distinguir ausencias.
       resumen: { sesiones: 0, ultima_sesion_en: null, proxima_cita_en: null },
     };
+  }
+
+  /**
+   * LA DOCTORA ESCRIBE CUALQUIER CAMPO, SIEMPRE, y esa asimetría con la paciente es la regla
+   * del tramo: ella es la responsable del expediente. Pide `pacientes:crear` —el mismo permiso
+   * que el alta— y recepción no entra.
+   */
+  async writeHistory(patientId: string, input: unknown, caller: Caller): Promise<unknown> {
+    const asking = practiceCallerOf(caller, PATIENT_CREATE_PERMISSION);
+    if (!UUID.test(patientId)) throw new ContractError('paciente_no_existe');
+
+    const body = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+    const written = await this.historyWriter.write(
+      asking,
+      patientId,
+      readHistory(input),
+      new Set(Object.keys(body)),
+    );
+    if (written.outcome === 'no_patient') throw new ContractError('paciente_no_existe');
+    if (written.outcome === 'archived') throw new ContractError('paciente_archivada');
+
+    // Se devuelve la forma completa, la misma del `GET`: la app no tiene que recargar.
+    return { guardado: written.saved, antecedentes: await this.history(patientId, caller) };
   }
 
   /** Solo los antecedentes, la misma forma que lleva dentro la ficha. */

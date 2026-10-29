@@ -21,6 +21,7 @@ import { WritePatientHistory } from './application/write-patient-history';
 import { PatientHistoryRepository } from './infrastructure/patient-history.repository';
 import { PatientLinksRepository } from './infrastructure/patient-links.repository';
 import { PatientsReadRepository } from './infrastructure/patients-read.repository';
+import { HistoryWriteRepository } from './infrastructure/history-write.repository';
 import { PatientsWriteRepository } from './infrastructure/patients-write.repository';
 
 const ownerUrl =
@@ -35,7 +36,7 @@ const clock = { now: () => new Date('2026-10-28T12:00:00Z') };
 const read = new PatientsReadRepository(app);
 const write = new PatientsWriteRepository(app);
 const list = new ListPatients(read, clock);
-const file = new ReadPatient(read, clock);
+const file = new ReadPatient(read, clock, new HistoryWriteRepository(app));
 const edit = new EditPatient(write, clock);
 const links = new PatientLinks(new PatientLinksRepository(app));
 const history = new WritePatientHistory(new PatientHistoryRepository(app));
@@ -373,5 +374,43 @@ describe('la ficha médica que llena la paciente', () => {
     await expect(
       history.run(ANA.link, { medicacion: { toma: false, cuales: [] } }, ana),
     ).rejects.toMatchObject({ code: 'vinculo_sin_aceptar' });
+  });
+});
+
+describe('los antecedentes escritos por la doctora', () => {
+  it('ella escribe cualquier campo, incluso uno que ya había escrito, y queda el anterior', async () => {
+    const written = (await file.writeHistory(
+      ANA.patient,
+      {
+        // `alergias` ya era suya y lo reescribe: la doctora escribe cualquiera, SIEMPRE.
+        alergias: { tiene: true, cuales: ['lidocaína', 'articaína'] },
+        // Y dos que la paciente no puede tocar: el fototipo lo evalúa quien la ve.
+        fototipo: 3,
+        notas: 'Pide empezar por la zona periocular.',
+      },
+      doctor(MINE.practice, MINE.doctor),
+    )) as { guardado: string[]; antecedentes: { fototipo: number | null; notas: string | null } };
+
+    expect(written.guardado).toEqual(
+      expect.arrayContaining(['alergias', 'fototipo', 'notas']),
+    );
+    expect(written.antecedentes.fototipo).toBe(3);
+    expect(written.antecedentes.notas).toBe('Pide empezar por la zona periocular.');
+
+    // Nada se borra: el valor anterior de las alergias quedó en la auditoría.
+    const { rows } = await owner.query<{ field: string; previous_value: unknown }>(
+      `select field, previous_value from medical_history_audit
+        where patient_id = $1 and actor_source = 'doctora' and field = 'alergias'`,
+      [ANA.patient],
+    );
+    expect(rows[0]?.previous_value).toEqual(['lidocaína']);
+  });
+
+  it('una ficha archivada no se edita', async () => {
+    await edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), true);
+    await expect(
+      file.writeHistory(ANA.patient, { fototipo: 4 }, doctor(MINE.practice, MINE.doctor)),
+    ).rejects.toMatchObject({ code: 'paciente_archivada' });
+    await edit.archive(ANA.patient, doctor(MINE.practice, MINE.doctor), false);
   });
 });

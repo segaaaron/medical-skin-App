@@ -5,7 +5,7 @@
 // guardia por lista blanca y el permiso lo comprueba el caso de uso, que es quien sabe cuál
 // pide cada uno: `pacientes:leer` para la lista, `historia:leer` para la ficha.
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
@@ -57,6 +57,16 @@ export class PatientsController {
   @HttpCode(200)
   async reactivate(@Req() req: RequestWithContext, @Param('id') id: string): Promise<unknown> {
     return this.editPatient.archive(id, callerOf(req), false);
+  }
+
+  @Put(':id/medical-history')
+  @HttpCode(200)
+  async writeHistory(
+    @Req() req: RequestWithContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<unknown> {
+    return this.readPatient.writeHistory(id, body, callerOf(req));
   }
 
   @Get(':id/medical-history')

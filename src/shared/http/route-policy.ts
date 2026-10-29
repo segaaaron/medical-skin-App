@@ -122,6 +122,12 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.readPatient,
   },
+  // Los antecedentes escritos por LA DOCTORA: ella escribe cualquier campo, siempre, porque es
+  // la responsable del expediente. La paciente escribe los suyos por `/v1/links/{id}/medical-form`.
+  'PUT /v1/patients/:id/medical-history': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.editPatient,
+  },
   // Corregir la ficha, archivar y reactivar: `pacientes:crear`, y recepcion NO.
   'PATCH /v1/patients/:id': {
     scopes: ['completo'],
