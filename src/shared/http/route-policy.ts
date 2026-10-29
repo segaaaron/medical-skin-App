@@ -154,6 +154,33 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `negocio.md` · el dinero. Los margenes y los informes son SOLO de la duena, y el asistente
+  // clinico no registra cobros: lo comprueba el caso de uso con el permiso de cada uno.
+  'POST /v1/payments': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.savePayment },
+  'GET /v1/payments': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readPayments },
+  'POST /v1/payments/:id/void': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.savePayment,
+  },
+  'GET /v1/margins': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readMargins },
+  'GET /v1/inventory': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readInventory },
+  'POST /v1/inventory': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readInventory },
+  'POST /v1/inventory/movements': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveMovement,
+  },
+  'GET /v1/reports': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readReports },
+  'GET /v1/plan': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readPlan },
+  'POST /v1/plan/extend': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readPlan },
+  'POST /v1/my-data/exports': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.requestExport,
+  },
+  'GET /v1/my-data/exports/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.requestExport,
+  },
+
   // `cuidados.md` · los cuidados, el hilo y los avisos. Casi todos son de la PACIENTE; la
   // consulta entra en el plan —para ver la adherencia— y en el hilo.
   'GET /v1/aftercare': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readAftercare },

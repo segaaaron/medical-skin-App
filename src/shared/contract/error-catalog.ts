@@ -51,6 +51,17 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `negocio.md` · cobros, margenes, inventario e informes
+  | 'importe_no_valido'
+  | 'medio_desconocido'
+  | 'credito_insuficiente'
+  | 'ya_cobrado'
+  | 'stock_negativo'
+  | 'merma_sin_motivo'
+  | 'movimiento_de_sesion'
+  | 'cobro_no_existe'
+  | 'exportacion_reciente'
+  | 'exportacion_vencida'
   // `cuidados.md` · cuidados, mensajes y avisos
   | 'paso_futuro'
   | 'paso_no_existe'
@@ -405,6 +416,53 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `negocio.md`. MedSkin registra cobros; no cobra. Ningun codigo de aqui habla de pasarela.
+  // -------------------------------------------------------------------------------------
+  importe_no_valido: {
+    status: 400,
+    message: 'El importe tiene que ser un número entero mayor que cero.',
+    field: 'importe',
+  },
+  medio_desconocido: {
+    status: 400,
+    message: 'Elige un medio de pago de la lista.',
+    field: 'medio',
+  },
+  // La frase lleva el importe y la fecha dentro, asi que la pone quien los tiene.
+  credito_insuficiente: {
+    status: 409,
+    message: 'Su crédito no alcanza o ya venció.',
+    field: null,
+  },
+  ya_cobrado: { status: 409, message: 'Esa sesión ya está cobrada.', field: null },
+  stock_negativo: {
+    status: 409,
+    message: 'Ese lote no tiene tantas unidades. No puedes descontar más de lo que hay.',
+    field: 'unidades',
+  },
+  merma_sin_motivo: {
+    status: 400,
+    message: 'Dinos por qué se perdió: va al inventario.',
+    field: 'motivo',
+  },
+  movimiento_de_sesion: {
+    status: 409,
+    message: 'Esa salida la registra la sesión. Corrígela desde la sesión.',
+    field: 'tipo',
+  },
+  cobro_no_existe: { status: 404, message: 'Ese cobro ya no está.', field: null },
+  exportacion_reciente: {
+    status: 429,
+    message: 'Ya pediste una copia hoy. Te llega por correo.',
+    field: null,
+  },
+  exportacion_vencida: {
+    status: 410,
+    message: 'Ese enlace ya venció. Pide otra copia.',
+    field: null,
+  },
+
   // -------------------------------------------------------------------------------------
   // `cuidados.md`.
   // -------------------------------------------------------------------------------------
@@ -1354,6 +1412,23 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `negocio.md`. La segunda frase dice que NO se registro nada, que es lo que calma. */
+  savePayment:
+    'No pudimos registrar el cobro. El servidor no respondió. No se registró nada: puedes volver a intentarlo.',
+  readPayments:
+    'No pudimos cargar los cobros. El servidor no respondió: puedes volver a intentarlo.',
+  readMargins:
+    'No pudimos calcular tus márgenes. El servidor no respondió: puedes volver a intentarlo.',
+  readInventory:
+    'No pudimos cargar tu inventario. El servidor no respondió: puedes volver a intentarlo.',
+  saveMovement:
+    'No pudimos guardar el movimiento. El servidor no respondió: puedes volver a intentarlo.',
+  readReports:
+    'No pudimos calcular el informe. El servidor no respondió: puedes volver a intentarlo.',
+  readPlan: 'No pudimos cargar tu plan. El servidor no respondió: puedes volver a intentarlo.',
+  requestExport:
+    'No pudimos preparar tu copia. El servidor no respondió: puedes volver a intentarlo.',
 
   /** `cuidados.md`. Las frases dicen DÓNDE quedó lo que se escribió, que es lo que calma. */
   readAftercare:
