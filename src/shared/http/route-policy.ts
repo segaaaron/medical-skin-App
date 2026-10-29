@@ -154,6 +154,31 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `imagenes.md` · las fotos. Las dos puertas: la consulta y la paciente —ella sube las suyas
+  // y compara su progreso, que es lo que vuelve adictivo el avance—.
+  'POST /v1/photos/upload-url': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.signUpload },
+  'POST /v1/photos/:photo_id/confirm': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.confirmUpload,
+  },
+  'GET /v1/photos': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.readPhotos },
+  'GET /v1/photos/:photo_id/master': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readMaster,
+  },
+  'GET /v1/photos/:photo_id/compare': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.comparePhotos,
+  },
+  'POST /v1/photos/:photo_id/reprocess': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readPhotos,
+  },
+  'DELETE /v1/photos/:photo_id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.deletePhoto,
+  },
+
   // `sesiones.md` · el expediente. `POST /v1/consents` lo llaman las dos puertas —la paciente
   // firma el suyo, o la consulta con ella presente— y el rol lo resuelve el caso de uso.
   'POST /v1/clinical-sessions': {

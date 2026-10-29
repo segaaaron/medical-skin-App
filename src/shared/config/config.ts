@@ -57,6 +57,20 @@ const esquema = z.object({
   // 32 bytes mínimo: con menos, el espacio enumerable de los correos se puede atacar.
   SERVICE_HMAC_KEY: z.string().min(32),
 
+  // El almacenamiento de objetos. «S3» es el PROTOCOLO, no Amazon: en producción es Garage,
+  // autoalojado en la misma VPS, y en desarrollo LocalStack. Por eso el endpoint es una
+  // variable y no una región de AWS, y por eso `S3_FORCE_PATH_STYLE` existe: Garage y
+  // LocalStack sirven por ruta, S3 de verdad por subdominio.
+  S3_ENDPOINT: z.string().min(1),
+  S3_REGION: z.string().min(1).default('us-east-1'),
+  S3_BUCKET: z.string().min(1),
+  S3_ACCESS_KEY: z.string().min(1),
+  S3_SECRET_KEY: z.string().min(1),
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
   SMTP_SECURE: z

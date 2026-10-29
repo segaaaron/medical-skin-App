@@ -6,15 +6,19 @@
 #   argon2 y esbuild: binario nativo, su script de instalación es obligatorio.
 #   msgpackr-extract: acelerador nativo OPCIONAL de bullmq. Sin él funciona igual, así que
 #                     no se compila C en cada instalación para ganar unos microsegundos.
+#   sharp: binario nativo con libvips dentro. Su script de instalacion baja el binario de la
+#         plataforma; sin el, `require('sharp')` muere al arrancar el trabajador de imagenes.
 allowBuilds:
   argon2: true
   esbuild: true
+  sharp: true
   msgpackr-extract: false
 # argon2 y esbuild traen binario nativo: su script de instalación es obligatorio.
 # pnpm 11 lee esta lista desde aquí, no desde package.json.
 onlyBuiltDependencies:
   - argon2
   - esbuild
+  - sharp
 
 # @nestjs/platform-fastify 11.2.8 fija fastify en 5.11.3 EXACTO, así que la copia que sirve
 # las peticiones era la vulnerable aunque `fastify` estuviera pineado arriba. Ocho avisos de

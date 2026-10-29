@@ -260,6 +260,20 @@
       "when": 1793238184715,
       "tag": "0036_consent_answer_check",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793238621900,
+      "tag": "0037_tramo6_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793239165499,
+      "tag": "0038_photo_worker_functions",
+      "breakpoints": true
     }
   ]
 }

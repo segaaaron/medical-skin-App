@@ -51,6 +51,22 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `imagenes.md` · las fotos
+  | 'tipo_no_admitido'
+  | 'demasiado_grande'
+  | 'vista_desconocida'
+  | 'sin_consentimiento_de_imagenes'
+  | 'cuota_de_la_consulta'
+  | 'no_se_subio'
+  | 'no_es_una_imagen'
+  | 'dimensiones_fuera_de_rango'
+  | 'ya_confirmada'
+  | 'foto_no_existe'
+  | 'foto_no_lista'
+  | 'vistas_distintas'
+  | 'maestra_en_almacenamiento_frio'
+  | 'foto_de_la_doctora'
+  | 'en_una_sesion_firmada'
   // `sesiones.md` · sesiones clinicas, lotes y consentimientos
   | 'unidades_no_cuadran'
   | 'sin_aplicaciones'
@@ -382,6 +398,70 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `imagenes.md`. Lo que estos codigos protegen es la cara de una persona.
+  // -------------------------------------------------------------------------------------
+  tipo_no_admitido: {
+    status: 400,
+    message: 'Ese archivo no es una foto que podamos guardar.',
+    field: 'tipo_declarado',
+  },
+  demasiado_grande: {
+    status: 400,
+    message: 'Esa foto es muy grande. La app la reduce antes de subirla.',
+    field: 'bytes_declarados',
+  },
+  vista_desconocida: { status: 400, message: 'Elige una de las vistas.', field: 'vista' },
+  // BLOQUEA LA FIRMA, NO LA CAPTURA: la app ya tiene la foto cifrada en el telefono y lo que se
+  // frena es que salga de ahi. Es la unica forma de que el consentimiento signifique algo.
+  sin_consentimiento_de_imagenes: {
+    status: 409,
+    message: 'Falta su consentimiento para fotos. Fírmalo con ella antes de tomarlas.',
+    field: null,
+  },
+  cuota_de_la_consulta: {
+    status: 409,
+    message: 'Llegaste al límite de almacenamiento de tu plan. Amplíalo para seguir subiendo fotos.',
+    field: null,
+  },
+  no_se_subio: { status: 409, message: 'Esa foto no llegó. Vuelve a intentarlo.', field: null },
+  // Se decide por los BYTES MAGICOS, nunca por la extension ni por el `Content-Type`. Y el
+  // rechazo se registra como fallo: el objeto se borra y queda la fila del intento.
+  no_es_una_imagen: {
+    status: 422,
+    message: 'Ese archivo no es una foto. No lo guardamos.',
+    field: null,
+  },
+  dimensiones_fuera_de_rango: {
+    status: 422,
+    message: 'Esa foto no nos sirve: es demasiado pequeña o demasiado grande.',
+    field: null,
+  },
+  // Mensaje vacio: «nada, la app sigue».
+  ya_confirmada: { status: 409, message: '', field: null },
+  foto_no_existe: { status: 404, message: 'Esa foto ya no está.', field: null },
+  foto_no_lista: { status: 409, message: 'Esa foto todavía se está procesando.', field: null },
+  vistas_distintas: {
+    status: 409,
+    message: 'Solo se pueden comparar fotos de la misma vista.',
+    field: null,
+  },
+  maestra_en_almacenamiento_frio: {
+    status: 409,
+    message: 'Esa foto está en almacenamiento de largo plazo. Tardará unos segundos.',
+    field: null,
+  },
+  foto_de_la_doctora: {
+    status: 409,
+    message: 'Esa foto la tomó tu doctora en consulta: es parte de tu historia clínica.',
+    field: null,
+  },
+  en_una_sesion_firmada: {
+    status: 409,
+    message: 'Esa foto es parte de una sesión ya firmada. Para quitarla, agrega una corrección.',
+    field: null,
+  },
+
   // -------------------------------------------------------------------------------------
   // `sesiones.md`. Lo que este bloque protege es un EXPEDIENTE: casi todos sus 409 bloquean en
   // vez de avisar, y eso es deliberado.
@@ -1249,6 +1329,20 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `imagenes.md` · las fotos. La frase dice donde quedo la foto, que es lo que importa. */
+  signUpload:
+    'No pudimos preparar la subida. El servidor no respondió. Tu foto está guardada en el teléfono y se sube sola cuando vuelva la señal.',
+  confirmUpload:
+    'No pudimos confirmar la foto. El servidor no respondió. La foto ya está subida: puedes volver a intentarlo.',
+  readPhotos:
+    'No pudimos cargar sus fotos. El servidor no respondió. Te mostramos las que ya tienes guardadas: puedes volver a intentarlo.',
+  readMaster:
+    'No pudimos abrir la foto original. El servidor no respondió: puedes volver a intentarlo.',
+  comparePhotos:
+    'No pudimos armar la comparación. El servidor no respondió: puedes volver a intentarlo.',
+  deletePhoto:
+    'No pudimos borrar la foto. El servidor no respondió. Sigue ahí: puedes volver a intentarlo.',
 
   /** `sesiones.md` · lo que se registra en la sala. */
   saveSession:

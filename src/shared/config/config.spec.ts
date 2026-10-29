@@ -26,6 +26,12 @@ const COMPLETO = {
   // despliegue que arranca sin saberlo descubre el hueco con la primera petición.
   PLATFORM_JWT_PUBLIC_KEY_PATH: './.secrets/plataforma.pub',
   SERVICE_HMAC_KEY: 'x'.repeat(32),
+  // El almacenamiento de objetos entra con el tramo 6: sin estas cinco, la API no puede firmar
+  // un enlace de subida y arrancar sin ellas seria prometer fotos que no se pueden guardar.
+  S3_ENDPOINT: 'http://localhost:4566',
+  S3_BUCKET: 'medskin-dev',
+  S3_ACCESS_KEY: 'test',
+  S3_SECRET_KEY: 'test',
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
   CORREO_REMITENTE: 'no-responder@medskin.local',
