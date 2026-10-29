@@ -1,5 +1,5 @@
 // La forma de `antecedentes`, que es la misma en tres sitios: dentro de la ficha, en
-// `GET /v1/pacientes/{id}/antecedentes`, y en lo que devuelve el `PUT`. Una sola función, aquí,
+// `GET /v1/patients/{id}/medical-history`, y en lo que devuelve el `PUT`. Una sola función, aquí,
 // porque tres copias de la misma forma divergen el día que se añade un campo.
 //
 // `fuentes` ES LO QUE HACE ESTO UTILIZABLE EN CONSULTA: la doctora ve de un vistazo que las
@@ -73,7 +73,7 @@ export function historyView(row: HistoryRow): HistoryView {
 
 /**
  * Una ficha sin antecedentes **no existe**: el alta los crea siempre, aunque sea con los siete
- * campos vacíos (`POST /v1/pacientes`, paso 3). Pero si la fila falta —una ficha anterior a la
+ * campos vacíos (`POST /v1/patients`, paso 3). Pero si la fila falta —una ficha anterior a la
  * 0006, o un borrado manual— esto devuelve la forma completa en vacío en vez de un hueco: la
  * app ramifica por `fuentes`, no por la ausencia del objeto.
  */

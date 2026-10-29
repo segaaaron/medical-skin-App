@@ -1,4 +1,4 @@
-// `POST /v1/sesion/refresco`. Lo que se fija aquí es lo del BORDE, porque la rotación, el
+// `POST /v1/session/refresh`. Lo que se fija aquí es lo del BORDE, porque la rotación, el
 // reuso y la ventana de gracia son de la base y `refresh-and-first-use.spec.ts` ya las
 // prueba contra el motor:
 //
@@ -150,7 +150,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('se esperaba un ContractError y no se lanzó ninguno');
 }
 
-describe('POST /v1/sesion/refresco · el cuerpo', () => {
+describe('POST /v1/session/refresh · el cuerpo', () => {
   it('sin el campo es 400 `refresco_vacio` y no toca la base', async () => {
     const { caso, visto } = armar({});
 
@@ -172,7 +172,7 @@ describe('POST /v1/sesion/refresco · el cuerpo', () => {
   });
 });
 
-describe('POST /v1/sesion/refresco · el 200', () => {
+describe('POST /v1/session/refresh · el 200', () => {
   it('rota con el resumen del refresco que llegó y devuelve los cinco campos', async () => {
     const { caso, visto } = armar({});
 
@@ -269,7 +269,7 @@ describe('POST /v1/sesion/refresco · el 200', () => {
   });
 });
 
-describe('POST /v1/sesion/refresco · los errores', () => {
+describe('POST /v1/session/refresh · los errores', () => {
   it('los cuatro veredictos que no son rotación son sus cuatro 401, con cuatro frases', async () => {
     const esperado = {
       reused: { code: 'refresco_reutilizado', message: 'Cerramos tu sesión por seguridad. Entra otra vez.' },

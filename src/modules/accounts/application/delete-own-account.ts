@@ -1,4 +1,4 @@
-// DELETE /v1/cuentas/mia · borrar mi cuenta desde la pantalla, sin escribirle a soporte.
+// DELETE /v1/accounts/mine · borrar mi cuenta desde la pantalla, sin escribirle a soporte.
 // Apple lo exige desde 2022 en toda app con cuentas, las cree quien las cree.
 //
 // EL ORDEN: la contraseña primero, y el borrado después. Se comprueba contra

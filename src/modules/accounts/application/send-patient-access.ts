@@ -1,4 +1,4 @@
-// POST /v1/cuentas/{cuenta_id}/acceso · mandar —o volver a mandar— el acceso de una
+// POST /v1/accounts/{account_id}/access · mandar —o volver a mandar— el acceso de una
 // paciente, con contraseña temporal nueva.
 //
 // «Cada llamada acuña una contraseña nueva y mata la anterior», y por eso NO es idempotente

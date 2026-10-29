@@ -1,4 +1,4 @@
-// POST /v1/acceso/contrasena-nueva · las reglas y el 409 que prometen las dos frases.
+// POST /v1/access/new-password · las reglas y el 409 que prometen las dos frases.
 //
 // Lo que esta prueba fija y no se puede perder: el 500 y el 410 de este endpoint prometen
 // por escrito que «todavía puedes entrar con la temporal», y eso solo es verdad porque la
@@ -146,7 +146,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('se esperaba un ErrorDeContrato y no se lanzó ninguno');
 }
 
-describe('POST /v1/acceso/contrasena-nueva · las reglas de la contraseña', () => {
+describe('POST /v1/access/new-password · las reglas de la contraseña', () => {
   it('menos de 8 caracteres es contrasena_corta, y no se escribe nada', async () => {
     const { caso, pasos } = armar({});
     const error = await errorDe(() => caso.run({ nueva: 'siete12' }, PACIENTE));
@@ -186,7 +186,7 @@ describe('POST /v1/acceso/contrasena-nueva · las reglas de la contraseña', () 
   });
 });
 
-describe('POST /v1/acceso/contrasena-nueva · el guardado', () => {
+describe('POST /v1/access/new-password · el guardado', () => {
   it('devuelve token de alcance COMPLETO, refresco y el `siguiente_paso` real', async () => {
     const { caso, pasos } = armar({ actual: null });
     const respuesta = await caso.run({ nueva: 'tejado-nuevo-07' }, PACIENTE);
@@ -240,7 +240,7 @@ describe('POST /v1/acceso/contrasena-nueva · el guardado', () => {
     expect(pasos).toContain('guardar:recuperacion:null:null');
     // Y por aquí no hay temporal que comparar: no se pide la credencial actual.
     expect(pasos).not.toContain('credencial:mia');
-    // La sesión se ABRE, que es el mismo acto que una entrada por POST /v1/acceso.
+    // La sesión se ABRE, que es el mismo acto que una entrada por POST /v1/access.
     expect(pasos).toContain('sesion:abrir');
     expect(respuesta.sesion_id).toBe('x');
     expect(respuesta.refresco).toBe('rfr_nuevo');

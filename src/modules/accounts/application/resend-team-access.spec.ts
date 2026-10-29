@@ -1,4 +1,4 @@
-// `POST /v1/equipo/{miembro_id}/acceso` · el endpoint que cierra el hueco del alta.
+// `POST /v1/team/{member_id}/access` · el endpoint que cierra el hueco del alta.
 //
 // Lo que se fija aquí:
 //   · el ORDEN: el miembro se busca antes de acuñar y antes de gastar contador, porque un
@@ -149,7 +149,7 @@ function mensajesDeLaCausa(error: unknown): string[] {
   return mensajes;
 }
 
-describe('POST /v1/equipo/{miembro_id}/acceso', () => {
+describe('POST /v1/team/{member_id}/access', () => {
   it('acuña una temporal nueva, se la manda por correo y no la devuelve', async () => {
     const { caso, pasos, contados, mandados, recibido } = armar();
     const bloque = await caso.run(MIEMBRO, DUENA);

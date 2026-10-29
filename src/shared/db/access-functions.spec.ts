@@ -178,7 +178,7 @@ async function seed() {
   );
 
   // La paciente del reenvío: su cuenta, su temporal SIN consumir, su ficha en A y su
-  // vínculo. El vínculo es la autorización literal de `POST /v1/cuentas/{cuenta_id}/acceso`;
+  // vínculo. El vínculo es la autorización literal de `POST /v1/accounts/{account_id}/access`;
   // en B no hay ninguna ficha, y eso es la otra mitad de la prueba.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
@@ -430,7 +430,7 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       attempts: exists[0]?.attempts_left,
     }).toEqual({ account_id: PATIENT.account, role: 'paciente', practice_id: null, attempts: 5 });
 
-    // 4 · La doctora trae su consulta y su rol de equipo, que es lo que `POST /v1/acceso`
+    // 4 · La doctora trae su consulta y su rol de equipo, que es lo que `POST /v1/access`
     // no puede averiguar después: con `app_practitioner` ya haría falta el `practice_id`.
     expect({
       practice: practitioner[0]?.practice_id,
@@ -565,7 +565,7 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
   });
 
   it('cuenta las sesiones de la dueña llegando por practice.owner_account_id', async () => {
-    // Es la consulta de `GET /v1/plataforma/inquilinos/{id}`: de la consulta a su dueña, y
+    // Es la consulta de `GET /v1/platform/tenants/{id}`: de la consulta a su dueña, y
     // de su dueña al recuento. Sin tocar `practitioner`, que la consola no tiene.
     const [row] = await read<{ owner: string; sessions: string }>(
       app,
@@ -1308,7 +1308,7 @@ describe('los parámetros del señuelo del acceso (0007)', () => {
 
 // =========================================================================================
 // LAS DOS FUNCIONES QUE `patient_link` HACE POSIBLES (0006)
-// `POST /v1/cuentas/{cuenta_id}/acceso` y el `ya_eligio_contrasena` de la ficha.
+// `POST /v1/accounts/{account_id}/access` y el `ya_eligio_contrasena` de la ficha.
 // =========================================================================================
 describe('el reenvío del acceso de la doctora (0006)', () => {
   const NEW_TEMP = '$argon2id$v=19$m=19456,p=1,t=2$c2FsdGVhZG9kZXBydWViYQ$4+9Luamu4CrTRSqz7rWxCJY49vSQUkKTBlaiJPvmXcs';
@@ -1554,7 +1554,7 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
     // por probar: `practice_id` es el de la doctora —lo acaba de devolver la función— y
     // `medskin.practice_id` está VACÍO, porque este rol no fija inquilino. La política de
     // inserción de `access_audit` es `with check (true)` a propósito; si no lo fuera, o si
-    // faltara el `GRANT INSERT`, `POST /v1/acceso/contrasena-nueva` sería un 500 con la
+    // faltara el `GRANT INSERT`, `POST /v1/access/new-password` sería un 500 con la
     // contraseña ya guardada, que es justo lo que el contrato promete que no pasa.
     await withTenantContext(app, ctxAccountOwner, (c) =>
       c.query(

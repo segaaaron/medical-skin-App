@@ -268,7 +268,7 @@ afterAll(async () => {
 }, 60_000);
 
 // =========================================================================================
-// DELETE /v1/cuentas/mia · medskin_delete_own_account()
+// DELETE /v1/accounts/mine · medskin_delete_own_account()
 // =========================================================================================
 describe('el borrado de la propia cuenta', () => {
   it('a la paciente le quita el acceso, le suelta el correo y le deja el expediente', async () => {
@@ -455,7 +455,7 @@ describe('el borrado de la propia cuenta', () => {
 });
 
 // =========================================================================================
-// POST /v1/equipo · medskin_create_team_member()
+// POST /v1/team · medskin_create_team_member()
 // =========================================================================================
 describe('el alta del equipo', () => {
   it('la dueña crea recepción con una temporal, y sus permisos nacen nulos', async () => {
@@ -567,7 +567,7 @@ describe('el alta del equipo', () => {
 });
 
 // =========================================================================================
-// POST /v1/plataforma/cuentas/{cuenta_id}/acceso/reenviar · medskin_platform_resend_access()
+// POST /v1/platform/accounts/{account_id}/access/resend · medskin_platform_resend_access()
 // =========================================================================================
 describe('el reenvío de acceso de la consola', () => {
   const expires = () => new Date(Date.now() + 72 * 3600_000).toISOString();

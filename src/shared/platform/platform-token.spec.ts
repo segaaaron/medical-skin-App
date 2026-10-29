@@ -294,11 +294,11 @@ async function denegar(
 }
 
 const CONSOLA: Readonly<Record<string, PlatformPermission>> = {
-  'POST /v1/plataforma/inquilinos': 'plataforma:inquilinos:crear',
-  'GET /v1/plataforma/inquilinos/:id': 'plataforma:inquilinos:leer',
-  'POST /v1/plataforma/inquilinos/:id/licencia/decision': 'plataforma:licencias:decidir',
-  'POST /v1/plataforma/cuentas/:cuenta_id/acceso/reenviar': 'plataforma:acceso:reenviar',
-  'DELETE /v1/plataforma/cuentas/:cuenta_id/pausa': 'plataforma:pausa:levantar',
+  'POST /v1/platform/tenants': 'plataforma:inquilinos:crear',
+  'GET /v1/platform/tenants/:id': 'plataforma:inquilinos:leer',
+  'POST /v1/platform/tenants/:id/license/decision': 'plataforma:licencias:decidir',
+  'POST /v1/platform/accounts/:account_id/access/resend': 'plataforma:acceso:reenviar',
+  'DELETE /v1/platform/accounts/:account_id/lock': 'plataforma:pausa:levantar',
 };
 
 describe('ScopeGuard · las cinco rutas de la consola', () => {
@@ -331,34 +331,34 @@ describe('ScopeGuard · las cinco rutas de la consola', () => {
   });
 
   it('sin cabecera, con otro esquema o vacía: token_de_plataforma_no_valido', async () => {
-    expect((await denegar('POST', '/v1/plataforma/inquilinos')).code).toBe(
+    expect((await denegar('POST', '/v1/platform/tenants')).code).toBe(
       'token_de_plataforma_no_valido',
     );
-    expect((await denegar('POST', '/v1/plataforma/inquilinos', 'Basic abc')).code).toBe(
+    expect((await denegar('POST', '/v1/platform/tenants', 'Basic abc')).code).toBe(
       'token_de_plataforma_no_valido',
     );
-    expect((await denegar('POST', '/v1/plataforma/inquilinos', 'Bearer   ')).code).toBe(
+    expect((await denegar('POST', '/v1/platform/tenants', 'Bearer   ')).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
 
   it('un token de plataforma NO abre una ruta de la app: 401 token_no_valido', async () => {
     // La frontera en los dos sentidos. Aquí el código es el de la app porque quien lo lee es
-    // la app: un token de consola en `GET /v1/acceso/sesiones` es una sesión que no existe.
+    // la app: un token de consola en `GET /v1/access/sessions` es una sesión que no existe.
     const error = await denegar(
       'GET',
-      '/v1/acceso/sesiones',
+      '/v1/access/sessions',
       `Bearer ${await acunar()}`,
     );
     expect(error.code).toBe('token_no_valido');
   });
 
-  it('`POST /v1/sesion/suplantacion` no está en la tabla: no se sirve ni con el permiso', async () => {
+  it('`POST /v1/session/suplantacion` no está en la tabla: no se sirve ni con el permiso', async () => {
     // `plataforma:suplantar` es un permiso conocido —está en la tabla del contrato— y sigue
     // siendo `propuesto`: sin entrada en `route-policy.ts` la ruta falla cerrada.
     const error = await denegar(
       'POST',
-      '/v1/sesion/suplantacion',
+      '/v1/session/suplantacion',
       `Bearer ${await acunar({ permisos: ['plataforma:suplantar'] })}`,
     );
     expect(error.code).toBe('fallo_de_servicio');

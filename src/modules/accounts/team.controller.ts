@@ -1,4 +1,4 @@
-// POST /v1/equipo · solo HTTP. La autorización la hizo el guardia por lista blanca de rutas,
+// POST /v1/team · solo HTTP. La autorización la hizo el guardia por lista blanca de rutas,
 // el permiso lo mira el caso de uso y que quien llama sea LA DUEÑA lo comprueba la base.
 //
 // LA CLAVE SE LEE AQUÍ —es una cabecera: transporte, no negocio— y se comprueba y se reserva
@@ -18,7 +18,7 @@ import { UUID, callerOf } from './accounts.controller';
 import { CreateTeamMember } from './application/create-team-member';
 import { ResendTeamAccess } from './application/resend-team-access';
 
-@Controller('v1/equipo')
+@Controller('v1/team')
 export class TeamController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
@@ -43,11 +43,11 @@ export class TeamController {
    * inquilino del token, y si no hay fila en esta consulta el 404 es el mismo que el de un
    * identificador inventado.
    */
-  @Post(':miembro_id/acceso')
+  @Post(':member_id/access')
   @HttpCode(202)
   async resend(
     @Req() req: RequestWithContext,
-    @Param('miembro_id') memberId: string,
+    @Param('member_id') memberId: string,
   ): Promise<unknown> {
     if (!UUID.test(memberId)) throw new ContractError('miembro_no_existe');
     return this.resendAccess.run(memberId, callerOf(req));

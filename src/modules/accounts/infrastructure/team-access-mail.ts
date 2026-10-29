@@ -1,4 +1,4 @@
-// El correo del acceso del equipo · `POST /v1/equipo`. «El acceso del equipo sale solo por
+// El correo del acceso del equipo · `POST /v1/team`. «El acceso del equipo sale solo por
 // correo: no hay `wa.me` aquí.»
 //
 // MISMO MECANISMO Y MISMO ASUNTO que el de la paciente: el `MailPort` de siempre y «Tu

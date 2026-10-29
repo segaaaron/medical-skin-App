@@ -1,4 +1,4 @@
-// POST /v1/pacientes · la doctora da de alta a una paciente: su ficha y su cuenta, en un
+// POST /v1/patients · la doctora da de alta a una paciente: su ficha y su cuenta, en un
 // solo acto. ES LA ÚNICA PUERTA DE UNA PACIENTE AL SISTEMA («nadie se registra solo»).
 //
 // Lo contratan dos archivos a la vez y ninguno cambia la forma del otro: `cuentas.md` pone

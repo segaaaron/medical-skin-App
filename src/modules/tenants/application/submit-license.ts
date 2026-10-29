@@ -1,4 +1,4 @@
-// POST /v1/inquilinos/mio/licencia · «La doctora envía su matrícula a revisión manual».
+// POST /v1/tenants/mine/license · «La doctora envía su matrícula a revisión manual».
 //
 // La credencial NO viaja por aquí: se sube antes por URL firmada (§7.1) y aquí llega su
 // clave de objeto. 202 y no 201 porque «lo que se creó es un caso de revisión humana, no un
@@ -127,7 +127,7 @@ export class SubmitLicense {
       // transición solo sale de `sin_enviar` o `rechazada`—, así que `invitar_pacientes` ya es
       // `false` por la licencia y el cupo no cambiaría un solo valor de esta respuesta. Una
       // consulta más para un número que no se ve es una consulta que nadie puede justificar;
-      // el cupo se sirve donde se lee, que es `GET /v1/inquilinos/mio`.
+      // el cupo se sirve donde se lee, que es `GET /v1/tenants/mine`.
       puede: capabilities(submission.status ?? 'en_revision', false),
     };
   }

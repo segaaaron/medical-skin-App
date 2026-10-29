@@ -1,4 +1,4 @@
-// POST /v1/sesion/refresco · «Token nuevo sin volver a escribir la contraseña».
+// POST /v1/session/refresh · «Token nuevo sin volver a escribir la contraseña».
 //
 // No lleva `Authorization` y no es idempotente: cada llamada rota el refresco. CUATRO cosas
 // que NO se escriben aquí porque ya están escritas en la base (migraciones 0018 y 0020), y
@@ -17,7 +17,7 @@
 //
 // Lo que sí es de aquí: validar el cuerpo, traducir el veredicto al error del contrato,
 // acuñar el token con las reclamaciones que manda `sesion.md` y resolver `siguiente_paso`
-// con la MISMA función que `POST /v1/acceso`.
+// con la MISMA función que `POST /v1/access`.
 
 import { z } from 'zod';
 
@@ -122,7 +122,7 @@ export class RefreshSession {
       // La que calculó la función con el rol en la mano: aquí no se recalcula ninguna
       // caducidad, porque tenerla en dos sitios es tenerla mal en uno de los dos.
       refresco_caduca_en: session.refreshExpiresAt?.toISOString() ?? null,
-      // El mismo campo y la misma función que en el acceso y en `GET /v1/sesion`: los tres
+      // El mismo campo y la misma función que en el acceso y en `GET /v1/session`: los tres
       // hechos que decide vienen de la base ya resueltos (0018), y la regla sigue siendo
       // una sola. Si se escribiera otra vez aquí, se desincronizaría en la primera adición.
       siguiente_paso: resolveNextStep(role, {
@@ -171,7 +171,7 @@ export class RefreshSession {
     if (session.accountRole === 'paciente') return 'paciente';
     if (session.practitionerRole !== null) return session.practitionerRole;
     // Una cuenta de consulta sin fila activa no tiene rol que devolver, y no se inventa
-    // uno: es la misma inconsistencia que para en `POST /v1/acceso`.
+    // uno: es la misma inconsistencia que para en `POST /v1/access`.
     throw new ServiceFailure(
       FAILURE_PHRASES.refreshSession,
       new Error(`cuenta ${session.accountId} sin rol de consulta que devolver`),

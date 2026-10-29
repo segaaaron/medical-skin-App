@@ -1,4 +1,4 @@
-// GET /v1/inquilinos/mio · «La doctora lee su consulta y, sobre todo, el estado de su
+// GET /v1/tenants/mine · «La doctora lee su consulta y, sobre todo, el estado de su
 // licencia».
 //
 // Es la única lectura del tramo que la app pide ANTES de tener nada más: de ella sale si se

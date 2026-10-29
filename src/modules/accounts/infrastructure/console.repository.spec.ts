@@ -169,7 +169,7 @@ beforeEach(async () => {
   await owner.query('update credential set hash = $2 where account_id = $1', [PAUSADA, HASH]);
 });
 
-describe('POST /v1/plataforma/cuentas/{id}/acceso/reenviar', () => {
+describe('POST /v1/platform/accounts/{id}/access/resend', () => {
   it('la contraseña va a su correo y NO a la respuesta: soporte no la ve', async () => {
     const respuesta = await reenvio().run(PAUSADA, SOPORTE);
 
@@ -257,7 +257,7 @@ describe('POST /v1/plataforma/cuentas/{id}/acceso/reenviar', () => {
   });
 });
 
-describe('DELETE /v1/plataforma/cuentas/{id}/pausa', () => {
+describe('DELETE /v1/platform/accounts/{id}/lock', () => {
   it('levanta la pausa, deja los intentos en cero y NO toca la contraseña', async () => {
     const antes = await credencialDe(PAUSADA);
     const respuesta = await pausa().run(PAUSADA, SOPORTE);

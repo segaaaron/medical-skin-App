@@ -1,4 +1,4 @@
-// GET /v1/vinculos · POST /v1/vinculos/{id}/aceptar · POST /v1/vinculos/{id}/rechazar
+// GET /v1/links · POST /v1/links/{id}/accept · POST /v1/links/{id}/reject
 //
 // «¿Es esta tu doctora?». LA PACIENTE, Y NADIE MÁS: nunca la doctora. Es el
 // `siguiente_paso: "vincular"` de `acceso.md`.

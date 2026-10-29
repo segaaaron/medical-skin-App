@@ -10,14 +10,14 @@
 // Sin NestJS a propósito: el dominio lanza estos errores y el dominio compila solo.
 
 export type ErrorCode =
-  // POST /v1/acceso
+  // POST /v1/access
   | 'correo_vacio'
   | 'contrasena_vacia'
   | 'acceso_no_coincide'
   | 'contrasena_temporal_caducada'
   | 'acceso_en_pausa'
   | 'cuenta_suspendida'
-  // POST /v1/acceso/contrasena-nueva
+  // POST /v1/access/new-password
   | 'contrasena_corta'
   | 'contrasena_muy_usada'
   | 'contrasena_igual_a_la_temporal'
@@ -29,7 +29,7 @@ export type ErrorCode =
   | 'token_no_valido'
   | 'sesion_revocada'
   | 'contrasena_temporal_pendiente'
-  // POST /v1/sesion/refresco
+  // POST /v1/session/refresh
   | 'refresco_vacio'
   | 'refresco_no_valido'
   | 'refresco_caducado'
@@ -38,46 +38,46 @@ export type ErrorCode =
   // sesiones activas
   | 'sesion_no_existe'
   | 'es_esta_sesion'
-  // POST /v1/recuperacion
+  // POST /v1/recovery
   | 'correo_mal_escrito'
   | 'demasiados_codigos'
-  // POST /v1/recuperacion/codigo
+  // POST /v1/recovery/code
   | 'codigo_incompleto'
   | 'codigo_no_es_numero'
   | 'codigo_no_coincide'
   | 'codigo_caducado'
   | 'codigo_anulado'
   | 'demasiados_intentos'
-  // PATCH /v1/cuentas/mia/contrasena
+  // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
-  // GET /v1/pacientes · `pacientes.md`
+  // GET /v1/patients · `pacientes.md`
   | 'busqueda_muy_corta'
   | 'nada_que_cambiar'
   | 'paciente_archivada'
   | 'cita_futura'
-  // GET /v1/vinculos y sus dos POST
+  // GET /v1/links y sus dos POST
   | 'vinculo_no_existe'
   | 'vinculo_ya_resuelto'
   | 'vinculo_sin_aceptar'
   | 'estado_no_valido'
   | 'vinculo_no_valido'
-  // POST /v1/cuentas/{cuenta_id}/acceso
+  // POST /v1/accounts/{account_id}/access
   | 'paciente_no_existe'
   | 'celular_necesario_para_whatsapp'
   | 'ya_eligio_su_contrasena'
   | 'demasiados_reenvios'
   | 'via_no_valida'
   | 'sin_permiso'
-  // POST /v1/equipo
+  // POST /v1/team
   | 'nombre_vacio'
   | 'rol_no_asignable'
   | 'correo_no_disponible'
-  // POST /v1/equipo/{miembro_id}/acceso
+  // POST /v1/team/{member_id}/access
   | 'miembro_no_existe'
   // Las dos de consola de `cuentas.md`
   | 'cuenta_no_existe'
-  // POST /v1/pacientes · `cuentas.md` (cuenta y acceso) + `pacientes.md` (el paso 3)
+  // POST /v1/patients · `cuentas.md` (cuenta y acceso) + `pacientes.md` (el paso 3)
   | 'nacimiento_no_valido'
   | 'nacimiento_futuro'
   | 'menor_de_edad'
@@ -92,13 +92,13 @@ export type ErrorCode =
   | 'medicacion_sin_cuales'
   | 'fototipo_fuera_de_escala'
   | 'embarazo_valor_desconocido'
-  // DELETE /v1/cuentas/mia
+  // DELETE /v1/accounts/mine
   | 'consulta_con_equipo'
   | 'consulta_con_pacientes'
   | 'suscripcion_activa'
-  // GET /v1/inquilinos/mio · `inquilinos.md`
+  // GET /v1/tenants/mine · `inquilinos.md`
   | 'rol_no_corresponde'
-  // POST /v1/inquilinos/mio/licencia · `inquilinos.md`
+  // POST /v1/tenants/mine/license · `inquilinos.md`
   | 'matricula_vacia'
   | 'pais_sin_cobertura'
   | 'especialidad_desconocida'
@@ -207,7 +207,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // POST /v1/sesion/refresco · los cinco de `sesion.md`.
+  // POST /v1/session/refresh · los cinco de `sesion.md`.
   //
   // TRES VAN CON `mensaje` VACÍO Y ES CORRECTO (decisión del 28 de octubre): la app los
   // resuelve **sin texto** —va a «Entra a MedSkin», o espera y reintenta con retroceso—,
@@ -279,8 +279,8 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // PATCH /v1/cuentas/mia/contrasena · «Aquí sí se nombra el campo que falló, al
-  // contrario que en `POST /v1/acceso`: quien llama ya está dentro» (`cuentas.md`).
+  // PATCH /v1/accounts/mine/password · «Aquí sí se nombra el campo que falló, al
+  // contrario que en `POST /v1/access`: quien llama ya está dentro» (`cuentas.md`).
   // ---------------------------------------------------------------------------------
   contrasena_igual_a_la_actual: {
     status: 400,
@@ -295,11 +295,11 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
 
   // ---------------------------------------------------------------------------------
   // ---------------------------------------------------------------------------------
-  // POST /v1/cuentas/{cuenta_id}/acceso · `cuentas.md`.
+  // POST /v1/accounts/{account_id}/access · `cuentas.md`.
   // ---------------------------------------------------------------------------------
   // «Un `cuenta_id` de otra consulta no devuelve fila y el endpoint responde
   // -------------------------------------------------------------------------------------
-  // `GET /v1/pacientes` · la lista y la busqueda
+  // `GET /v1/patients` · la lista y la busqueda
   //
   // `busqueda_muy_corta` va con `mensaje` VACIO, como `clave_idempotencia_faltante`: «la app
   // no manda la peticion hasta el segundo caracter» (`pacientes.md`), asi que no hay nada que
@@ -370,14 +370,14 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Elige por dónde mandárselo: correo, WhatsApp, o dárselo en persona.',
     field: 'via',
   },
-  // Un `codigo`, dos frases: esta es la del reenvío. `POST /v1/pacientes` dice «Recepción
+  // Un `codigo`, dos frases: esta es la del reenvío. `POST /v1/patients` dice «Recepción
   // no puede dar de alta pacientes.» y la pasa cuando se implemente. Anotado para
   // `producto`.
   sin_permiso: { status: 403, message: 'Recepción no puede mandar accesos.', field: null },
 
   // ---------------------------------------------------------------------------------
-  // POST /v1/equipo · `cuentas.md`. «Errores de correo, duplicado, permiso,
-  // idempotencia y 500: los mismos de `POST /v1/pacientes`», así que `correo_vacio` y
+  // POST /v1/team · `cuentas.md`. «Errores de correo, duplicado, permiso,
+  // idempotencia y 500: los mismos de `POST /v1/patients`», así que `correo_vacio` y
   // `correo_mal_escrito` son los de arriba con la frase de ESE endpoint, que la pasa
   // quien lanza.
   // ---------------------------------------------------------------------------------
@@ -406,7 +406,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // POST /v1/equipo/{miembro_id}/acceso · el reenvío del acceso del equipo.
+  // POST /v1/team/{member_id}/access · el reenvío del acceso del equipo.
   //
   // UN SOLO `404` PARA CUATRO SITUACIONES —no es de esta consulta, está retirada, su
   // cuenta está borrada, o es la fila de quien llama— e indistinguible de un
@@ -417,7 +417,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   miembro_no_existe: { status: 404, message: 'Esa persona no está en tu equipo.', field: null },
 
   // ---------------------------------------------------------------------------------
-  // DELETE /v1/cuentas/mia · los tres `409` hermanos: «antes de borrar a la persona hay
+  // DELETE /v1/accounts/mine · los tres `409` hermanos: «antes de borrar a la persona hay
   // que desarmar lo que depende de ella». Dos llevan un número o una fecha dentro de la
   // frase, y los pone quien lanza con el dato que devuelve la función del borrado.
   // ---------------------------------------------------------------------------------
@@ -440,8 +440,8 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // LA CONSOLA INTERNA · `POST /v1/plataforma/cuentas/{id}/acceso/reenviar` y
-  // `DELETE /v1/plataforma/cuentas/{id}/pausa`.
+  // LA CONSOLA INTERNA · `POST /v1/platform/accounts/{id}/access/resend` y
+  // `DELETE /v1/platform/accounts/{id}/lock`.
   //
   // UN SOLO 404 PARA TRES SITUACIONES —no existe, está borrada, o es de otra región— e
   // indistinguible de un identificador inventado. Soporte no tiene por qué poder
@@ -453,7 +453,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   cuenta_no_existe: { status: 404, message: 'No encontramos esa cuenta.', field: null },
 
   // ---------------------------------------------------------------------------------
-  // POST /v1/pacientes · el alta. Lo contratan dos archivos: `cuentas.md` pone la cuenta
+  // POST /v1/patients · el alta. Lo contratan dos archivos: `cuentas.md` pone la cuenta
   // y el acceso, `pacientes.md` pone los cuatro últimos, que son del paso 3.
   //
   // `nombre_vacio`, `correo_vacio`, `correo_mal_escrito`, `celular_necesario_para_whatsapp`,
@@ -754,8 +754,8 @@ export class ContractError extends Error {
     message?: string,
     /**
      * Sustituye el `campo` del catálogo. Existe por un caso concreto:
-     * `contrasena_actual_no_coincide` nació en `PATCH /v1/cuentas/mia/contrasena`, cuyo
-     * cuerpo es `{ actual, nueva }`, y `DELETE /v1/cuentas/mia` lo reusa con un cuerpo
+     * `contrasena_actual_no_coincide` nació en `PATCH /v1/accounts/mine/password`, cuyo
+     * cuerpo es `{ actual, nueva }`, y `DELETE /v1/accounts/mine` lo reusa con un cuerpo
      * cuyo campo se llama `contrasena`. El `codigo` es contrato y no se duplica por un
      * nombre de campo; lo que cambia es a qué casilla se enciende en la pantalla.
      */
@@ -839,7 +839,7 @@ export const FAILURE_PHRASES = {
   deleteOwnAccount:
     'No pudimos borrar tu cuenta. El servidor no respondió. No se borró nada: puedes volver a intentarlo.',
   /**
-   * `POST /v1/equipo`. NO es la de `POST /v1/pacientes`: «los mismos errores» no alcanza a
+   * `POST /v1/team`. NO es la de `POST /v1/patients`: «los mismos errores» no alcanza a
    * la frase del 500, porque un alta de equipo no crea ninguna ficha y decir «no pudimos
    * crear la ficha» a quien dio de alta a su recepcionista es nombrar algo que no existe
    * (`cuentas.md`, 28 de octubre, en respuesta a la pregunta que levantó construirlo).
@@ -852,7 +852,7 @@ export const FAILURE_PHRASES = {
    * «puedes volver a intentarlo» sería falso.
    *
    * **Ya no manda a soporte**, y es el cambio que trae
-   * `POST /v1/equipo/{miembro_id}/acceso`: desde que ese endpoint existe hay una salida
+   * `POST /v1/team/{member_id}/access`: desde que ese endpoint existe hay una salida
    * dentro del producto —volver a mandarle el acceso a esa misma persona— y la frase la
    * nombra en vez de prometer un reintento que daba 409 (`cuentas.md` · «El hueco que
    * obliga a un endpoint más»).
@@ -869,25 +869,25 @@ export const FAILURE_PHRASES = {
     'No pudimos mandarle el acceso. Su contraseña anterior ya no vale: vuelve a mandárselo.',
 
   /**
-   * `POST /v1/pacientes`, literal de `cuentas.md` y de `pacientes.md`, que escriben la
+   * `POST /v1/patients`, literal de `cuentas.md` y de `pacientes.md`, que escriben la
    * misma segunda frase: lo que la doctora llenó está en el teléfono y el alta se puede
    * repetir con la misma `Idempotency-Key`.
    */
-  /** `pacientes.md` · `GET /v1/pacientes`. La app guarda la ultima lista y la ensena. */
+  /** `pacientes.md` · `GET /v1/patients`. La app guarda la ultima lista y la ensena. */
   listPatients:
     'No pudimos cargar tus pacientes. El servidor no respondió. Te mostramos la última lista guardada: puedes volver a intentarlo.',
-  /** `pacientes.md` · `GET /v1/pacientes/{id}`. Lo mismo con la ficha. */
+  /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
 
   /** `pacientes.md` · los vinculos de la paciente. */
   patientLinks:
     'No pudimos guardar tu respuesta. El servidor no respondió: puedes volver a intentarlo.',
-  /** `pacientes.md` · `PUT /v1/vinculos/{id}/ficha-medica`. */
+  /** `pacientes.md` · `PUT /v1/links/{id}/medical-form`. */
   patientHistory:
     'No pudimos guardar tu ficha. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
 
-  /** `pacientes.md` · `PATCH /v1/pacientes/{id}`. */
+  /** `pacientes.md` · `PATCH /v1/patients/{id}`. */
   editPatient:
     'No pudimos guardar el cambio. El servidor no respondió. Su ficha sigue como estaba: puedes volver a intentarlo.',
   /** `pacientes.md` · archivar y reactivar. */
@@ -902,7 +902,7 @@ export const FAILURE_PHRASES = {
    * volver a intentarlo» mandaría a crear una segunda ficha de la misma persona —el alta no
    * da `409` por el correo, da el aviso del duplicado— y «lo que llenaste está guardado» ya
    * no es lo que hace falta. La salida es la que existe: volver a mandarle el acceso con
-   * `POST /v1/cuentas/{cuenta_id}/acceso`. Es la misma clase de frase que la del alta de
+   * `POST /v1/accounts/{account_id}/access`. Es la misma clase de frase que la del alta de
    * equipo, y por el mismo motivo (28 de octubre de 2026; anotado para `producto`).
    */
   createPatientMail:

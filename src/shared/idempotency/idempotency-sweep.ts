@@ -3,7 +3,7 @@
 // aunque la fila siga ahí—, y esto es lo que hace que la fila **deje de estar ahí**.
 //
 // Por qué importa más que la higiene normal: la respuesta guardada del `201` de
-// `POST /v1/pacientes` lleva la contraseña temporal EN CLARO cuando la vía es `whatsapp` o
+// `POST /v1/patients` lleva la contraseña temporal EN CLARO cuando la vía es `whatsapp` o
 // `ninguna`. Pasadas sus 24 h esa fila ya no sirve para nada y sigue siendo el nombre, el
 // correo y una credencial de una paciente. `_convenciones.md` promete «durante 24 h», que es
 // una promesa de retención y no solo una ventana de repetición, y hasta la 0024 nadie barría:

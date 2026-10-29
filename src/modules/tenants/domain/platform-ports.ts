@@ -41,7 +41,7 @@ export type Served<T> = {
 };
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/plataforma/inquilinos · el alta
+// POST /v1/platform/tenants · el alta
 // ---------------------------------------------------------------------------------------
 
 /** Las columnas de `practice` que escribe el alta. `patient_limit` sale del plan. */
@@ -107,7 +107,7 @@ export interface TenantAdmissionPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// GET /v1/plataforma/inquilinos/{id} · la ficha de la consola
+// GET /v1/platform/tenants/{id} · la ficha de la consola
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -142,7 +142,7 @@ export interface TenantFilePort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/plataforma/inquilinos/{id}/licencia/decision
+// POST /v1/platform/tenants/{id}/license/decision
 // ---------------------------------------------------------------------------------------
 
 export type Decision = {

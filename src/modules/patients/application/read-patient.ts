@@ -1,4 +1,4 @@
-// GET /v1/pacientes/{id} · la ficha · y GET /v1/pacientes/{id}/antecedentes.
+// GET /v1/patients/{id} · la ficha · y GET /v1/patients/{id}/medical-history.
 //
 // Recepción NO entra en ninguno de los dos: `historia:leer`. Y abrir una ficha queda en la
 // auditoría, con quién y cuándo, sin interruptor — lo escribe el repositorio dentro de la misma

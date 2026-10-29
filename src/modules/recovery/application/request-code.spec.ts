@@ -1,4 +1,4 @@
-// `POST /v1/recuperacion` · la prueba de LA RESPUESTA IDÉNTICA.
+// `POST /v1/recovery` · la prueba de LA RESPUESTA IDÉNTICA.
 //
 // No comprueba que un doble fue llamado: comprueba que el caso de uso NO TIENE RAMAS. El
 // contrato dice «mismo 202, mismo cuerpo, mismo `caduca_en` calculado, mismo tiempo de
@@ -59,7 +59,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('POST /v1/recuperacion · idéntica exista o no el correo', () => {
+describe('POST /v1/recovery · idéntica exista o no el correo', () => {
   it('los pasos son los mismos para cualquier correo: contar y encolar, y nada más', async () => {
     const existe = armar();
     await existe.caso.run({ correo: 'carla.rojas@gmail.com' }, IP);

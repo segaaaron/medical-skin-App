@@ -187,7 +187,7 @@ afterAll(async () => {
   await app.end();
 });
 
-describe('GET /v1/inquilinos/mio · contra las políticas y los grants de verdad', () => {
+describe('GET /v1/tenants/mine · contra las políticas y los grants de verdad', () => {
   it('sirve la consulta, su licencia y el recuento de fichas ACTIVAS de ESTA consulta', async () => {
     const snapshot = await repository.read({ accountId: A.owner, practiceId: A.practice });
 
@@ -244,7 +244,7 @@ describe('GET /v1/inquilinos/mio · contra las políticas y los grants de verdad
   });
 });
 
-describe('POST /v1/inquilinos/mio/licencia · contra la función de verdad', () => {
+describe('POST /v1/tenants/mine/license · contra la función de verdad', () => {
   const form = {
     practiceCountry: 'BO',
     specialty: 'medicina_estetica',

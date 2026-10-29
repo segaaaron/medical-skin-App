@@ -1,4 +1,4 @@
-// `POST /v1/equipo` contra la base. Única puerta: `withTenantContext()`.
+// `POST /v1/team` contra la base. Única puerta: `withTenantContext()`.
 //
 // Siempre `app_practitioner` con el inquilino del token: `medskin_create_team_member()` saca
 // el `practice_id` del CONTEXTO y comprueba ella misma que quien llama es
@@ -108,7 +108,7 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/equipo/{miembro_id}/acceso
+  // POST /v1/team/{member_id}/access
   // -------------------------------------------------------------------------------------
 
   async forDelivery(

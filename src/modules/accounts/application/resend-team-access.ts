@@ -1,4 +1,4 @@
-// POST /v1/equipo/{miembro_id}/acceso · la dueña vuelve a mandarle el acceso a su equipo.
+// POST /v1/team/{member_id}/access · la dueña vuelve a mandarle el acceso a su equipo.
 //
 // POR QUÉ EXISTE: si el relé falla después de crear al miembro, la cuenta ya está creada y
 // reintentar el alta devuelve `409 correo_no_disponible`. Sin este endpoint quedaba una

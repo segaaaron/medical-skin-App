@@ -89,7 +89,7 @@ export function readRequest(
   };
 }
 
-/** La ruta tal y como la registró Fastify, con sus parámetros: `/v1/acceso/sesiones/:id`. */
+/** La ruta tal y como la registró Fastify, con sus parámetros: `/v1/access/sessions/:id`. */
 export function registeredRoute(req: FastifyRequest): string | undefined {
   const withRoute = req as FastifyRequest & {
     routeOptions?: { url?: string };

@@ -44,7 +44,7 @@ describe('resolvePermissions', () => {
   });
 
   it('`pacientes:crear` es de doctora y asistente clínico · recepción NO', () => {
-    // `cuentas.md` · POST /v1/pacientes, literal.
+    // `cuentas.md` · POST /v1/patients, literal.
     expect(PERMISSIONS_BY_ROLE.doctora).toContain('pacientes:crear');
     expect(PERMISSIONS_BY_ROLE.asistente_clinico).toContain('pacientes:crear');
     expect(PERMISSIONS_BY_ROLE.recepcion).not.toContain('pacientes:crear');

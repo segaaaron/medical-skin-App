@@ -1,4 +1,4 @@
-// `POST /v1/pacientes` · el alta de una paciente, que es la única puerta de una paciente al
+// `POST /v1/patients` · el alta de una paciente, que es la única puerta de una paciente al
 // sistema y el endpoint más cargado del tramo.
 //
 // Lo que se fija aquí, regla por regla:
@@ -187,7 +187,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('POST /v1/pacientes · la ficha, la cuenta y el acceso', () => {
+describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
   it('por WhatsApp devuelve la temporal y el enlace, y MedSkin no manda nada', async () => {
     const { caso, pasos, enviados } = armar();
     const respuesta = await caso.run(CUERPO, DOCTORA, CLAVE);
@@ -393,7 +393,7 @@ describe('POST /v1/pacientes · la ficha, la cuenta y el acceso', () => {
   });
 });
 
-describe('POST /v1/pacientes · lo que no entra', () => {
+describe('POST /v1/patients · lo que no entra', () => {
   it('ningún 400 toca la base ni gasta el límite de altas', async () => {
     const casos: [Record<string, unknown>, string, string | null][] = [
       [{ nombre: '  ' }, 'nombre_vacio', 'nombre'],
@@ -487,7 +487,7 @@ describe('POST /v1/pacientes · lo que no entra', () => {
   });
 });
 
-describe('POST /v1/pacientes · los veredictos de la base', () => {
+describe('POST /v1/patients · los veredictos de la base', () => {
   it('la licencia sin verificar no da de alta a nadie', async () => {
     const { caso } = armar({ registro: { ...CREADA, verdict: 'license_unverified' } });
     const fallo = await errorDe(() => caso.run(CUERPO, DOCTORA, CLAVE));
@@ -577,7 +577,7 @@ describe('POST /v1/pacientes · los veredictos de la base', () => {
   });
 });
 
-describe('POST /v1/pacientes · el relé caído', () => {
+describe('POST /v1/patients · el relé caído', () => {
   it('es un 500 que admite lo que se perdió y deshace la marca de envío', async () => {
     const { caso, pasos, marcas } = armar({ releCaido: true });
     const fallo = await errorDe(() => caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE));
@@ -623,7 +623,7 @@ describe('POST /v1/pacientes · el relé caído', () => {
   });
 });
 
-describe('POST /v1/pacientes · la idempotencia', () => {
+describe('POST /v1/patients · la idempotencia', () => {
   it('la repetición devuelve la respuesta guardada y no manda ni crea nada', async () => {
     // La decide la MISMA transacción que habría creado la ficha, así que el caso de uso no
     // vuelve a hashear, no vuelve a escribir y no manda ningún correo.

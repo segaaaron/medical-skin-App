@@ -64,7 +64,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('se esperaba un ErrorDeContrato y no se lanzó ninguno');
 }
 
-describe('DELETE /v1/acceso', () => {
+describe('DELETE /v1/access', () => {
   it('cierra la sesión del token y devuelve `cerrada_en`', async () => {
     const { port, vistos } = puerto({});
     const respuesta = await new SignOut(port, clock).run(PACIENTE);
@@ -81,7 +81,7 @@ describe('DELETE /v1/acceso', () => {
   });
 });
 
-describe('GET /v1/acceso/sesiones', () => {
+describe('GET /v1/access/sessions', () => {
   it('marca `esta` en la sesión del token y devuelve ciudad y nada más fino', async () => {
     const filas: ActiveSession[] = [
       {
@@ -133,7 +133,7 @@ describe('GET /v1/acceso/sesiones', () => {
   });
 });
 
-describe('DELETE /v1/acceso/sesiones/{sesion_id}', () => {
+describe('DELETE /v1/access/sessions/{session_id}', () => {
   it('cerrar la actual por id es 400 es_esta_sesion', async () => {
     const { port, vistos } = puerto({});
     const error = await errorDe(() => new CloseSession(port).run(ESTA, PACIENTE));
@@ -165,7 +165,7 @@ describe('DELETE /v1/acceso/sesiones/{sesion_id}', () => {
   });
 });
 
-describe('DELETE /v1/acceso/sesiones', () => {
+describe('DELETE /v1/access/sessions', () => {
   it('cierra todas menos la actual y devuelve cuántas', async () => {
     const { port, vistos } = puerto({ cuantas: 3 });
     expect(await new CloseOtherSessions(port).run(PACIENTE)).toEqual({ cerradas: 3 });

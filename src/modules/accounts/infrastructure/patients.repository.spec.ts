@@ -1,4 +1,4 @@
-// `POST /v1/pacientes` CONTRA LA BASE REAL, porque hay cuatro cosas que un doble no puede
+// `POST /v1/patients` CONTRA LA BASE REAL, porque hay cuatro cosas que un doble no puede
 // sostener:
 //
 //   1. **El alta de la consulta A no existe para la consulta B.** Es el único endpoint del

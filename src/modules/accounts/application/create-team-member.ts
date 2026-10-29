@@ -1,4 +1,4 @@
-// POST /v1/equipo · la dueña da de alta a recepción o a un asistente clínico.
+// POST /v1/team · la dueña da de alta a recepción o a un asistente clínico.
 //
 // EL ROL SÍ VIAJA EN EL CUERPO Y ES LA ÚNICA EXCEPCIÓN DEL TRAMO, «porque no es el rol de
 // autenticación sino el permiso dentro de un inquilino que ya está resuelto»: `account.role`
@@ -186,7 +186,7 @@ export class CreateTeamMember {
    * Y cuando el relé falla, la cuenta ya está creada: reintentar el alta devuelve
    * `409 correo_no_disponible`, así que la frase de «puedes volver a intentarlo» sería falsa
    * y se usa otra, que manda a soporte. Es el hueco que `cuentas.md` cierra con
-   * `POST /v1/equipo/{miembro_id}/acceso`: el día que exista, esta frase dice «vuelve a
+   * `POST /v1/team/{member_id}/access`: el día que exista, esta frase dice «vuelve a
    * mandárselo» y la salida deja de ser un correo a soporte.
    */
   private async sendMail(facts: TeamDeliveryFacts, accountId: string): Promise<void> {
@@ -241,7 +241,7 @@ export class CreateTeamMember {
 
   /**
    * «Solo la dueña da de alta al equipo»: la frase es la del contrato, con las palabras de
-   * su «Quién puede», y no la de `POST /v1/pacientes`, que habla de pacientes. Acordada el
+   * su «Quién puede», y no la de `POST /v1/patients`, que habla de pacientes. Acordada el
    * 28 de octubre al construir esto.
    */
   private noPermission(): ContractError {

@@ -1,4 +1,4 @@
-// GET /v1/plataforma/inquilinos/{id} · «La ficha de un consultorio en la consola interna».
+// GET /v1/platform/tenants/{id} · «La ficha de un consultorio en la consola interna».
 //
 // ES EL CONTRATO DE LA REGLA QUE DEFINE ESA PANTALLA: **soporte ve metadatos y estados,
 // nunca contenido de pacientes.** No hay un solo campo de paciente en esta respuesta, y

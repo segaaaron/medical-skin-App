@@ -77,7 +77,7 @@ describe('el correo del acceso', () => {
   });
 });
 
-// El aviso de `POST /v1/pacientes` cuando el correo ya tenía cuenta en la región. Existe
+// El aviso de `POST /v1/patients` cuando el correo ya tenía cuenta en la región. Existe
 // porque esa persona tiene que enterarse de que una consulta la dio de alta: es su identidad
 // la que queda vinculada (decisión del dueño, 28 de octubre de 2026).
 describe('el correo de quien ya tiene cuenta', () => {

@@ -1,4 +1,4 @@
-// El repositorio de la sesión: `GET /v1/sesion` y `POST /v1/sesion/refresco`. La ÚNICA puerta a la base es `withTenantContext()`:
+// El repositorio de la sesión: `GET /v1/session` y `POST /v1/session/refresh`. La ÚNICA puerta a la base es `withTenantContext()`:
 // abre la transacción, adopta el rol y fija los dos contextos con `SET LOCAL`. Aquí no hay
 // un solo `pool.query()` y no hay un solo `SET` de sesión — detrás del pooler en modo
 // transacción se lo lleva el siguiente cliente, y eso es una fuga entre doctoras.
@@ -130,7 +130,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/sesion/refresco
+  // POST /v1/session/refresh
   // -------------------------------------------------------------------------------------
 
   /**

@@ -21,7 +21,7 @@ function ownerOf(caller: Caller): OwnerOfSessions {
 }
 
 /**
- * DELETE /v1/acceso · cerrar sesión en este teléfono. Cerrar lo ya cerrado devuelve 200.
+ * DELETE /v1/access · cerrar sesión en este teléfono. Cerrar lo ya cerrado devuelve 200.
  *
  * `caller` nulo es quien llega con un token de RECUPERACIÓN: ese token no lleva `sid`
  * porque todavía no hay sesión (`recuperacion.md`), así que no hay fila que revocar y el
@@ -52,7 +52,7 @@ export type ListedSession = {
   ultima_vez: string;
 };
 
-/** GET /v1/acceso/sesiones · las sesiones activas de MI cuenta. */
+/** GET /v1/access/sessions · las sesiones activas de MI cuenta. */
 export class ListSessions {
   constructor(private readonly sessions: SessionPort) {}
 
@@ -76,7 +76,7 @@ export class ListSessions {
   }
 }
 
-/** DELETE /v1/acceso/sesiones/{sesion_id} · cerrar una concreta. */
+/** DELETE /v1/access/sessions/{session_id} · cerrar una concreta. */
 export class CloseSession {
   constructor(private readonly sessions: SessionPort) {}
 
@@ -94,7 +94,7 @@ export class CloseSession {
   }
 }
 
-/** DELETE /v1/acceso/sesiones · todas menos la actual. */
+/** DELETE /v1/access/sessions · todas menos la actual. */
 export class CloseOtherSessions {
   constructor(private readonly sessions: SessionPort) {}
 

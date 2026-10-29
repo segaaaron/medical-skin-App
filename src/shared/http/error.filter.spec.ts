@@ -121,7 +121,7 @@ afterAll(async () => {
 
 describe('un 500 de una ruta de consola', () => {
   it('deja la fila CON actor, con la región del despliegue y sin inquilino', async () => {
-    const host = hostOf('/v1/plataforma/inquilinos/:id', { platform: PLATFORM });
+    const host = hostOf('/v1/platform/tenants/:id', { platform: PLATFORM });
 
     filter.catch(
       new ServiceFailure(FAILURE_PHRASES.readTenant, new Error('la base no contestó')),
@@ -139,7 +139,7 @@ describe('un 500 de una ruta de consola', () => {
     // El fallo es de una petición de soporte, no de la consulta sobre la que miraba:
     // atribuírsela la haría aparecer en el panel de fallos de un inquilino que no hizo nada.
     expect(row?.practice_id).toBeNull();
-    expect(row?.operation).toBe('GET /v1/plataforma/inquilinos/:id');
+    expect(row?.operation).toBe('GET /v1/platform/tenants/:id');
     expect(row?.error_code).toBe('fallo_de_servicio');
     // La causa real del motor, que es para arreglarlo. La frase del contrato va al cliente y
     // no a la tabla.
@@ -147,7 +147,7 @@ describe('un 500 de una ruta de consola', () => {
   });
 
   it('y la respuesta al cliente sigue siendo la frase del contrato, sin causa ni pila', () => {
-    const host = hostOf('/v1/plataforma/inquilinos/:id', {
+    const host = hostOf('/v1/platform/tenants/:id', {
       platform: PLATFORM,
       traceId: 'traza-2',
       requestId: 'peticion-2',

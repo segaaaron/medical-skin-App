@@ -1,4 +1,4 @@
-// PUT /v1/vinculos/{id}/ficha-medica · «Antes de atenderte». La paciente llena sus propios
+// PUT /v1/links/{id}/medical-form · «Antes de atenderte». La paciente llena sus propios
 // antecedentes. Es el `siguiente_paso: "ficha_medica"` de `acceso.md`.
 //
 // LA REGLA, Y ES LO ÚNICO QUE ESTE CONTRATO INVENTA: la paciente escribe un campo **solo si

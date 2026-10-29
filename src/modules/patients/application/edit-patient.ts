@@ -1,5 +1,5 @@
-// PATCH /v1/pacientes/{id} · corregir los datos de contacto y de contexto.
-// POST /v1/pacientes/{id}/archivar · POST /v1/pacientes/{id}/reactivar.
+// PATCH /v1/patients/{id} · corregir los datos de contacto y de contexto.
+// POST /v1/patients/{id}/archive · POST /v1/patients/{id}/reactivate.
 //
 // Los tres piden `pacientes:crear` y recepción no entra en ninguno.
 //

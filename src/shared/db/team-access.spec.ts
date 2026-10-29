@@ -1,4 +1,4 @@
-// La prueba de lo que añade la 0019: `POST /v1/equipo/{miembro_id}/acceso` ·
+// La prueba de lo que añade la 0019: `POST /v1/team/{member_id}/access` ·
 // `medskin_resend_team_access()`.
 //
 // Mismas reglas que sus hermanas: contra la base real en Docker, sin un solo doble, RLS
@@ -200,7 +200,7 @@ describe('el reenvío de acceso del equipo · medskin_resend_team_access (0019)'
       resend(ctxOwnerA, A.deleted.practitioner),
       // La dueña no se reenvía el acceso a sí misma: su salida es «Olvidé mi contraseña».
       // Si esto se permitiera, podría acuñarse credenciales sin saber su contraseña actual,
-      // que es lo que `PATCH /v1/cuentas/mia/contrasena` exige.
+      // que es lo que `PATCH /v1/accounts/mine/password` exige.
       resend(ctxOwnerA, A.owner.practitioner),
     ]);
     expect(outcomes.map((rows) => rows[0]?.outcome)).toEqual([

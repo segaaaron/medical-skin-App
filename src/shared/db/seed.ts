@@ -2,8 +2,8 @@
 // `development`: siembra contraseñas temporales conocidas y las imprime.
 //
 // Existe porque el acceso no se puede probar sin una consulta, una doctora y una paciente,
-// y los endpoints que crean inquilinos (`POST /v1/plataforma/inquilinos`,
-// `POST /v1/pacientes`) no son de este encargo. Así que llama a las funciones que ya
+// y los endpoints que crean inquilinos (`POST /v1/platform/tenants`,
+// `POST /v1/patients`) no son de este encargo. Así que llama a las funciones que ya
 // existen —las mismas que llamarán esos endpoints— y no inventa filas a mano donde hay
 // función.
 //
@@ -144,9 +144,9 @@ async function seed(): Promise<void> {
     if (patientAccount === undefined) throw new Error('medskin_create_patient_account no devolvió cuenta');
 
     // 5 · Su FICHA y su VÍNCULO, con el rol de la doctora y bajo sus políticas, que es
-    // exactamente lo que hace `POST /v1/pacientes`: la cuenta la crea la función, la ficha
+    // exactamente lo que hace `POST /v1/patients`: la cuenta la crea la función, la ficha
     // y el vínculo los escribe ella. Sin el vínculo no se puede ejercitar
-    // `POST /v1/cuentas/{cuenta_id}/acceso`, cuya autorización ES esa fila.
+    // `POST /v1/accounts/{account_id}/access`, cuya autorización ES esa fila.
     //
     // `patient_link` copia el nombre de la consulta, el de la doctora y la ciudad (la
     // pregunta 7): la paciente no tiene política en `practice` ni en `practitioner`.
@@ -199,7 +199,7 @@ async function seed(): Promise<void> {
         }`,
         `  ficha      ${ficha} · vínculo invitada, antecedentes en blanco (nulo, que no es «no»)`,
         '  las dos entran con siguiente_paso = contrasena_nueva y alcance restringido.',
-        `  reenvío    POST /v1/cuentas/${patientAccount}/acceso ya se puede ejercitar.`,
+        `  reenvío    POST /v1/accounts/${patientAccount}/acceso ya se puede ejercitar.`,
         '',
       ].join('\n'),
     );

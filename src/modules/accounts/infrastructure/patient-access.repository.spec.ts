@@ -1,4 +1,4 @@
-// `POST /v1/cuentas/{cuenta_id}/acceso` CONTRA LA BASE REAL, y existe por un invariante que
+// `POST /v1/accounts/{account_id}/access` CONTRA LA BASE REAL, y existe por un invariante que
 // un doble no puede sostener:
 //
 //   **`patient_link.access_sent_at` solo puede afirmar un envío que ocurrió.**

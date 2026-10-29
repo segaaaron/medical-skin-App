@@ -46,7 +46,7 @@ export interface PasswordAttemptsPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// El acceso de SU paciente · `POST /v1/cuentas/{cuenta_id}/acceso`.
+// El acceso de SU paciente · `POST /v1/accounts/{account_id}/access`.
 //
 // La autorización no es un `if` del código: es la política de `patient_link` sobre
 // `practice_id` más la función `SECURITY DEFINER` que empieza buscando ese vínculo. Un
@@ -124,7 +124,7 @@ export interface PatientAccessMailPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// GET /v1/cuentas/mia · quién soy, qué rol tengo y qué pantalla toca.
+// GET /v1/accounts/mine · quién soy, qué rol tengo y qué pantalla toca.
 //
 // Todo sale del CONTEXTO: `account` y `credential` por las políticas `*_own` sobre
 // `medskin_current_account()`, y los vínculos por `account_id`. No hay un solo
@@ -178,7 +178,7 @@ export interface OwnProfilePort {
 }
 
 // ---------------------------------------------------------------------------------------
-// DELETE /v1/cuentas/mia · `medskin_delete_own_account()`.
+// DELETE /v1/accounts/mine · `medskin_delete_own_account()`.
 //
 // La función no recibe la cuenta: sale del contexto. Con un argumento, cualquiera con
 // sesión podría borrar la de cualquiera, y la de una doctora se lleva su consulta entera.
@@ -218,7 +218,7 @@ export interface AccountDeletionPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/equipo · `medskin_create_team_member()`.
+// POST /v1/team · `medskin_create_team_member()`.
 //
 // El `practice_id` sale del contexto y la autorización es SER LA DUEÑA, comprobada en la
 // función y no en el controlador. Un correo que ya tiene cuenta no se reusa, y el veredicto
@@ -258,7 +258,7 @@ export interface TeamPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/equipo/{miembro_id}/acceso · `medskin_resend_team_access()`.
+// POST /v1/team/{member_id}/access · `medskin_resend_team_access()`.
 //
 // Puerto aparte del alta y no un tercer verbo en `TeamPort`: quien reenvía un acceso no
 // crea a nadie, y al revés. Los implementa la misma clase, que es otra cosa (la I de
@@ -322,7 +322,7 @@ export interface TeamAccessMailPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/pacientes · el alta de una paciente. LA ÚNICA PUERTA DE UNA PACIENTE AL SISTEMA.
+// POST /v1/patients · el alta de una paciente. LA ÚNICA PUERTA DE UNA PACIENTE AL SISTEMA.
 //
 // Un solo verbo y UNA SOLA TRANSACCIÓN, y no es comodidad: el alta es «su ficha y su
 // cuenta, en un solo acto». Repartida en dos llamadas, un fallo entre ellas deja una cuenta

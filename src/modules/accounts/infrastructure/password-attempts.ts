@@ -1,6 +1,6 @@
 // Los contadores de las cuentas, sobre Redis: los intentos de `actual` en
-// `PATCH /v1/cuentas/mia/contrasena`, los reenvíos de acceso de
-// `POST /v1/cuentas/{cuenta_id}/acceso` y las altas de `POST /v1/pacientes`.
+// `PATCH /v1/accounts/mine/password`, los reenvíos de acceso de
+// `POST /v1/accounts/{account_id}/access` y las altas de `POST /v1/patients`.
 //
 // Van por `cuenta_id` —o por consulta el de las altas— y no por correo, al contrario que
 // los del acceso y de la recuperación: aquí quien llama ya está dentro, así que hay una fila

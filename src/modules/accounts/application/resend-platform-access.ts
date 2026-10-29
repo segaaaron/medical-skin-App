@@ -1,4 +1,4 @@
-// POST /v1/plataforma/cuentas/{cuenta_id}/acceso/reenviar · «Reenviar la contraseña temporal
+// POST /v1/platform/accounts/{account_id}/access/resend · «Reenviar la contraseña temporal
 // · Va a su propio correo. Soporte no la ve.» (`Consola.dc.html` · 2).
 //
 // ES EL ÚNICO ENDPOINT DEL TRAMO QUE ACUÑA UNA CREDENCIAL SIN DEVOLVERLA, y esa diferencia

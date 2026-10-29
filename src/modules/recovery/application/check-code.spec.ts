@@ -1,4 +1,4 @@
-// `POST /v1/recuperacion/codigo` · el orden, que es parte del contrato, y las dos cosas
+// `POST /v1/recovery/code` · el orden, que es parte del contrato, y las dos cosas
 // que el contrato promete y es fácil romper:
 //
 //   · el 401 es UNO para tres situaciones —código mal, correo sin cuenta, cuenta sin
@@ -112,7 +112,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('POST /v1/recuperacion/codigo · el orden', () => {
+describe('POST /v1/recovery/code · el orden', () => {
   it('la forma primero: un código corto no llega ni al contador', async () => {
     const { caso, pasos } = armar({});
     const error = await errorDe(() => caso.run({ ...PETICION, codigo: '418' }, IP));
@@ -138,7 +138,7 @@ describe('POST /v1/recuperacion/codigo · el orden', () => {
   });
 });
 
-describe('POST /v1/recuperacion/codigo · el 401 es uno para tres', () => {
+describe('POST /v1/recovery/code · el 401 es uno para tres', () => {
   it('correo sin cuenta y código mal dan el mismo cuerpo y el mismo contador', async () => {
     const sinCuenta = await errorDe(() => armar({ codigo: SENUELO }).caso.run(PETICION, IP));
     const codigoMal = await errorDe(() =>
@@ -168,7 +168,7 @@ describe('POST /v1/recuperacion/codigo · el 401 es uno para tres', () => {
   });
 });
 
-describe('POST /v1/recuperacion/codigo · los dos 410, también para quien no existe', () => {
+describe('POST /v1/recovery/code · los dos 410, también para quien no existe', () => {
   it('cinco intentos gastados: 410 `codigo_anulado` con motivo `intentos`', async () => {
     const real = await errorDe(() =>
       armar({ codigo: { ...VIVO, verdict: 'voided', voidedReason: 'intentos' } }).caso.run(
@@ -221,7 +221,7 @@ describe('POST /v1/recuperacion/codigo · los dos 410, también para quien no ex
   });
 });
 
-describe('POST /v1/recuperacion/codigo · el token', () => {
+describe('POST /v1/recovery/code · el token', () => {
   it('firma `sub`, `alcance` y `region`, Y NADA MÁS: sin rol y sin sesión', async () => {
     const { caso, firmados } = armar({ coincide: true });
     const respuesta = await caso.run(PETICION, IP);

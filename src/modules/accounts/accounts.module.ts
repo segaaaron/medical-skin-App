@@ -1,7 +1,7 @@
 // El cableado de las cuentas. Nueve endpoints —con las dos de consola, el tramo 1 queda
 // cerrado—: el alta de una paciente
-// (`POST /v1/pacientes`), el cambio de contraseña, el envío del acceso de una paciente,
-// `GET /v1/cuentas/mia`, su borrado, el alta del equipo y el reenvío del acceso del equipo.
+// (`POST /v1/patients`), el cambio de contraseña, el envío del acceso de una paciente,
+// `GET /v1/accounts/mine`, su borrado, el alta del equipo y el reenvío del acceso del equipo.
 // y las dos acciones de `Consola.dc.html` · 2 (reenviar el acceso y levantar la pausa).
 
 import { Module } from '@nestjs/common';
@@ -38,9 +38,9 @@ import { PlatformAccountsController } from './platform-accounts.controller';
 import { TeamController } from './team.controller';
 
 /**
- * `GET /v1/cuentas/mia` necesita el `practitioner.role` de esta consulta y el estado que
+ * `GET /v1/accounts/mine` necesita el `practitioner.role` de esta consulta y el estado que
  * decide `siguiente_paso` —licencia y lista del primer día—, que es EXACTAMENTE lo que lee
- * `AccessRepository.nextStepFacts()` en una sola consulta para `POST /v1/acceso`. Se reusa
+ * `AccessRepository.nextStepFacts()` en una sola consulta para `POST /v1/access`. Se reusa
  * ese puerto en vez de escribir una segunda consulta que diga lo mismo: si fueran dos, un
  * día la regla cambiaría en una sola y la pantalla de arranque diría otra cosa que la
  * entrada. No se importa `AccessModule`: lo que hace falta es la clase, que solo depende del

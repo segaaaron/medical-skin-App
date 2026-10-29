@@ -1,4 +1,4 @@
-// `POST /v1/equipo` · el rol que la dueña SÍ puede dar. Dominio: sin NestJS y sin `pg`.
+// `POST /v1/team` · el rol que la dueña SÍ puede dar. Dominio: sin NestJS y sin `pg`.
 //
 // El rol viaja en el cuerpo y es la única excepción del tramo, «porque no es el rol de
 // autenticación sino el permiso dentro de un inquilino que ya está resuelto»: `account.role`

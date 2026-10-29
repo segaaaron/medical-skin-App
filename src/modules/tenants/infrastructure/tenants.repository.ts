@@ -131,7 +131,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/inquilinos/mio/licencia · una transacción, tres pasos y en este orden.
+  // POST /v1/tenants/mine/license · una transacción, tres pasos y en este orden.
   // -------------------------------------------------------------------------------------
 
   async submit(p: {

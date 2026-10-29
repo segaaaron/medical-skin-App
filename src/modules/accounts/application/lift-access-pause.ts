@@ -1,4 +1,4 @@
-// DELETE /v1/plataforma/cuentas/{cuenta_id}/pausa · «Levantar la pausa por intentos · Vuelve
+// DELETE /v1/platform/accounts/{account_id}/lock · «Levantar la pausa por intentos · Vuelve
 // a poder entrar. No cambia su contraseña.» (`Consola.dc.html` · 2).
 //
 // LA RESPUESTA SON DOS LITERALES, `{ pausa_hasta: null, intentos: 0 }`, y es a propósito: es

@@ -17,7 +17,7 @@ import { RefreshSession } from './application/refresh-session';
  *
  * `caller` nulo aquí es quien llega con un token de RECUPERACIÓN, que no lleva `sid`
  * porque todavía no hay sesión. No debería llegar —la política de la ruta no admite ese
- * alcance— y si llega no se le inventa una: `GET /v1/sesion` es «cualquiera con sesión».
+ * alcance— y si llega no se le inventa una: `GET /v1/session` es «cualquiera con sesión».
  */
 function callerOf(req: RequestWithContext): Caller {
   const ctx = req.medskin;
@@ -26,7 +26,7 @@ function callerOf(req: RequestWithContext): Caller {
   return ctx.caller;
 }
 
-@Controller('v1/sesion')
+@Controller('v1/session')
 export class SessionController {
   // `@Inject` explícito y no inyección por tipo del constructor: esbuild —el que usan
   // `tsx` y vitest— no emite `emitDecoratorMetadata`, así que sin esto el controlador se
@@ -57,7 +57,7 @@ export class SessionController {
    *
    * `200` y no `201`: no crea un recurso nuevo, rota el que había.
    */
-  @Post('refresco')
+  @Post('refresh')
   @HttpCode(200)
   async refresh(@Req() req: RequestWithContext) {
     return this.refreshSession.run(req.body);

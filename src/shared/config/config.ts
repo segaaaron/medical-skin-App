@@ -30,7 +30,7 @@ const esquema = z.object({
   ZONA_HORARIA: z.string().min(1),
 
   // El plazo legal de conservación del expediente, en años. Sale de aquí y NO de una tabla
-  // (decisión del 28 de octubre, `cuentas.md` · DELETE /v1/cuentas/mia): no es dato de
+  // (decisión del 28 de octubre, `cuentas.md` · DELETE /v1/accounts/mine): no es dato de
   // inquilino —todos los de un despliegue comparten el plazo— y guardarlo por fila serían N
   // copias del mismo literal que se pueden desincronizar. `se_conserva.hasta` se calcula
   // sumándolo a la fecha del borrado, y lo que queda escrito en la bitácora es la FECHA

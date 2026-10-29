@@ -28,7 +28,7 @@ import { policyFor } from './route-policy';
 export class ErrorFilter implements ExceptionFilter {
   /**
    * `region` es la del DESPLIEGUE y no la de quien llama: el proceso solo sirve una, y en
-   * un fallo sin sesión —`POST /v1/acceso`, los dos de recuperación, el refresco— la del
+   * un fallo sin sesión —`POST /v1/access`, los dos de recuperación, el refresco— la del
    * `caller` no existe todavía. Con `null` la columna quedaba vacía justo en las filas que
    * más se miran, y `medskin_record_anonymous_failure` acepta el argumento y lo valida
    * contra la lista cerrada (0005).

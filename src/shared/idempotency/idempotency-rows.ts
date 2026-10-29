@@ -3,7 +3,7 @@
 // decididas por escrito:
 //
 // 1. **La respuesta que hay que repetir lleva la contraseña temporal en claro.** El `201` de
-//    `POST /v1/pacientes` la trae cuando la vía es `whatsapp` o `ninguna` —y el texto y la
+//    `POST /v1/patients` la trae cuando la vía es `whatsapp` o `ninguna` —y el texto y la
 //    url del WhatsApp la llevan dentro—, así que guardarla en Redis dejaba 24 h una
 //    credencial viva, el nombre y el correo de una paciente fuera de la base, sin cifrar y
 //    sin HMAC. La decisión 30 mandó el envío EN LÍNEA y no por cola exactamente para no meter
@@ -11,7 +11,7 @@
 //    no se deja fuera de la base». La razón cubría los dos caminos; la implementación, uno.
 // 2. **Una fila que se escribe DESPUÉS del `COMMIT` no es idempotencia.** Redis no entra en
 //    el `COMMIT` de Postgres: un parpadeo entre las dos devolvía un `500` cuya frase era
-//    falsa y el reintento ejecutaba otra vez, y en `POST /v1/pacientes` eso acababa en DOS
+//    falsa y el reintento ejecutaba otra vez, y en `POST /v1/patients` eso acababa en DOS
 //    fichas sobre la misma cuenta.
 //
 // LO QUE SERIALIZA ES LA CLAVE PRIMARIA `(account_id, key)`, Y POR ESO `claim()` VA PRIMERO.

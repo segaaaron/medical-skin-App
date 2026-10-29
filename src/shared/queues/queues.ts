@@ -2,7 +2,7 @@
 //
 // Lo que va a una cola es «lo que puede tardar o reintentarse»: aquí, el correo del código
 // de recuperación. Lo que NO va es nada que el ciclo de la petición necesite para
-// responder, y en este tramo hay una razón añadida: el 202 de `POST /v1/recuperacion` tiene
+// responder, y en este tramo hay una razón añadida: el 202 de `POST /v1/recovery` tiene
 // que tardar lo mismo exista o no el correo, y acuñar un código no tarda lo mismo.
 //
 // Este archivo es solo la plumbería: el nombre de la cola y la política de reintentos. El

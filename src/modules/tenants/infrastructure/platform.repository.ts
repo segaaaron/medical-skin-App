@@ -99,7 +99,7 @@ export class PlatformRepository
   ) {}
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/plataforma/inquilinos
+  // POST /v1/platform/tenants
   // -------------------------------------------------------------------------------------
 
   async create<T>(p: {
@@ -198,7 +198,7 @@ export class PlatformRepository
   }
 
   // -------------------------------------------------------------------------------------
-  // GET /v1/plataforma/inquilinos/{id}
+  // GET /v1/platform/tenants/{id}
   // -------------------------------------------------------------------------------------
 
   async read(p: { actor: PlatformActor; practiceId: string }): Promise<TenantFile | null> {
@@ -281,7 +281,7 @@ export class PlatformRepository
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/plataforma/inquilinos/{id}/licencia/decision
+  // POST /v1/platform/tenants/{id}/license/decision
   // -------------------------------------------------------------------------------------
 
   async decide<T>(p: {

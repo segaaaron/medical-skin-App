@@ -1,4 +1,4 @@
-// El alta de una paciente · `POST /v1/pacientes`. Dominio: sin NestJS, sin Fastify, sin `pg`.
+// El alta de una paciente · `POST /v1/patients`. Dominio: sin NestJS, sin Fastify, sin `pg`.
 //
 // Es LA ÚNICA PUERTA DE UNA PACIENTE AL SISTEMA («nadie se registra solo»), y por eso todo
 // lo que entra se lee aquí y se normaliza aquí: la ficha, la vía del acceso y los

@@ -18,7 +18,7 @@ export type SessionOwner = {
 };
 
 /**
- * Lo que `GET /v1/sesion` necesita saber de la base, y NADA MÁS: su obligación de
+ * Lo que `GET /v1/session` necesita saber de la base, y NADA MÁS: su obligación de
  * rendimiento es parte del contrato —«si pasa de 3 s aparece la barra»— y por eso no
  * devuelve pacientes, ni citas, ni nada que haya que buscar.
  */
@@ -49,7 +49,7 @@ export interface SessionSnapshotPort {
 }
 
 // ---------------------------------------------------------------------------------------
-// `POST /v1/sesion/refresco` · lo que devuelve `medskin_session_refresh()` (migración
+// `POST /v1/session/refresh` · lo que devuelve `medskin_session_refresh()` (migración
 // 0018), que es la que rota, detecta el reuso Y resuelve la ventana de gracia de 20 s.
 // Ninguna de esas tres reglas se vuelve a escribir en TypeScript.
 // ---------------------------------------------------------------------------------------

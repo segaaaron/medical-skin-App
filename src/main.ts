@@ -27,7 +27,7 @@ async function start() {
 
   // `415 formato_no_admitido` DE VERDAD. Fastify trae parser propio de `text/plain`, así
   // que un cuerpo mandado con ese `Content-Type` se parseaba como cadena, no pasaba el
-  // esquema del endpoint y se atendía como si viniera vacío: `POST /v1/acceso` respondía
+  // esquema del endpoint y se atendía como si viniera vacío: `POST /v1/access` respondía
   // `correo_vacio` con el correo escrito. Quitado el parser, Fastify responde 415 y el
   // filtro lo traduce. Esta API solo acepta JSON (_convenciones.md, 27 de octubre).
   app.getHttpAdapter().getInstance().removeContentTypeParser('text/plain');

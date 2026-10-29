@@ -1,4 +1,4 @@
-// `PATCH /v1/cuentas/mia/contrasena` · el orden y lo que el contrato promete.
+// `PATCH /v1/accounts/mine/password` · el orden y lo que el contrato promete.
 //
 // Lo que se fija aquí: que la nueva pasa las MISMAS reglas que `contrasena-nueva`, que el
 // 429 se mira antes de comparar, que un fallo de `actual` gasta intento y un acierto lo
@@ -81,7 +81,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('PATCH /v1/cuentas/mia/contrasena', () => {
+describe('PATCH /v1/accounts/mine/password', () => {
   it('cambia, cierra las demás y devuelve cuántas', async () => {
     const { caso, pasos } = armar({ cerradas: 2 });
     const respuesta = await caso.run({ actual: 'la-de-ahora', nueva: 'cometa-nieve-11' }, DOCTORA);

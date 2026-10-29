@@ -16,7 +16,7 @@ const COMPLETO = {
   REGION_ETIQUETA: 'Bolivia · bo-1',
   ZONA_HORARIA: 'America/La_Paz',
   // El plazo legal de conservación de la región, en años (`cuentas.md` · DELETE
-  // /v1/cuentas/mia): configuración del despliegue, no una tabla. Sin valor por omisión a
+  // /v1/accounts/mine): configuración del despliegue, no una tabla. Sin valor por omisión a
   // propósito: un plazo legal adivinado por el servidor no es un plazo legal.
   CONSERVACION_ANOS: '7',
   JWT_PRIVATE_KEY_PATH: './.secrets/jwt.key',

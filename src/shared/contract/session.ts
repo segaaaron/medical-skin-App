@@ -51,7 +51,7 @@ export type Claims = {
 };
 
 /**
- * El token de `recuperacion.md` · `POST /v1/recuperacion/codigo`, y es OTRA forma: **no
+ * El token de `recuperacion.md` · `POST /v1/recovery/code`, y es OTRA forma: **no
  * lleva `rol`, no lleva `sid` y no lleva `practice`.**
  *
  * No es una omisión por pereza. El cuerpo de un JWT lo lee el cliente, así que una

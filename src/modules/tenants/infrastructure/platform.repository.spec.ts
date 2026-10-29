@@ -179,7 +179,7 @@ afterAll(async () => {
   await app.end();
 });
 
-describe('POST /v1/plataforma/inquilinos · contra la función del alta', () => {
+describe('POST /v1/platform/tenants · contra la función del alta', () => {
   it('crea consulta, dueña, credencial y LICENCIA `sin_enviar` sin insertar la licencia', async () => {
     const admission = await repository.create({
       actor: ACTOR,
@@ -518,7 +518,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
   });
 });
 
-describe('GET /v1/plataforma/inquilinos/{id} · la ficha de la consola', () => {
+describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
   it('sirve metadatos, estados y TRES números, sin leer una sola fila de paciente', async () => {
     const file = await repository.read({ actor: ACTOR, practiceId: FILE.practice });
 
@@ -572,7 +572,7 @@ describe('GET /v1/plataforma/inquilinos/{id} · la ficha de la consola', () => {
   });
 });
 
-describe('POST /v1/plataforma/inquilinos/{id}/licencia/decision · sin función', () => {
+describe('POST /v1/platform/tenants/{id}/license/decision · sin función', () => {
   const inReview = () => ({ status: 'verificada' as const, rejectionReason: null });
 
   it('sin licencia es `no_license`, y `sin_enviar` es su propio resultado', async () => {

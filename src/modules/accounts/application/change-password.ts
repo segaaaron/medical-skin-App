@@ -1,9 +1,9 @@
-// PATCH /v1/cuentas/mia/contrasena · cambiar la contraseña sabiendo la actual.
+// PATCH /v1/accounts/mine/password · cambiar la contraseña sabiendo la actual.
 //
-// No confundir con `POST /v1/acceso/contrasena-nueva`, que es la pantalla obligatoria y no
+// No confundir con `POST /v1/access/new-password`, que es la pantalla obligatoria y no
 // pide la actual porque la actual es la temporal o no existe.
 //
-// Aquí SÍ se nombra el campo que falló, al contrario que en `POST /v1/acceso`: quien llama
+// Aquí SÍ se nombra el campo que falló, al contrario que en `POST /v1/access`: quien llama
 // ya está dentro, así que no hay oráculo que cerrar. `cuentas.md`, literal.
 //
 // Y no hay interruptor de «cerrar las otras sesiones»: cambiar la contraseña revoca

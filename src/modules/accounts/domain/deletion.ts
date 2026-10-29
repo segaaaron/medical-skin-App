@@ -1,4 +1,4 @@
-// `DELETE /v1/cuentas/mia` · lo que el borrado promete por escrito, sin NestJS y sin `pg`.
+// `DELETE /v1/accounts/mine` · lo que el borrado promete por escrito, sin NestJS y sin `pg`.
 //
 // DOS COSAS QUE PARECEN LA MISMA Y NO LO SON: el PLAZO sale de la configuración del
 // despliegue (`CONSERVACION_ANOS`), y la FECHA que se le promete a quien se borra se guarda
@@ -59,7 +59,7 @@ export function dayAndMonth(day: string): string {
 /**
  * «148 pacientes» · «1 paciente». El contrato escribe el caso plural y concordar el
  * singular es interpolar bien, no cambiar la frase: es la misma regla que el «te quedan 1
- * intentos» de `POST /v1/acceso`.
+ * intentos» de `POST /v1/access`.
  */
 export function patientsPhrase(count: number): string {
   return count === 1 ? '1 paciente' : `${count} pacientes`;

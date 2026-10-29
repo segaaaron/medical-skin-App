@@ -71,7 +71,7 @@ export const practice = pgTable(
     patientLimit: integer('patient_limit').notNull(),
     planRenewsOn: date('plan_renews_on'),
 
-    // `status` es la pausa de PATCH /v1/plataforma/inquilinos/{id}, no la licencia.
+    // `status` es la pausa de PATCH /v1/platform/tenants/{id}, no la licencia.
     status: text('status').notNull().default('activa'),
 
     // Los cuatro de «Datos de la consulta» de PrimerDia: nacen vacíos.
@@ -192,11 +192,11 @@ export const practitioner = pgTable(
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
     // El permiso dentro de un inquilino ya resuelto. NO es el rol de autenticación:
-    // ese vive en `account.role` y lo pone el servidor (cuentas.md · POST /v1/equipo).
+    // ese vive en `account.role` y lo pone el servidor (cuentas.md · POST /v1/team).
     role: text('role').notNull(),
     // Nulo = «los de su `role`», y es lo que tendrá el 100 % de las filas de la primera
     // entrega (decisión 11 del 27 oct). La lista explícita la escribe «Equipo y permisos»
-    // cuando la dueña la edite de una en una. `GET /v1/sesion` devuelve siempre la lista
+    // cuando la dueña la edite de una en una. `GET /v1/session` devuelve siempre la lista
     // resuelta, nunca el rol: la app no deduce permisos (sesion.md).
     permissions: text('permissions').array(),
     status: text('status').notNull().default('activa'),
@@ -209,7 +209,7 @@ export const practitioner = pgTable(
     // Inquilino delante (§7.3, regla 5): «mi equipo activo», que es lo que mira
     // «409 consulta_con_equipo» al borrar la cuenta de la dueña.
     index('practitioner_practice_status_idx').on(t.practiceId, t.status),
-    // Y uno por cuenta sola, sin inquilino delante a propósito: POST /v1/acceso tiene
+    // Y uno por cuenta sola, sin inquilino delante a propósito: POST /v1/access tiene
     // que averiguar a qué consulta pertenece quien entra ANTES de que exista contexto
     // de inquilino. Es la única consulta del tramo que no puede empezar por él.
     index('practitioner_account_idx').on(t.accountId),
@@ -286,7 +286,7 @@ export const credential = pgTable(
       .references(() => account.id, { onDelete: 'cascade' }),
 
     // Argon2id (acceso.md). Una fila por cuenta: acuñar una temporal mata la anterior
-    // (cuentas.md · POST /v1/cuentas/{id}/acceso).
+    // (cuentas.md · POST /v1/accounts/{id}/access).
     hash: text('hash').notNull(),
 
     isTemporary: boolean('is_temporary').notNull().default(true),

@@ -32,7 +32,7 @@ function callerOf(req: RequestWithContext): Caller {
   return caller;
 }
 
-@Controller('v1/acceso')
+@Controller('v1/access')
 export class AccessController {
   // `@Inject` explícito y no inyección por tipo: esbuild no emite `emitDecoratorMetadata`,
   // así que sin esto el controlador se construye con los casos de uso en `undefined` bajo
@@ -57,7 +57,7 @@ export class AccessController {
   // Un flujo, dos entradas, y el `if` está aquí y no en el caso de uso porque la entrada
   // la decide el TOKEN, que es cosa del borde: con sesión restringida se asciende esa
   // sesión; con token de recuperación no hay sesión ni rol que leer y se abre una nueva.
-  @Post('contrasena-nueva')
+  @Post('new-password')
   @HttpCode(200)
   async newPassword(@Req() req: RequestWithContext) {
     const ctx = contextOf(req);
@@ -74,18 +74,18 @@ export class AccessController {
     return this.signOut.run(ctx.recovery !== null ? null : callerOf(req));
   }
 
-  @Get('sesiones')
+  @Get('sessions')
   async sessions(@Req() req: RequestWithContext) {
     return this.listSessions.run(callerOf(req));
   }
 
-  @Delete('sesiones/:sesion_id')
+  @Delete('sessions/:session_id')
   @HttpCode(200)
-  async closeOne(@Req() req: RequestWithContext, @Param('sesion_id') sessionId: string) {
+  async closeOne(@Req() req: RequestWithContext, @Param('session_id') sessionId: string) {
     return this.closeSession.run(sessionId, callerOf(req));
   }
 
-  @Delete('sesiones')
+  @Delete('sessions')
   @HttpCode(200)
   async closeOthers(@Req() req: RequestWithContext) {
     return this.closeOtherSessions.run(callerOf(req));

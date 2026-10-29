@@ -1,4 +1,4 @@
-// `POST /v1/cuentas/{cuenta_id}/acceso` · lo que el contrato promete y es fácil romper.
+// `POST /v1/accounts/{account_id}/access` · lo que el contrato promete y es fácil romper.
 //
 // Las dos que importan:
 //
@@ -137,7 +137,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('POST /v1/cuentas/{cuenta_id}/acceso · quién puede', () => {
+describe('POST /v1/accounts/{account_id}/access · quién puede', () => {
   it('recepción no manda accesos, y el permiso se mira antes de leer la ficha', async () => {
     const { caso, pasos } = armar({});
     const error = await errorDe(() => caso.run({ via: 'whatsapp' }, CUENTA_PACIENTE, RECEPCION));
@@ -159,7 +159,7 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · quién puede', () => {
   });
 });
 
-describe('POST /v1/cuentas/{cuenta_id}/acceso · la temporal en claro', () => {
+describe('POST /v1/accounts/{account_id}/access · la temporal en claro', () => {
   it('por WhatsApp viaja, con el número, el texto y el `wa.me` armado', async () => {
     const { caso } = armar({});
     const bloque = await caso.run({ via: 'whatsapp' }, CUENTA_PACIENTE, DOCTORA);
@@ -213,7 +213,7 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · la temporal en claro', () => {
   });
 });
 
-describe('POST /v1/cuentas/{cuenta_id}/acceso · lo que no se hace', () => {
+describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
   it('ya eligió su contraseña: 409 con su nombre, y la doctora no la resetea', async () => {
     const { caso } = armar({ veredicto: 'ya_eligio_su_contrasena' });
     const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
@@ -321,7 +321,7 @@ describe('POST /v1/cuentas/{cuenta_id}/acceso · lo que no se hace', () => {
 // =========================================================================================
 // EL INVARIANTE · es lo que arregla esto para siempre
 // =========================================================================================
-describe('POST /v1/cuentas/{cuenta_id}/acceso · el invariante de la entrega', () => {
+describe('POST /v1/accounts/{account_id}/access · el invariante de la entrega', () => {
   it('para CADA vía: o se entregó un mensaje, o la contraseña viaja. Nunca ninguna', async () => {
     // Acuñar mata la temporal anterior y devuelve `temp_first_used_at` a nulo, y
     // `medskin_recovery_mint` solo acuña si está estrenada: una vía que no entregue

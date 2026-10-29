@@ -1,4 +1,4 @@
-// POST /v1/pacientes · solo HTTP. La autorización la hizo el guardia por lista blanca de
+// POST /v1/patients · solo HTTP. La autorización la hizo el guardia por lista blanca de
 // rutas, el permiso lo mira el caso de uso y el inquilino lo ponen las políticas.
 //
 // LA IDEMPOTENCIA YA NO VIVE AQUÍ, y el cambio es el arreglo de tres defectos que el revisor
@@ -32,7 +32,7 @@ import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
 import { callerOf } from './accounts.controller';
 import { RegisterPatient } from './application/register-patient';
 
-@Controller('v1/pacientes')
+@Controller('v1/patients')
 export class PatientsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(@Inject(RegisterPatient) private readonly register: RegisterPatient) {}

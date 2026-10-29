@@ -1,4 +1,4 @@
-// POST /v1/recuperacion/codigo · validar el código y abrir la pantalla de contraseña nueva.
+// POST /v1/recovery/code · validar el código y abrir la pantalla de contraseña nueva.
 //
 // EL ORDEN ES PARTE DEL CONTRATO, igual que en el acceso:
 //
@@ -104,7 +104,7 @@ export class CheckRecoveryCode {
     });
 
     // Validar el código no cambia la contraseña ni cierra sesiones: eso es el paso
-    // siguiente, `POST /v1/acceso/contrasena-nueva`. Y el código se anula allí, en la
+    // siguiente, `POST /v1/access/new-password`. Y el código se anula allí, en la
     // misma transacción que guarda la contraseña.
     return {
       token,

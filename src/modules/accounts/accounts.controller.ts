@@ -19,7 +19,7 @@ export function callerOf(req: RequestWithContext): Caller {
   return ctx.caller;
 }
 
-@Controller('v1/cuentas')
+@Controller('v1/accounts')
 export class AccountsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
@@ -30,19 +30,19 @@ export class AccountsController {
   ) {}
 
   // Sin cuerpo y sin parámetros: la ruta es `/mia` y quien pregunta sale del token.
-  @Get('mia')
+  @Get('mine')
   @HttpCode(200)
   async mine(@Req() req: RequestWithContext) {
     return this.readOwn.run(callerOf(req));
   }
 
-  @Delete('mia')
+  @Delete('mine')
   @HttpCode(200)
   async deleteMine(@Req() req: RequestWithContext) {
     return this.deleteOwn.run(req.body, callerOf(req));
   }
 
-  @Patch('mia/contrasena')
+  @Patch('mine/password')
   @HttpCode(200)
   async newPassword(@Req() req: RequestWithContext) {
     return this.changePassword.run(req.body, callerOf(req));
@@ -51,9 +51,9 @@ export class AccountsController {
   // El `cuenta_id` de la URL NO autoriza: entra como criterio de búsqueda dentro del
   // inquilino del token, y si no hay vínculo en esa consulta, el 404 es el mismo que el de
   // una cuenta inventada.
-  @Post(':cuenta_id/acceso')
+  @Post(':account_id/access')
   @HttpCode(200)
-  async access(@Req() req: RequestWithContext, @Param('cuenta_id') accountId: string) {
+  async access(@Req() req: RequestWithContext, @Param('account_id') accountId: string) {
     if (!UUID.test(accountId)) throw new ContractError('paciente_no_existe');
     return this.sendAccess.run(req.body, accountId, callerOf(req));
   }

@@ -6,7 +6,7 @@
 //   según sus permisos.»
 //
 // De ahí las tres diferencias con `security/tokens.ts`, que es el de las sesiones:
-//   1. Aquí solo se VERIFICA. No hay `sign()`: no existe `POST /v1/plataforma/acceso` y el
+//   1. Aquí solo se VERIFICA. No hay `sign()`: no existe `POST /v1/platform/access` y el
 //      contrato lo dice en «Lo que este contrato no hace». El token llega ya firmado.
 //   2. La llave es OTRA —la pública del servicio de plataforma, que pone el despliegue— y
 //      por eso el `kid` también es otro. Un token de sesión no abre la consola y un token de
@@ -45,7 +45,7 @@ export const PLATFORM_TOKEN_LIFETIME_SECONDS = 15 * 60;
  * entero: no se ignora el permiso raro y se atienden los demás».
  *
  * `plataforma:suplantar` está en la tabla del contrato y por eso es un permiso conocido —un
- * token que lo traiga es válido—, pero **no abre nada**: `POST /v1/sesion/suplantacion` está
+ * token que lo traiga es válido—, pero **no abre nada**: `POST /v1/session/suplantacion` está
  * en `propuesto` y no existe en `route-policy.ts`. Conocido no es implementado.
  */
 export const PLATFORM_PERMISSIONS = [

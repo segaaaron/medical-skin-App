@@ -5,7 +5,7 @@
 // de arranque de las dos apps.
 //
 // Lo que se comprueba aquí:
-//   · `GET /v1/cuentas/mia` servido por los TRES roles que lo pueden pedir —`app_patient`,
+//   · `GET /v1/accounts/mine` servido por los TRES roles que lo pueden pedir —`app_patient`,
 //     `app_account` (la sesión restringida) y `app_practitioner`— sin un solo `where`: la
 //     fila que vuelve es la de quien pregunta porque lo dicen `account_own` y
 //     `credential_own`, y el `hash` no se nombra porque no hay `GRANT` que lo permita;
@@ -13,7 +13,7 @@
 //     cruzando SOLO las fichas de quien pregunta;
 //   · el `desde` en la zona del despliegue: con el UTC de la conexión, un vínculo creado a
 //     las 22:00 en La Paz se mostraría al día siguiente;
-//   · `POST /v1/equipo` con el nombre de la consulta leído en la MISMA transacción y su
+//   · `POST /v1/team` con el nombre de la consulta leído en la MISMA transacción y su
 //     línea de bitácora, y el `email_taken` de un correo que ya tiene cuenta en la región.
 //
 // Siembra el DUEÑO del esquema, que es quien migra; todo lo que se comprueba pasa por
@@ -173,7 +173,7 @@ afterAll(async () => {
   await Promise.all([owner.end(), app.end()]);
 }, 60_000);
 
-describe('GET /v1/cuentas/mia contra la base', () => {
+describe('GET /v1/accounts/mine contra la base', () => {
   it('la paciente ve su cuenta y sus dos doctoras, con el día en la zona del despliegue', async () => {
     const perfil = await repo.readProfile({
       owner: comoPaciente,
@@ -241,7 +241,7 @@ describe('GET /v1/cuentas/mia contra la base', () => {
   });
 });
 
-describe('POST /v1/equipo contra la base', () => {
+describe('POST /v1/team contra la base', () => {
   it('la dueña crea recepción, y el nombre de la consulta sale de la misma transacción', async () => {
     const creada = await team.create({
       owner: comoDuena,
@@ -305,7 +305,7 @@ describe('POST /v1/equipo contra la base', () => {
   });
 });
 
-describe('POST /v1/equipo/{miembro_id}/acceso contra la base', () => {
+describe('POST /v1/team/{member_id}/access contra la base', () => {
   // Va después del alta a propósito: el miembro que este endpoint existe para rescatar es
   // justo el que acabó de crearse, con su temporal sin entregar.
   it('la dueña lee a su miembro, y a sí misma NO: ese 404 llega antes del contador', async () => {
@@ -424,7 +424,7 @@ describe('POST /v1/equipo/{miembro_id}/acceso contra la base', () => {
   });
 });
 
-describe('DELETE /v1/cuentas/mia contra la base', () => {
+describe('DELETE /v1/accounts/mine contra la base', () => {
   // Va al final: el borrado se lleva la credencial y suelta los vínculos de la semilla.
   it('borra, suelta los dos vínculos y el segundo intento dice `already_deleted`', async () => {
     const primero = await repo.deleteMine({

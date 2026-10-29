@@ -1,4 +1,4 @@
-// POST /v1/plataforma/inquilinos/{id}/licencia/decision · «Aprobar o rechazar la licencia
+// POST /v1/platform/tenants/{id}/license/decision · «Aprobar o rechazar la licencia
 // revisada a mano».
 //
 // LA REVISIÓN ES A MANO Y ESTE ENDPOINT ES SU ÚNICA SALIDA: no hay aprobación automática, ni

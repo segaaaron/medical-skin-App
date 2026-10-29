@@ -1,4 +1,4 @@
-// `GET /v1/inquilinos/mio` · lo que el contrato promete de `PrimerDia` y de `Licencia` · 2.
+// `GET /v1/tenants/mine` · lo que el contrato promete de `PrimerDia` y de `Licencia` · 2.
 //
 // Lo que se fija aquí:
 //   · `puede` se DERIVA del estado de la licencia y viaja resuelto, porque la app lo lee;
@@ -67,7 +67,7 @@ function armar(consulta: PracticeSnapshot | null = CONSULTA) {
   return { caso: new ReadOwnPractice(practices), pedido };
 }
 
-describe('GET /v1/inquilinos/mio', () => {
+describe('GET /v1/tenants/mine', () => {
   it('sirve la consulta entera con su plan, su licencia y su primer día', async () => {
     const { caso, pedido } = armar();
 

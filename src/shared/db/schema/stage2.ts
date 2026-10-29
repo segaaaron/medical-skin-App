@@ -1,7 +1,7 @@
 // Esquema del tramo 2 · la ficha, el vínculo y los antecedentes.
 //
 // Fuentes: docs/contratos/pacientes.md (completo), docs/contratos/cuentas.md
-// (`POST /v1/pacientes` y `POST /v1/cuentas/{cuenta_id}/acceso`), §12.1 y §12.2 del diseño.
+// (`POST /v1/patients` y `POST /v1/accounts/{account_id}/access`), §12.1 y §12.2 del diseño.
 //
 // Archivo aparte del tramo 1 porque lo dice el comentario de `stage1.ts`: una tabla de
 // otro tramo va a su propio archivo y el glob de `drizzle.config.ts` los recoge todos.
@@ -101,7 +101,7 @@ export const patient = pgTable(
     status: text('status').notNull().default('activa'),
     archivedAt: timestampTz('archived_at'),
 
-    // La búsqueda de `GET /v1/pacientes`: nombre, apellido, correo y celular en una sola
+    // La búsqueda de `GET /v1/patients`: nombre, apellido, correo y celular en una sola
     // cadena, en minúsculas, mantenida por el motor. Columna generada y no expresión en el
     // índice para que la consulta sea legible y para que `backend-senior` tenga un nombre
     // que nombrar: `where search_text % $1`, con el patrón también en minúsculas.
@@ -157,7 +157,7 @@ export const patientLink = pgTable(
       .notNull()
       .references(() => patient.id, { onDelete: 'cascade' }),
     // Admite nulo y es `set null` a propósito: el expediente es de la consulta y sobrevive
-    // al borrado de la cuenta de la persona (cuentas.md · DELETE /v1/cuentas/mia).
+    // al borrado de la cuenta de la persona (cuentas.md · DELETE /v1/accounts/mine).
     accountId: uuid('account_id').references(() => account.id, { onDelete: 'set null' }),
 
     // `invitada` es un estado NORMAL, no un error (§12.2.2). `revocada` es «no, gracias»:
@@ -181,12 +181,12 @@ export const patientLink = pgTable(
     // Una fila por ficha (§12.1: `patient_link 1`). Una sola columna, así que la regla 5 no
     // la alcanza: no hay índice compuesto que pudiera empezar por el inquilino.
     uniqueIndex('patient_link_patient_uq').on(t.patientId),
-    // Inquilino delante: es la autorización literal de `POST /v1/cuentas/{cuenta_id}/acceso`
+    // Inquilino delante: es la autorización literal de `POST /v1/accounts/{account_id}/access`
     // —`EXISTS (SELECT 1 FROM patient_link WHERE account_id = $1)` bajo la política de
     // `practice_id`— y la que distingue «no es tuya» de «no existe» sin decir cuál.
     index('patient_link_practice_account_idx').on(t.practiceId, t.accountId),
-    // Y uno por cuenta sola, SIN inquilino delante y a propósito: es `GET /v1/vinculos` y
-    // los `doctoras[]` de `GET /v1/cuentas/mia`, la única lectura que cruza inquilinos. No
+    // Y uno por cuenta sola, SIN inquilino delante y a propósito: es `GET /v1/links` y
+    // los `doctoras[]` de `GET /v1/accounts/mine`, la única lectura que cruza inquilinos. No
     // hay `practice_id` que poner delante porque quien pregunta no tiene uno.
     index('patient_link_account_idx').on(t.accountId),
     check('patient_link_status_ck', sql`${t.status} in ('invitada', 'vinculada', 'revocada')`),

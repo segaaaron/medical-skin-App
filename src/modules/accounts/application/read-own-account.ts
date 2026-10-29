@@ -1,7 +1,7 @@
-// GET /v1/cuentas/mia · quién soy, qué rol tengo y QUÉ PANTALLA TOCA.
+// GET /v1/accounts/mine · quién soy, qué rol tengo y QUÉ PANTALLA TOCA.
 //
 // Es el único endpoint que una sesión con la contraseña todavía temporal puede llamar aparte
-// de `POST /v1/acceso/contrasena-nueva` (`sesion.md` · `siguiente_paso`), así que es lo
+// de `POST /v1/access/new-password` (`sesion.md` · `siguiente_paso`), así que es lo
 // primero que piden las dos apps al arrancar.
 //
 // EL `rol` SE LEE, NO SE PIDE: no hay pantalla de «¿eres doctora o paciente?» y ningún

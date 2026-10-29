@@ -3,7 +3,7 @@
 //   0017 · el reenvío de acceso deja de borrar `temp_first_used_at`, así que la paciente
 //          que ya estrenó su temporal conserva la recuperación por correo cuando el
 //          reenvío se queda a medias (H-12) o cuando el correo se pierde.
-//   0018 · `medskin_session_refresh` devuelve lo que el 200 de `POST /v1/sesion/refresco`
+//   0018 · `medskin_session_refresh` devuelve lo que el 200 de `POST /v1/session/refresh`
 //          promete —`practitioner_role`, `license_status`, `first_day_done`,
 //          `password_is_temporary`— y resuelve la gracia de 20 s en la fila.
 //   0020 · acuñar una temporal nueva revoca las sesiones de esa cuenta —la llave contra la
@@ -217,7 +217,7 @@ describe('el reenvío de acceso · la marca de la primera entrada es un hecho (0
   it('el reenvío revoca la sesión viva de esa cuenta, y su refresco ya no rota (0020)', async () => {
     // El callejón sin salida que esto cierra: con la sesión abierta, el refresco devolvía
     // `siguiente_paso: contrasena_nueva` con un token de alcance `completo`, y
-    // `POST /v1/acceso/contrasena-nueva` solo admite `contrasena_temporal` y
+    // `POST /v1/access/new-password` solo admite `contrasena_temporal` y
     // `recuperacion`. La pantalla se abría y no se podía completar.
     await owner.query('update session set revoked_at = null, revoked_reason = null where id = $1', [USED.session]);
 
@@ -247,7 +247,7 @@ describe('el reenvío de acceso · la marca de la primera entrada es un hecho (0
 });
 
 // =========================================================================================
-// 0018 · POST /v1/sesion/refresco
+// 0018 · POST /v1/session/refresh
 // =========================================================================================
 describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () => {
   type Rotation = {

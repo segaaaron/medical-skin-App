@@ -1,4 +1,4 @@
-// `GET /v1/plataforma/inquilinos/{id}` · la ficha de la consola.
+// `GET /v1/platform/tenants/{id}` · la ficha de la consola.
 //
 // Lo que se fija aquí:
 //   · NO HAY UN SOLO CAMPO DE PACIENTE en la respuesta, y `incidencias` nace vacía;
@@ -49,7 +49,7 @@ function armar(ficha: TenantFile | null = FICHA) {
   return { caso: new ReadTenant(files, 'Bolivia · bo-1'), pedido };
 }
 
-describe('GET /v1/plataforma/inquilinos/{id}', () => {
+describe('GET /v1/platform/tenants/{id}', () => {
   it('sirve metadatos y estados, y ni un dato de paciente', async () => {
     const { caso, pedido } = armar();
 

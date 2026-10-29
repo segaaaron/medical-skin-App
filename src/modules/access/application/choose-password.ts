@@ -1,4 +1,4 @@
-// POST /v1/acceso/contrasena-nueva · la contraseña nueva obligatoria. Un flujo, dos
+// POST /v1/access/new-password · la contraseña nueva obligatoria. Un flujo, dos
 // entradas: la primera vez y el olvido. El MISMO endpoint, porque si fueran dos, un día
 // divergirían las reglas de la contraseña.
 //
@@ -13,7 +13,7 @@
 //   · por RECUPERACIÓN no hay sesión, no hay rol y no hay inquilino, porque el token de
 //     recuperación no los lleva (`recuperacion.md`: «el token no lleva rol»). El rol y el
 //     inquilino los devuelve la base al guardar, y la sesión se ABRE después, que es el
-//     mismo acto que una entrada por `POST /v1/acceso`.
+//     mismo acto que una entrada por `POST /v1/access`.
 
 import { z } from 'zod';
 

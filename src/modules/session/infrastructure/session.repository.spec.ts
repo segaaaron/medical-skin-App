@@ -1,4 +1,4 @@
-// El repositorio de `GET /v1/sesion` contra la base REAL en Docker, con los roles de
+// El repositorio de `GET /v1/session` contra la base REAL en Docker, con los roles de
 // aplicación y `withTenantContext()`. Sin un solo doble, y EN NINGÚN MOMENTO SE DESACTIVA
 // RLS: la siembra la hace el dueño del esquema —que es quien migra— y todo lo que se
 // comprueba pasa por `app_practitioner` y `app_patient`.
@@ -267,7 +267,7 @@ describe('qué ve otro inquilino · nada', () => {
 });
 
 // =========================================================================================
-// POST /v1/sesion/refresco · el mapeo de las catorce columnas y el ROLLBACK, que es lo que
+// POST /v1/session/refresh · el mapeo de las catorce columnas y el ROLLBACK, que es lo que
 // esta capa añade. La rotación, el reuso y la ventana de 20 s son de la base y las prueba
 // `refresh-and-first-use.spec.ts` contra el motor: aquí no se repiten.
 // =========================================================================================

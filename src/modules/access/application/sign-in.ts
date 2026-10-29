@@ -1,4 +1,4 @@
-// POST /v1/acceso · entrar. El único endpoint de autenticación del producto.
+// POST /v1/access · entrar. El único endpoint de autenticación del producto.
 //
 // EL ORDEN DE LAS COMPROBACIONES ES PARTE DEL CONTRATO (`acceso.md` · «El orden de las
 // comprobaciones, que es parte del contrato») y es la diferencia entre cerrar y abrir el
@@ -63,7 +63,7 @@ export type SignInResponse = {
   /**
    * SIEMPRE presente, con nulo cuando no hay refresco —alcance restringido—, y no omitido:
    * `sesion.md`, 28 de octubre. Dos formas para el mismo campo en dos endpoints obligan a
-   * la app a llevar dos decodificadores, y `GET /v1/sesion` y el refresco ya lo mandan así.
+   * la app a llevar dos decodificadores, y `GET /v1/session` y el refresco ya lo mandan así.
    */
   refresco_caduca_en: string | null;
   region: Region;

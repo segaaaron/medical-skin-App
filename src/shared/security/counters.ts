@@ -106,7 +106,7 @@ export const COUNTER_KEYS = {
   /** `cuentas.md` · 429 `demasiados_reenvios`: «más de 3 en una hora para la misma cuenta». */
   accessResendsByAccount: (accountId: string) => `acceso:reenvios:${accountId}`,
 
-  // El de `PATCH /v1/cuentas/mia/contrasena`: «5 fallos de `actual` en 15 min». No está
+  // El de `PATCH /v1/accounts/mine/password`: «5 fallos de `actual` en 15 min». No está
   // en la tabla de `_convenciones.md` y el contrato lo exige. Va por `cuenta_id` y no por
   // correo porque aquí quien llama ya está dentro: hay fila de cuenta segura que contar.
   passwordChangeByAccount: (accountId: string) => `cuenta:contrasena:intentos:${accountId}`,

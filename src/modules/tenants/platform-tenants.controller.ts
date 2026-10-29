@@ -1,7 +1,7 @@
 // Solo HTTP · los TRES endpoints de consola de `inquilinos.md`.
 //
-// LAS RUTAS SON EXACTAMENTE LAS CLAVES DE `route-policy.ts` —`POST /v1/plataforma/inquilinos`,
-// `GET /v1/plataforma/inquilinos/:id`, `POST /v1/plataforma/inquilinos/:id/licencia/decision`—
+// LAS RUTAS SON EXACTAMENTE LAS CLAVES DE `route-policy.ts` —`POST /v1/platform/tenants`,
+// `GET /v1/platform/tenants/:id`, `POST /v1/platform/tenants/:id/license/decision`—
 // porque la clave de esa tabla es la ruta tal y como la registra Fastify: cambiar la forma de
 // la ruta aquí es cambiar la clave, y una ruta sin política es un 500 que ninguna prueba de
 // unidad ve.
@@ -32,7 +32,7 @@ import type { PlatformActor } from './domain/platform-ports';
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-@Controller('v1/plataforma/inquilinos')
+@Controller('v1/platform/tenants')
 export class PlatformTenantsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
@@ -64,7 +64,7 @@ export class PlatformTenantsController {
     return this.readTenant.run(id, actorOf(req));
   }
 
-  @Post(':id/licencia/decision')
+  @Post(':id/license/decision')
   @HttpCode(200)
   async decide(@Req() req: RequestWithContext, @Param('id') id: string): Promise<unknown> {
     // Sin licencia que decidir: el mismo 404 que una consulta que no existe.

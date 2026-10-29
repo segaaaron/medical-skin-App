@@ -1,4 +1,4 @@
-// `POST /v1/plataforma/inquilinos` · la única puerta de una doctora al sistema.
+// `POST /v1/platform/tenants` · la única puerta de una doctora al sistema.
 //
 // Lo que se fija aquí:
 //   · el 201 completo, con la temporal y su caducidad, y `licencia.estado = "sin_enviar"`;
@@ -105,7 +105,7 @@ function armar(opciones: Opciones = {}) {
 
 const CLAVE = { key: 'consola-caso', bodyHash: 'huella-caso' };
 
-describe('POST /v1/plataforma/inquilinos', () => {
+describe('POST /v1/platform/tenants', () => {
   it('crea la consulta y devuelve el 201 con la temporal una sola vez', async () => {
     const { caso, enviados, hasheadas } = armar();
 

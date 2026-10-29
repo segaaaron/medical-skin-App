@@ -1,4 +1,4 @@
-// POST /v1/plataforma/inquilinos · «MedSkin da de alta una consulta y, en el mismo acto, la
+// POST /v1/platform/tenants · «MedSkin da de alta una consulta y, en el mismo acto, la
 // cuenta de su doctora dueña».
 //
 // ES LA ÚNICA PUERTA DE ENTRADA DE UNA DOCTORA AL SISTEMA. «Nadie se registra solo» (estado
@@ -173,7 +173,7 @@ export class CreateTenant {
         accountId: p.response.doctora.cuenta_id,
         practiceId: p.response.id,
         region: this.region,
-        operation: 'POST /v1/plataforma/inquilinos',
+        operation: 'POST /v1/platform/tenants',
         traceId: p.trace.traceId,
         requestId: p.trace.requestId,
       });

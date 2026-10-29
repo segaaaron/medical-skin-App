@@ -1,4 +1,4 @@
-// `POST /v1/inquilinos/mio/licencia` · los veredictos de la base traducidos a la tabla de
+// `POST /v1/tenants/mine/license` · los veredictos de la base traducidos a la tabla de
 // errores del contrato, y nada más que eso.
 //
 // Lo que se fija aquí:
@@ -97,7 +97,7 @@ function armar(verdict: SubmissionVerdict = 'submitted', repetida: unknown = nul
   };
 }
 
-describe('POST /v1/inquilinos/mio/licencia', () => {
+describe('POST /v1/tenants/mine/license', () => {
   it('abre el caso y devuelve el 202 del contrato, con `puede` sin desbloquear nada', async () => {
     const { caso, pedido } = armar();
 

@@ -1,4 +1,4 @@
-// GET /v1/pacientes · la lista y la búsqueda de la consulta.
+// GET /v1/patients · la lista y la búsqueda de la consulta.
 //
 // Recepción SÍ entra: necesita encontrar a la paciente para agendarle, y eso no es abrir su
 // historia. Por eso el permiso es `pacientes:leer` y no `historia:leer`, y por eso `alerta` es

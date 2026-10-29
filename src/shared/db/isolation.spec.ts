@@ -802,7 +802,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
   }
 
   it('la lista de pacientes entra por el índice que empieza por el inquilino', async () => {
-    // `GET /v1/pacientes` sin búsqueda: las activas, las últimas primero. Y sin
+    // `GET /v1/patients` sin búsqueda: las activas, las últimas primero. Y sin
     // `where practice_id`: lo pone la política, que es justo lo que hay que medir.
     const used = await plan(
       ctxPractitionerA,
@@ -855,7 +855,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
   });
 
   it('la autorización del reenvío de acceso entra por (practice_id, account_id)', async () => {
-    // `POST /v1/cuentas/{cuenta_id}/acceso`: `EXISTS (... where account_id = $1)` bajo la
+    // `POST /v1/accounts/{account_id}/access`: `EXISTS (... where account_id = $1)` bajo la
     // política del inquilino. Es la consulta literal del contrato.
     const used = await plan(ctxPractitionerA, 'select exists (select 1 from patient_link where account_id = $1)', [
       PATIENT.account,
@@ -892,7 +892,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
   });
 
   it('las sesiones activas de una cuenta entran por su índice parcial', async () => {
-    // `GET /v1/acceso/sesiones`: las de SU cuenta, las vivas, la última primero. El índice
+    // `GET /v1/access/sessions`: las de SU cuenta, las vivas, la última primero. El índice
     // es parcial (`where revoked_at is null`) y la consulta tiene que decir lo mismo para
     // poder usarlo.
     const used = await plan(
@@ -918,8 +918,8 @@ describe('los planes de las rutas calientes del tramo 2', () => {
 //
 // El rol del token de recuperación, que a propósito no lleva el rol dentro. Por aquí entra
 // una paciente y entra una doctora, así que lo que tiene que poder hacer es exactamente lo
-// que los dos endpoints de ese token necesitan —`POST /v1/acceso/contrasena-nueva` y
-// `GET /v1/cuentas/mia`— y nada más. Que una doctora lo adopte NO le da su consulta.
+// que los dos endpoints de ese token necesitan —`POST /v1/access/new-password` y
+// `GET /v1/accounts/mine`— y nada más. Que una doctora lo adopte NO le da su consulta.
 // =========================================================================================
 describe('app_account · el rol del token que no dice qué eres', () => {
   it('lee su cuenta, su credencial, sus sesiones y sus vínculos, y nada clínico', async () => {
@@ -927,7 +927,7 @@ describe('app_account · el rol del token que no dice qué eres', () => {
       account: (await read(app, ctxAccountPatient, 'select id from account')).map((r) => r.id),
       credential: (await read(app, ctxAccountPatient, 'select account_id from credential')).map((r) => r.account_id),
       session: (await read(app, ctxAccountPatient, 'select id from session')).map((r) => r.id),
-      // Los dos vínculos: `GET /v1/cuentas/mia` devuelve `doctoras[]` también con una
+      // Los dos vínculos: `GET /v1/accounts/mine` devuelve `doctoras[]` también con una
       // sesión restringida, y si no pudiera leerlos le mentiría con una lista vacía.
       links: (await read(app, ctxAccountPatient, 'select practice_name from patient_link'))
         .map((r) => r.practice_name)

@@ -1,4 +1,4 @@
-// `POST /v1/equipo` · el alta de recepción o de un asistente clínico.
+// `POST /v1/team` · el alta de recepción o de un asistente clínico.
 //
 // Lo que se fija aquí:
 //   · UN SOLO `409` para las dos causas del correo tomado —ya está en este equipo, o ese
@@ -124,7 +124,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('POST /v1/equipo', () => {
+describe('POST /v1/team', () => {
   it('da de alta a recepción, le manda su acceso y no devuelve la contraseña', async () => {
     const { caso, pasos, enviados, recibido } = armar();
     const respuesta = await caso.run(CUERPO, DUENA, CLAVE);
@@ -259,7 +259,7 @@ describe('POST /v1/equipo', () => {
     expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
       codigo: 'fallo_de_servicio',
       estado: 500,
-      // Ya no manda a soporte: desde que existe `POST /v1/equipo/{miembro_id}/acceso` hay
+      // Ya no manda a soporte: desde que existe `POST /v1/team/{member_id}/access` hay
       // una salida dentro del producto, y la frase la nombra en vez de prometer un reintento
       // del alta que daría `409 correo_no_disponible`.
       mensaje:

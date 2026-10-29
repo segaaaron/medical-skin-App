@@ -123,7 +123,7 @@ afterAll(async () => {
 
 describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
   it('la consola crea consulta, dueña y licencia en `sin_enviar`, y la doctora la envía sin que nadie inserte la fila', async () => {
-    // Paso 1 y 2 de `POST /v1/plataforma/inquilinos`, tal cual los va a escribir el
+    // Paso 1 y 2 de `POST /v1/platform/tenants`, tal cual los va a escribir el
     // endpoint: el `INSERT` de la consulta y la función del alta de la dueña.
     const created = await read<{ id: string }>(
       ctxPlatform,
@@ -150,7 +150,7 @@ describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
     );
     expect(licencia).toEqual([{ status: 'sin_enviar', submitted_at: null }]);
 
-    // Y `POST /v1/inquilinos/mio/licencia` de esa dueña recién creada funciona de una:
+    // Y `POST /v1/tenants/mine/license` de esa dueña recién creada funciona de una:
     // su `UPDATE` toca su fila, y la función la mueve a revisión.
     const ctxOwner: TenantContext = { role: 'app_practitioner', practiceId: A.practice, accountId: ownerAccount };
     const filled = await read<{ id: string }>(
@@ -259,7 +259,7 @@ describe('la ficha de la consola · cuenta fichas sin leer ninguna (0015)', () =
   });
 });
 
-describe('el plan del recuento del plan de `GET /v1/inquilinos/mio`', () => {
+describe('el plan del recuento del plan de `GET /v1/tenants/mine`', () => {
   beforeAll(async () => {
     for (const [id, name] of [
       [SMALL.practice, 'Pequeña'],

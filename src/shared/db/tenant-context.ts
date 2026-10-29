@@ -52,8 +52,8 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   const practiceId = validUuid(ctx.practiceId, 'practiceId');
   const accountId = validUuid(ctx.accountId, 'accountId');
 
-  // `app_anonymous` es el rol de las peticiones SIN sesión: `POST /v1/acceso`, los dos de
-  // recuperación y `POST /v1/sesion/refresco`. Cuando llegan no hay ni inquilino ni cuenta
+  // `app_anonymous` es el rol de las peticiones SIN sesión: `POST /v1/access`, los dos de
+  // recuperación y `POST /v1/session/refresh`. Cuando llegan no hay ni inquilino ni cuenta
   // que fijar, así que no fija ninguno de los dos contextos —y se rechaza que lo intente:
   // un `account_id` puesto aquí sería un identificador que nadie ha probado todavía, y
   // habilitaría políticas por fila con el único rol que no debería disparar ninguna. No

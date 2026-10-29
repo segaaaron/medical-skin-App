@@ -1,4 +1,4 @@
-// GET /v1/sesion · «Comprobar la sesión al arrancar y saber qué pantalla toca».
+// GET /v1/session · «Comprobar la sesión al arrancar y saber qué pantalla toca».
 //
 // Es la llamada de `Arranque.dc.html` · 1, así que tiene una obligación de rendimiento y
 // no solo de forma: UNA transacción, UNA lectura, y **nada clínico** — ni pacientes, ni
@@ -97,7 +97,7 @@ export class ReadSession {
           : { id: snapshot.practice.id, nombre: snapshot.practice.name },
       permisos: resolvePermissions(caller.role, snapshot.permissions ?? null),
       // Apagado en la primera entrega, y escrito así a propósito: `sesion.md` deja
-      // `POST /v1/sesion/segundo-factor` en `propuesto` —«el segundo factor existe en el
+      // `POST /v1/session/segundo-factor` en `propuesto` —«el segundo factor existe en el
       // contrato y está apagado», `segundo_factor.activo = false`— y el campo viaja igual
       // para que la app pueda recibirlo el día que se encienda sin cambiar de forma.
       segundo_factor: { activo: false, obligatorio_desde: null },
@@ -107,7 +107,7 @@ export class ReadSession {
   }
 
   /**
-   * El MISMO campo y la misma lista que `POST /v1/acceso`, y por eso la misma función: «la
+   * El MISMO campo y la misma lista que `POST /v1/access`, y por eso la misma función: «la
    * app lo lee en cada arranque, no solo al entrar», así que una licencia aprobada con la
    * app cerrada mueve a la doctora de `primer_dia` sin que ella haga nada.
    *

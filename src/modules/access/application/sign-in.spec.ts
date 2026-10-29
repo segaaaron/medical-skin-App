@@ -1,4 +1,4 @@
-// La prueba del ORDEN, que es parte del contrato de `POST /v1/acceso`.
+// La prueba del ORDEN, que es parte del contrato de `POST /v1/access`.
 //
 // No comprueba que un doble fue llamado: comprueba la SECUENCIA, porque la secuencia es la
 // regla. `acceso.md` · «El orden de las comprobaciones, que es parte del contrato»: la
@@ -182,7 +182,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('se esperaba un ErrorDeContrato y no se lanzó ninguno');
 }
 
-describe('POST /v1/acceso · el orden de las comprobaciones', () => {
+describe('POST /v1/access · el orden de las comprobaciones', () => {
   it('mira la pausa ANTES de leer la credencial y de verificar el hash', async () => {
     const { caso, pasos } = armar({ credencial: PACIENTE, coincide: true });
     await caso.run(PETICION);
@@ -305,7 +305,7 @@ describe('POST /v1/acceso · el orden de las comprobaciones', () => {
   });
 });
 
-describe('POST /v1/acceso · la pausa', () => {
+describe('POST /v1/access · la pausa', () => {
   it('429 antes de verificar nada: no se lee la credencial ni se llama a Argon2id', async () => {
     const hasta = new Date('2026-10-27T14:29:00.000Z');
     const { caso, pasos } = armar({
@@ -401,7 +401,7 @@ describe('POST /v1/acceso · la pausa', () => {
   });
 });
 
-describe('POST /v1/acceso · la respuesta', () => {
+describe('POST /v1/access · la respuesta', () => {
   it('la contraseña definitiva da alcance completo, refresco y 30 días para la paciente', async () => {
     const { caso } = armar({ credencial: PACIENTE, coincide: true });
     const respuesta = await caso.run(PETICION);
@@ -459,7 +459,7 @@ describe('POST /v1/acceso · la respuesta', () => {
   });
 });
 
-describe('POST /v1/acceso · la forma del cuerpo', () => {
+describe('POST /v1/access · la forma del cuerpo', () => {
   it('correo vacío y contraseña vacía, en ese orden, y sin tocar nada más', async () => {
     const { caso, pasos } = armar({ credencial: PACIENTE, coincide: true });
 

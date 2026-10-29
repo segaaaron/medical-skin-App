@@ -19,7 +19,7 @@ export type PracticeOwner = {
 };
 
 /**
- * Lo que `GET /v1/inquilinos/mio` necesita de la base y nada más. `internal_note` NO está,
+ * Lo que `GET /v1/tenants/mine` necesita de la base y nada más. `internal_note` NO está,
  * y no es una omisión del código: `app_practitioner` no tiene ese `GRANT SELECT` de columna
  * («solo consola, nunca sale a la app»), así que pedirla sería «permiso denegado».
  */
@@ -69,7 +69,7 @@ export interface OwnPracticePort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/inquilinos/mio/licencia
+// POST /v1/tenants/mine/license
 // ---------------------------------------------------------------------------------------
 
 /** Las seis columnas del formulario, ya validadas. */

@@ -1,4 +1,4 @@
-// Las rutas de ficha de `pacientes.md`. El alta —`POST /v1/pacientes`— NO está aquí: es la
+// Las rutas de ficha de `pacientes.md`. El alta —`POST /v1/patients`— NO está aquí: es la
 // parte de cuenta y acceso, vive en `accounts` y ya se sirve.
 //
 // Solo HTTP: valida la forma, llama al caso de uso, devuelve. La autorización la hizo el
@@ -14,7 +14,7 @@ import { EditPatient } from './application/edit-patient';
 import { ListPatients } from './application/list-patients';
 import { ReadPatient } from './application/read-patient';
 
-@Controller('v1/pacientes')
+@Controller('v1/patients')
 export class PatientsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
@@ -47,19 +47,19 @@ export class PatientsController {
 
   // Archivar y reactivar son el mismo camino con el estado al reves, y los dos son
   // idempotentes por naturaleza: archivar lo archivado devuelve el mismo 200.
-  @Post(':id/archivar')
+  @Post(':id/archive')
   @HttpCode(200)
   async archive(@Req() req: RequestWithContext, @Param('id') id: string): Promise<unknown> {
     return this.editPatient.archive(id, callerOf(req), true);
   }
 
-  @Post(':id/reactivar')
+  @Post(':id/reactivate')
   @HttpCode(200)
   async reactivate(@Req() req: RequestWithContext, @Param('id') id: string): Promise<unknown> {
     return this.editPatient.archive(id, callerOf(req), false);
   }
 
-  @Get(':id/antecedentes')
+  @Get(':id/medical-history')
   @HttpCode(200)
   async history(@Req() req: RequestWithContext, @Param('id') id: string) {
     return this.readPatient.history(id, callerOf(req));

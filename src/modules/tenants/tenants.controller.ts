@@ -2,7 +2,7 @@
 // hizo el guardia global por lista blanca de rutas y quién llama sale del token: ni un
 // `practice_id` de la URL, porque la ruta es `/mio`.
 //
-// Los tres de `/v1/plataforma/inquilinos…` de este mismo contrato NO están aquí: necesitan
+// Los tres de `/v1/platform/tenants…` de este mismo contrato NO están aquí: necesitan
 // la verificación del token de plataforma y son de otro encargo.
 //
 // LA CLAVE SE LEE AQUÍ —es una cabecera: transporte, no negocio— y se comprueba y se guarda
@@ -24,7 +24,7 @@ import type { Caller } from '../access/application/caller';
 import { ReadOwnPractice } from './application/read-own-practice';
 import { SubmitLicense } from './application/submit-license';
 
-@Controller('v1/inquilinos')
+@Controller('v1/tenants')
 export class TenantsController {
   // `@Inject` explícito y no inyección por el tipo del constructor: esbuild —el que usan
   // `tsx` y vitest— no emite `emitDecoratorMetadata`, así que sin esto el controlador se
@@ -34,13 +34,13 @@ export class TenantsController {
     @Inject(SubmitLicense) private readonly submitLicense: SubmitLicense,
   ) {}
 
-  @Get('mio')
+  @Get('mine')
   @HttpCode(200)
   async mine(@Req() req: RequestWithContext) {
     return this.readPractice.run(callerOf(req));
   }
 
-  @Post('mio/licencia')
+  @Post('mine/license')
   @HttpCode(202)
   async license(@Req() req: RequestWithContext): Promise<unknown> {
     const body: unknown = req.body;

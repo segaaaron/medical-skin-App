@@ -1,4 +1,4 @@
-// `DELETE /v1/cuentas/mia` · el orden, los cuatro noes y lo que el 200 promete.
+// `DELETE /v1/accounts/mine` · el orden, los cuatro noes y lo que el 200 promete.
 //
 // Lo que se fija aquí:
 //   · la contraseña se comprueba ANTES de llamar al borrado, y un fallo no escribe nada;
@@ -90,7 +90,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('DELETE /v1/cuentas/mia', () => {
+describe('DELETE /v1/accounts/mine', () => {
   it('borra, y dice qué se fue y qué se conserva hasta cuándo', async () => {
     const { caso, pasos, recibido } = armar({});
     const respuesta = await caso.run({ contrasena: 'la-mía', motivo: 'ya_no_la_uso' }, PACIENTE);

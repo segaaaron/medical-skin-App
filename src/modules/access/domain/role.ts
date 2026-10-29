@@ -79,7 +79,7 @@ export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly str
 };
 
 /**
- * La lista resuelta que viaja en el token y en `GET /v1/sesion`. Nunca el rol: «la app no
+ * La lista resuelta que viaja en el token y en `GET /v1/session`. Nunca el rol: «la app no
  * deduce permisos del rol», y por eso quien resuelve es el servidor.
  */
 export function resolvePermissions(

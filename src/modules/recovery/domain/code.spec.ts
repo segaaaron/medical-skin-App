@@ -1,7 +1,7 @@
 // Las reglas del código, sin NestJS, sin base y sin Redis.
 //
 // La prueba que importa es la última: EL VEREDICTO DE UN CORREO QUE NO TIENE CUENTA. Si se
-// rompe, el código de estado de `POST /v1/recuperacion/codigo` dice si un correo existe
+// rompe, el código de estado de `POST /v1/recovery/code` dice si un correo existe
 // —410 para los reales, 401 para los inventados—, y eso es dato de salud.
 
 import { describe, expect, it } from 'vitest';

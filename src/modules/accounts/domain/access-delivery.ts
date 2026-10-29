@@ -112,7 +112,7 @@ export type LinkNoticeFacts = {
 };
 
 /**
- * EL CORREO DE QUIEN YA TIENE CUENTA · `POST /v1/pacientes` con `via: "correo"` cuando el
+ * EL CORREO DE QUIEN YA TIENE CUENTA · `POST /v1/patients` con `via: "correo"` cuando el
  * correo ya tenía cuenta en la región.
  *
  * Existe porque esa persona TIENE QUE ENTERARSE de que una consulta la dio de alta: es su
@@ -140,7 +140,7 @@ export type PlatformDeliveryFacts = {
 };
 
 /**
- * EL CORREO DEL REENVÍO DE LA CONSOLA · `POST /v1/plataforma/cuentas/{id}/acceso/reenviar`.
+ * EL CORREO DEL REENVÍO DE LA CONSOLA · `POST /v1/platform/accounts/{id}/access/resend`.
  *
  * «Va a su propio correo. Soporte no la ve», y es literal: la contraseña está en este cuerpo
  * y NO en la respuesta del endpoint. Plantilla propia y no la de la paciente por dos razones
@@ -173,7 +173,7 @@ export type TeamDeliveryFacts = {
 };
 
 /**
- * EL CORREO DEL ACCESO DEL EQUIPO · `POST /v1/equipo`. «El acceso del equipo sale solo por
+ * EL CORREO DEL ACCESO DEL EQUIPO · `POST /v1/team`. «El acceso del equipo sale solo por
  * correo: no hay `wa.me` aquí. La vía por WhatsApp existe porque muchas pacientes no abren
  * el correo; quien trabaja en la consulta sí.»
  *

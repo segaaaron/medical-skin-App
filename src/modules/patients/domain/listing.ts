@@ -19,7 +19,7 @@ const STATUSES: readonly PatientStatusFilter[] = ['activa', 'archivada', 'todas'
 const LINKS: readonly LinkStatus[] = ['invitada', 'vinculada', 'revocada'];
 
 /**
- * La query de `GET /v1/pacientes`. Todo opcional, y lo que no se entiende **no se adivina**:
+ * La query de `GET /v1/patients`. Todo opcional, y lo que no se entiende **no se adivina**:
  * un `estado=cualquiera` no cae en `activa` en silencio, porque entonces la app creería que
  * está filtrando algo que no filtra.
  *

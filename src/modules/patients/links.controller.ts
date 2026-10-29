@@ -1,4 +1,4 @@
-// `/v1/vinculos…` · las dos pantallas de la paciente: «¿Es esta tu doctora?» y «Antes de
+// `/v1/links…` · las dos pantallas de la paciente: «¿Es esta tu doctora?» y «Antes de
 // atenderte». Controlador aparte del de la ficha porque es otra puerta: otro rol de base
 // (`app_patient`), otro permiso y otra política. Lo único que comparten es la tabla.
 
@@ -10,7 +10,7 @@ import type { Caller } from '../access/application/caller';
 import { PatientLinks } from './application/patient-links';
 import { WritePatientHistory } from './application/write-patient-history';
 
-@Controller('v1/vinculos')
+@Controller('v1/links')
 export class LinksController {
   constructor(
     @Inject(PatientLinks) private readonly links: PatientLinks,
@@ -23,23 +23,23 @@ export class LinksController {
     return this.links.list(callerOf(req));
   }
 
-  @Post(':vinculo_id/aceptar')
+  @Post(':link_id/accept')
   @HttpCode(200)
-  async accept(@Req() req: RequestWithContext, @Param('vinculo_id') id: string) {
+  async accept(@Req() req: RequestWithContext, @Param('link_id') id: string) {
     return this.links.decide(id, callerOf(req), true);
   }
 
-  @Post(':vinculo_id/rechazar')
+  @Post(':link_id/reject')
   @HttpCode(200)
-  async reject(@Req() req: RequestWithContext, @Param('vinculo_id') id: string) {
+  async reject(@Req() req: RequestWithContext, @Param('link_id') id: string) {
     return this.links.decide(id, callerOf(req), false);
   }
 
-  @Put(':vinculo_id/ficha-medica')
+  @Put(':link_id/medical-form')
   @HttpCode(200)
   async medicalForm(
     @Req() req: RequestWithContext,
-    @Param('vinculo_id') id: string,
+    @Param('link_id') id: string,
     @Body() body: unknown,
   ) {
     return this.history.run(id, body, callerOf(req));

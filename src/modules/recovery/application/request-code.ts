@@ -1,4 +1,4 @@
-// POST /v1/recuperacion · pedir el código de seis dígitos.
+// POST /v1/recovery · pedir el código de seis dígitos.
 //
 // LA REGLA DE ESTE CASO DE USO ES QUE NO TOCA LA BASE, y no es una optimización: es la
 // única forma de cumplir «esta respuesta es idéntica exista o no el correo, mismo 202,

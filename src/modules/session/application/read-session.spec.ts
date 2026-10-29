@@ -1,4 +1,4 @@
-// `GET /v1/sesion`. Lo que se fija aquí es lo que el contrato pone por escrito y una app
+// `GET /v1/session`. Lo que se fija aquí es lo que el contrato pone por escrito y una app
 // no puede comprobar sola:
 //
 //   · la lista de permisos sale RESUELTA, y nunca el rol a secas;
@@ -77,7 +77,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('se esperaba un ContractError y no se lanzó ninguno');
 }
 
-describe('GET /v1/sesion · el 200', () => {
+describe('GET /v1/session · el 200', () => {
   it('devuelve la forma exacta del contrato y busca la fila por el `sid` del token', async () => {
     const { port, vistos } = puerto(CONSULTA_VIVA);
 
@@ -182,7 +182,7 @@ describe('GET /v1/sesion · el 200', () => {
   });
 });
 
-describe('GET /v1/sesion · los errores', () => {
+describe('GET /v1/session · los errores', () => {
   it('una sesión cerrada en otro sitio es 401 `sesion_revocada`, no un 200', async () => {
     const { port } = puerto({ ...CONSULTA_VIVA, revokedAt: new Date('2026-10-27T13:00:00.000Z') });
 

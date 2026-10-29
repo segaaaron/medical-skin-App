@@ -18,7 +18,7 @@ function ipOf(req: RequestWithContext): string {
   return ctx.ip;
 }
 
-@Controller('v1/recuperacion')
+@Controller('v1/recovery')
 export class RecoveryController {
   // `@Inject` explícito y no inyección por tipo: esbuild no emite `emitDecoratorMetadata`,
   // así que sin esto el controlador se construye con los casos de uso en `undefined` bajo
@@ -34,7 +34,7 @@ export class RecoveryController {
     return this.requestCode.run(req.body, ipOf(req));
   }
 
-  @Post('codigo')
+  @Post('code')
   @HttpCode(200)
   async check(@Req() req: RequestWithContext) {
     return this.checkCode.run(req.body, ipOf(req));

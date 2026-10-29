@@ -1,4 +1,4 @@
-// `GET /v1/cuentas/mia` · lo que el contrato promete de la pantalla de arranque.
+// `GET /v1/accounts/mine` · lo que el contrato promete de la pantalla de arranque.
 //
 // Lo que se fija aquí:
 //   · el `rol` de doctora y equipo sale de `practitioner.role` DE ESTA CONSULTA, no de
@@ -102,7 +102,7 @@ async function errorDe(trabajo: () => Promise<unknown>): Promise<ContractError> 
   throw new Error('no lanzó y tenía que lanzar');
 }
 
-describe('GET /v1/cuentas/mia', () => {
+describe('GET /v1/accounts/mine', () => {
   it('a la paciente le devuelve sus doctoras, y no pregunta nada de ninguna consulta', async () => {
     const { caso, pedido, pasos } = armar();
     const respuesta = await caso.run(PACIENTE);

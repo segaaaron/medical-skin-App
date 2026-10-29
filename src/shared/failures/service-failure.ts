@@ -118,7 +118,7 @@ export class FailureLog {
     const first = chain[0] ?? { name: 'Desconocido', message: 'sin causa' };
 
     if (failure.context === null) {
-      // Un 500 de una petición SIN sesión —`POST /v1/acceso`, los dos de recuperación, el
+      // Un 500 de una petición SIN sesión —`POST /v1/access`, los dos de recuperación, el
       // refresco— no tiene inquilino ni actor que escribir, y `app_anonymous` no tiene
       // `INSERT` sobre `service_failure`. Va por `medskin_record_anonymous_failure()`,
       // que es `SECURITY DEFINER`, escribe las doce columnas que no necesitan contexto y

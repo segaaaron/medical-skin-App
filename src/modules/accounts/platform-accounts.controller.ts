@@ -1,8 +1,8 @@
 // Solo HTTP · las DOS acciones de consola de `cuentas.md`.
 //
 // LAS RUTAS SON EXACTAMENTE LAS CLAVES DE `route-policy.ts`
-// —`POST /v1/plataforma/cuentas/:cuenta_id/acceso/reenviar` y
-// `DELETE /v1/plataforma/cuentas/:cuenta_id/pausa`— porque la clave de esa tabla es la ruta
+// —`POST /v1/platform/accounts/:account_id/access/resend` y
+// `DELETE /v1/platform/accounts/:account_id/lock`— porque la clave de esa tabla es la ruta
 // tal y como la registra Fastify: cambiar la forma aquí es cambiar la clave, y una ruta sin
 // política es un 500 que ninguna prueba de unidad ve.
 //
@@ -25,7 +25,7 @@ import { ResendPlatformAccess } from './application/resend-platform-access';
 import type { ConsoleActor } from './domain/ports';
 import { UUID } from './accounts.controller';
 
-@Controller('v1/plataforma/cuentas')
+@Controller('v1/platform/accounts')
 export class PlatformAccountsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
   constructor(
@@ -37,16 +37,16 @@ export class PlatformAccountsController {
    * El `cuenta_id` de la ruta NO autoriza: entra como criterio de búsqueda y, si no hay fila,
    * el 404 es el mismo que el de una cuenta inventada, una borrada o una de otra región.
    */
-  @Post(':cuenta_id/acceso/reenviar')
+  @Post(':account_id/access/resend')
   @HttpCode(200)
-  async resendAccess(@Req() req: RequestWithContext, @Param('cuenta_id') accountId: string) {
+  async resendAccess(@Req() req: RequestWithContext, @Param('account_id') accountId: string) {
     if (!UUID.test(accountId)) throw new ContractError('cuenta_no_existe');
     return this.resend.run(accountId, actorOf(req));
   }
 
-  @Delete(':cuenta_id/pausa')
+  @Delete(':account_id/lock')
   @HttpCode(200)
-  async lift(@Req() req: RequestWithContext, @Param('cuenta_id') accountId: string) {
+  async lift(@Req() req: RequestWithContext, @Param('account_id') accountId: string) {
     if (!UUID.test(accountId)) throw new ContractError('cuenta_no_existe');
     return this.liftPause.run(accountId, actorOf(req));
   }

@@ -1,4 +1,4 @@
-// El cuerpo del `PATCH /v1/pacientes/{id}` y la respuesta del archivado.
+// El cuerpo del `PATCH /v1/patients/{id}` y la respuesta del archivado.
 //
 // MEZCLA POR CAMPO, CON EL SERVIDOR COMO ÁRBITRO (§9.3): un `PATCH` que no nombra un campo no
 // lo toca, así que dos dispositivos que tocan campos distintos no se pisan. Por eso cada campo

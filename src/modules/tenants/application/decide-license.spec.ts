@@ -1,4 +1,4 @@
-// `POST /v1/plataforma/inquilinos/{id}/licencia/decision` · los cuatro resultados que la
+// `POST /v1/platform/tenants/{id}/license/decision` · los cuatro resultados que la
 // base distingue, traducidos a la tabla del contrato.
 //
 // Lo que se fija aquí:
@@ -74,7 +74,7 @@ function armar(opciones: Opciones = {}) {
 
 const CLAVE = { key: 'consola-decision', bodyHash: 'huella-decision' };
 
-describe('POST /v1/plataforma/inquilinos/{id}/licencia/decision', () => {
+describe('POST /v1/platform/tenants/{id}/license/decision', () => {
   it('verificar devuelve el 200 del contrato y abre invitar y registrar', async () => {
     const { caso, pedido } = armar();
 
