@@ -243,6 +243,17 @@ export function startRetentionSweep(
   failures: FailureLog,
 ): { queue: Queue; worker: Worker } {
   const queue = createQueue(QUEUE_NAMES.retentionSweep, redis);
+
+  // Y LA PROGRAMACIÓN QUE YA ESTUVIERA ESCRITA SE BORRA. Quitar la llamada a
+  // `upsertJobScheduler` no borra lo que dejó: el `scheduler` sigue en Redis con su diferido
+  // para mañana, así que en cualquier despliegue que haya corrido la versión anterior la cola
+  // **dispara igual** y cae en el `run()` que rechaza, escribiendo una fila de error cada
+  // noche. Que el código diga «apagado» y Redis diga «mañana a las tres» es la clase de
+  // desacuerdo que nadie mira hasta que importa.
+  queue
+    .removeJobScheduler(QUEUE_NAMES.retentionSweep)
+    .catch((cause: unknown) => recordSweepFailure(failures, cause, 'desprogramar-retencion'));
+
   const worker = createWorker(QUEUE_NAMES.retentionSweep, redis, () => sweep.run());
   worker.on('failed', (job, cause) => {
     void recordSweepFailure(failures, cause, job?.id);

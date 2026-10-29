@@ -6,7 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 
-import { ServiceFailure } from '../../../shared/contract/error-catalog';
+import { FAILURE_PHRASES, ServiceFailure } from '../../../shared/contract/error-catalog';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -322,8 +322,10 @@ export class AftercareRepository implements AftercarePort {
       const id = rows[0]?.id ?? null;
       if (id === null) {
         await release(c, { record: idempotency, accountId: caller.accountId });
+        // La frase sale del catálogo y no se copia aquí: dos copias de la misma frase de
+        // usuario es cómo se desincronizan.
         throw new ServiceFailure(
-          'No pudimos enviar tu mensaje. Está guardado en tu teléfono y se envía solo cuando vuelva la señal.',
+          FAILURE_PHRASES.sendMessage,
           new Error(`el hilo ${threadId} no admitió el mensaje`),
         );
       }

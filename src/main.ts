@@ -9,6 +9,7 @@ import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { pushSendersOf } from './modules/notifications/notifications.module';
 import { config } from './shared/config/config';
+import { countRetentionDebt, retentionLine } from './shared/db/retention-alarm';
 import { assertDecoyParity } from './shared/security/decoy-parity';
 import { POOL } from './shared/shared.module';
 
@@ -73,6 +74,13 @@ async function start() {
   // tiene cuenta en MedSkin, y eso es dato de salud. El proceso no arranca y dice qué
   // difiere (migración 0007 · `medskin_access_decoy_params()`).
   await assertDecoyParity(app.get<Pool>(POOL));
+
+  // EL PLAZO DE CONSERVACIÓN, DICHO EN VOZ ALTA. El barrido está apagado por una decisión de
+  // producto pendiente, así que lo único que impide que «se conserva hasta 2036» se convierta en
+  // una frase olvidada es que alguien lo vea. No tumba el proceso: avisa.
+  const debt = await countRetentionDebt(app.get<Pool>(POOL));
+  const line = retentionLine(debt);
+  if (line !== null) process.stdout.write(`${line}\n`);
 
   await app.listen(cfg.PORT, '0.0.0.0');
 

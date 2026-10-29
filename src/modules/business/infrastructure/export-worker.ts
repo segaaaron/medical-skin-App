@@ -88,6 +88,11 @@ export class ExportWorker {
 
     const now = new Date();
     let done = 0;
+    // UNA FILA DE FALLO POR PASADA, no una por objeto: con un almacenamiento que rechaza el
+    // borrado de forma persistente —el `SignatureDoesNotMatch` de la lección del napkin es
+    // justo eso— serían 100 objetos × 1 440 pasadas al día, y la señal que tenía que hacer
+    // visible el problema se entierra a sí misma.
+    let refused = 0;
     for (const row of expired) {
       if (row.object_key !== null) {
         // Se firma EL MÉTODO QUE SE USA: el método entra en la firma, y un enlace de `GET`
@@ -104,19 +109,7 @@ export class ExportWorker {
         // Si el almacenamiento no la borró, la fila se queda `lista` y la pasada siguiente lo
         // vuelve a intentar. Lo que no se hace es sellar un borrado que no ocurrió.
         if (!gone) {
-          await this.failures.record({
-            service: 'worker',
-            operation: 'exportacion.caducar',
-            severity: 'warning',
-            errorCode: 'fallo_de_servicio',
-            cause: new Error(`el almacenamiento no borró ${row.object_key}`),
-            traceId: row.id,
-            requestId: row.id,
-            appVersion: null,
-            platform: null,
-            region: null,
-            context: null,
-          });
+          refused += 1;
           continue;
         }
       }
@@ -124,6 +117,22 @@ export class ExportWorker {
         await c.query('select medskin_export_expired($1)', [row.id]);
       });
       done += 1;
+    }
+
+    if (refused > 0) {
+      await this.failures.record({
+        service: 'worker',
+        operation: 'exportacion.caducar',
+        severity: 'warning',
+        errorCode: 'fallo_de_servicio',
+        cause: new Error(`el almacenamiento no borró ${refused} de ${expired.length} objetos`),
+        traceId: 'exportacion-caducar',
+        requestId: 'exportacion-caducar',
+        appVersion: null,
+        platform: null,
+        region: null,
+        context: null,
+      });
     }
     return done;
   }
@@ -172,7 +181,7 @@ export class ExportWorker {
       // caído dejaba la fila en `fallida` con el archivo hecho y, como solo se puede pedir una
       // al día, la paciente recibía `429` el resto del día y se quedaba sin su copia. Un efecto
       // a medias sellado como fallo y sin salida para la persona.
-      await this.mail2(exportId, accountId, key, now);
+      await this.sendLink(exportId, accountId, key, now);
     } catch (cause) {
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
         await c.query('select medskin_export_failed($1)', [exportId]);
@@ -202,7 +211,7 @@ export class ExportWorker {
    * fallo queda registrado con su causa. Lo que NO pasa es que la exportación se marque fallida
    * por algo que ocurrió después de estar lista.
    */
-  private async mail2(
+  private async sendLink(
     exportId: string,
     accountId: string,
     key: string,

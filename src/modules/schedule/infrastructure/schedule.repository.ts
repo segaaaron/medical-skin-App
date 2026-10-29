@@ -541,8 +541,9 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         attended: boolean | null;
         deposit_required: boolean;
         treatment_id: string;
+        practice_id: string;
       }>(
-        `select status, starts_at, attended, deposit_required, treatment_id
+        `select status, starts_at, attended, deposit_required, treatment_id, practice_id
            from appointment where id = $1 for update`,
         [appointmentId],
       );
@@ -571,58 +572,39 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       // «Cancelar libera el hueco y avisa a la lista de espera en el acto, en orden de
       // llegada.» Una a la vez, treinta minutos.
       //
-      // Y EL ORDEN DE LAS DOS COSAS IMPORTA: se avisa PRIMERO y se reserva DESPUÉS, solo si el
-      // aviso se encoló. Al revés —que es como estaba— el hueco se le reservaba treinta minutos
-      // a alguien a quien no se le podía avisar, y la respuesta decía
-      // `lista_de_espera_avisada: 1`. Eso pasa de verdad: `medskin_notify_waitlist` necesita un
-      // `patient_link` con cuenta, y **la mitad de las fichas de una consulta no tiene cuenta**
-      // (lo dice la propia 0046). O sea que el defecto que la bandeja de salida cerró seguía
-      // abierto por otra puerta: la de la paciente que no usa la app.
-      //
-      // Así que se recorre la lista EN ORDEN y se le ofrece a la primera a la que de verdad se
-      // le puede decir. Si a ninguna, el hueco se queda libre para quien lo tome y la respuesta
-      // dice `0`: la consulta ve su lista de espera en la pantalla y llama por teléfono, que es
-      // lo que haría igual. Reservarle el hueco a quien no se enteró es perderlo.
-      const { rows: waiting } = await c.query<{ id: string }>(
-        `select id from waitlist_entry
-          where treatment_id = $1
-            and $2::date between from_date and to_date
-          order by created_at`,
-        [found.treatment_id, now],
-      );
-
+      // TODO EN UNA FUNCIÓN (0061), y no es comodidad: **quien cancela no puede ver la lista**.
+      // La política de `app_patient` sobre `waitlist_entry` la acota a sus propios asientos, así
+      // que el `select` que buscaba a quién avisar no veía a nadie cuando cancelaba una
+      // paciente —que es quien más cancela—: con otra persona esperando, cero avisos y nadie se
+      // enteraba; con ella misma en la lista, el `update offered_until` reventaba por falta de
+      // privilegio y **la cita no se cancelaba**. La decisión de a quién se le ofrece la toma
+      // quien puede ver la lista entera, y el aviso y la reserva se escriben juntos o ninguno.
+      // Los casteos van explícitos: con `$1` a secas Postgres no puede resolver la sobrecarga
+      // —«function medskin_waitlist_offer(unknown, unknown, …) does not exist»— y el mismo
+      // instante viaja dos veces, como texto para la carga del aviso y como `timestamptz` para
+      // la reserva, así que son dos parámetros y no uno.
       const until = new Date(now.getTime() + 30 * 60_000);
-      let offered = 0;
-      for (const entry of waiting) {
-        // La función resuelve la cuenta de quien espera —quien cancela, que puede ser otra
-        // paciente, no lee el vínculo de nadie más— y devuelve nulo si no hay a quién avisar.
-        const { rows: queued } = await c.query<{ id: string | null }>(
-          `select medskin_notify_waitlist($1,
-                    jsonb_build_object('tratamiento_id', $2::text,
-                                       'empieza_en', $3::text,
-                                       'vence_en', $4::text),
-                    $5) as id`,
-          [
-            entry.id,
-            found.treatment_id,
-            found.starts_at.toISOString(),
-            until.toISOString(),
-            `hueco:${appointmentId}:${entry.id}`,
-          ],
-        );
-        if (queued[0]?.id == null) continue;
-
-        await c.query(`update waitlist_entry set offered_until = $2 where id = $1`, [
-          entry.id,
+      const { rows: offered } = await c.query<{ id: string | null }>(
+        `select medskin_waitlist_offer($1::uuid, $2::uuid, $3::date,
+                  jsonb_build_object('tratamiento_id', $2::text,
+                                     'empieza_en', $4::text,
+                                     'vence_en', $5::text),
+                  $6::text, $7::timestamptz) as id`,
+        [
+          found.practice_id,
+          found.treatment_id,
+          now,
+          found.starts_at.toISOString(),
+          until.toISOString(),
+          `hueco:${appointmentId}`,
           until,
-        ]);
-        offered = 1;
-        break;
-      }
+        ],
+      );
+      const offeredTo = offered[0]?.id ?? null;
 
       const row = await this.readOne(c, appointmentId);
       if (row === null) throw new Error(`la cita ${appointmentId} no se pudo releer al cancelar`);
-      return { outcome: 'cancelled', row, deposit, waitlisted: offered };
+      return { outcome: 'cancelled', row, deposit, waitlisted: offeredTo === null ? 0 : 1 };
     });
   }
 

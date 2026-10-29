@@ -756,6 +756,62 @@ describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
     await owner.query(`delete from patient where id = $1`, [sola[0]!.id]);
   });
 
+  it('CUANDO CANCELA LA PACIENTE y hay alguien esperando CON cuenta, la cita se cancela', async () => {
+    // El caso que mi arreglo anterior no alcanzaba: su prueba cancelaba como DOCTORA, y quien
+    // más cancela es la paciente. `app_patient` no tiene `UPDATE` sobre `waitlist_entry`, así
+    // que en cuanto el aviso SÍ se encolaba —justo cuando se decide reservar el hueco— el
+    // `update offered_until` moría con «permission denied», abortaba la transacción, y **la
+    // cita no se cancelaba**: 500 y la cita seguía confirmada, con la decisión de la seña
+    // perdida. No era regresión: el UPDATE corría antes siempre que hubiera alguien esperando.
+    await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [MINE.practice]);
+
+    // Bea espera, y Bea SÍ tiene cuenta: es la condición que dispara el camino.
+    await appointments.joinWaitlist(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        desde: '2026-11-01',
+        hasta: '2026-12-31',
+      },
+      patient(BEA.account),
+    );
+
+    const suya = (await appointments.book(
+      {
+        practice_id: MINE.practice,
+        tratamiento_id: treatment,
+        empieza_en: '2026-11-03T13:00:00.000Z',
+      },
+      patient(ANA.account),
+      key('cancela-paciente'),
+    )) as { id: string };
+
+    // ELLA cancela, no la consulta.
+    const cancelled = (await appointments.cancel(suya.id, patient(ANA.account))) as {
+      estado: string;
+      lista_de_espera_avisada: number;
+    };
+    expect(cancelled.estado).toBe('cancelada');
+    expect(cancelled.lista_de_espera_avisada).toBe(1);
+
+    // Y las dos escrituras ocurrieron: el aviso y la reserva de treinta minutos.
+    const { rows: avisos } = await owner.query<{ account_id: string }>(
+      `select account_id from notification_outbox
+        where practice_id = $1 and kind = 'hueco_libre'`,
+      [MINE.practice],
+    );
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]?.account_id).toBe(BEA.account);
+
+    const { rows: espera } = await owner.query<{ offered_until: Date | null }>(
+      `select offered_until from waitlist_entry where patient_id = $1`,
+      [BEA.patient],
+    );
+    expect(espera[0]?.offered_until).not.toBeNull();
+  });
+
   it('cancelar exige citas:cancelar, y reagendar citas:crear', async () => {
     await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
     const booked = (await appointments.book(

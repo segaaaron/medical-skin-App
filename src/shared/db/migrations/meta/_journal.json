@@ -428,6 +428,20 @@
       "when": 1793308906296,
       "tag": "0060_devolver_las_columnas_de_account",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793312205896,
+      "tag": "0061_ofrecer_el_hueco_en_una_sola_funcion",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793312412302,
+      "tag": "0062_la_deuda_de_retencion_por_funcion",
+      "breakpoints": true
     }
   ]
 }
