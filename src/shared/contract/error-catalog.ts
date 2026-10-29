@@ -51,6 +51,17 @@ export type ErrorCode =
   // PATCH /v1/cuentas/mia/contrasena
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // GET /v1/pacientes · `pacientes.md`
+  | 'busqueda_muy_corta'
+  | 'nada_que_cambiar'
+  | 'paciente_archivada'
+  | 'cita_futura'
+  // GET /v1/vinculos y sus dos POST
+  | 'vinculo_no_existe'
+  | 'vinculo_ya_resuelto'
+  | 'vinculo_sin_aceptar'
+  | 'estado_no_valido'
+  | 'vinculo_no_valido'
   // POST /v1/cuentas/{cuenta_id}/acceso
   | 'paciente_no_existe'
   | 'celular_necesario_para_whatsapp'
@@ -287,6 +298,50 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // POST /v1/cuentas/{cuenta_id}/acceso · `cuentas.md`.
   // ---------------------------------------------------------------------------------
   // «Un `cuenta_id` de otra consulta no devuelve fila y el endpoint responde
+  // -------------------------------------------------------------------------------------
+  // `GET /v1/pacientes` · la lista y la busqueda
+  //
+  // `busqueda_muy_corta` va con `mensaje` VACIO, como `clave_idempotencia_faltante`: «la app
+  // no manda la peticion hasta el segundo caracter» (`pacientes.md`), asi que no hay nada que
+  // contarle a una persona. Lo que no puede faltar es el codigo, para que la app lo registre.
+  //
+  // Los otros dos no estan en la tabla del contrato y existen igual: un `?estado=cualquiera`
+  // NO puede caer en `activa` en silencio, porque entonces la app creeria que esta filtrando
+  // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
+  // faltan en la tabla de errores de ese endpoint.
+  // -------------------------------------------------------------------------------------
+  busqueda_muy_corta: { status: 400, message: '', field: 'busca' },
+  // Un `PATCH` sin un solo campo no es una edicion. Mensaje vacio: es un error DE LA APP,
+  // igual que la clave de idempotencia que falta.
+  nada_que_cambiar: { status: 400, message: '', field: null },
+  // Los tres de los vinculos. `vinculo_ya_resuelto` va con mensaje VACIO a proposito: «la app
+  // recarga y sigue», no hay nada que contarle a una persona que ya respondio.
+  vinculo_no_existe: { status: 404, message: 'Esa invitación ya no está.', field: null },
+  vinculo_ya_resuelto: { status: 409, message: '', field: null },
+  vinculo_sin_aceptar: { status: 409, message: '', field: null },
+  paciente_archivada: {
+    status: 409,
+    message: 'Esa ficha está archivada. Reactívala antes de editarla.',
+    field: null,
+  },
+  // La agenda es del tramo 4: hoy este 409 no se alcanza, y existe porque el camino del
+  // archivado ya lo espera.
+  cita_futura: {
+    status: 409,
+    message: 'Tiene una cita por delante. Cancélala antes de archivar su ficha.',
+    field: null,
+  },
+  estado_no_valido: {
+    status: 400,
+    message: 'Ese filtro no existe. Vuelve a elegir entre activas, archivadas o todas.',
+    field: 'estado',
+  },
+  vinculo_no_valido: {
+    status: 400,
+    message: 'Ese filtro no existe. Vuelve a elegir entre invitada, vinculada o revocada.',
+    field: 'vinculo',
+  },
+
   // `404 paciente_no_existe`, la misma respuesta que un `cuenta_id` inventado: no se
   // distingue "no es tuya" de "no existe".»
   paciente_no_existe: { status: 404, message: 'Esa paciente no está en tu lista.', field: null },
@@ -818,6 +873,27 @@ export const FAILURE_PHRASES = {
    * misma segunda frase: lo que la doctora llenó está en el teléfono y el alta se puede
    * repetir con la misma `Idempotency-Key`.
    */
+  /** `pacientes.md` · `GET /v1/pacientes`. La app guarda la ultima lista y la ensena. */
+  listPatients:
+    'No pudimos cargar tus pacientes. El servidor no respondió. Te mostramos la última lista guardada: puedes volver a intentarlo.',
+  /** `pacientes.md` · `GET /v1/pacientes/{id}`. Lo mismo con la ficha. */
+  readPatient:
+    'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `pacientes.md` · los vinculos de la paciente. */
+  patientLinks:
+    'No pudimos guardar tu respuesta. El servidor no respondió: puedes volver a intentarlo.',
+  /** `pacientes.md` · `PUT /v1/vinculos/{id}/ficha-medica`. */
+  patientHistory:
+    'No pudimos guardar tu ficha. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+
+  /** `pacientes.md` · `PATCH /v1/pacientes/{id}`. */
+  editPatient:
+    'No pudimos guardar el cambio. El servidor no respondió. Su ficha sigue como estaba: puedes volver a intentarlo.',
+  /** `pacientes.md` · archivar y reactivar. */
+  archivePatient:
+    'No pudimos archivar su ficha. El servidor no respondió. No se archivó nada: puedes volver a intentarlo.',
+
   createPatient:
     'No pudimos crear la ficha. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
   /**

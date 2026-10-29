@@ -106,6 +106,54 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   // `inquilinos.md` · los dos de la doctora. Solo `completo`: el contrato da
   // `403 contrasena_temporal_pendiente` para estas pantallas, que es exactamente lo que el
   // guardia devuelve cuando el alcance restringido no está en la lista.
+  // `pacientes.md` · la lista y la busqueda. Recepcion SI entra: necesita encontrar a la
+  // paciente para agendarle, y eso no es abrir su historia. El permiso lo comprueba el caso
+  // de uso (`pacientes:leer`), que es quien sabe cual pide cada ruta.
+  'GET /v1/pacientes': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.listPatients,
+  },
+  // La ficha y sus antecedentes: `historia:leer`, y recepcion NO.
+  'GET /v1/pacientes/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readPatient,
+  },
+  'GET /v1/pacientes/:id/antecedentes': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readPatient,
+  },
+  // Corregir la ficha, archivar y reactivar: `pacientes:crear`, y recepcion NO.
+  'PATCH /v1/pacientes/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.editPatient,
+  },
+  'POST /v1/pacientes/:id/archivar': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.archivePatient,
+  },
+  'POST /v1/pacientes/:id/reactivar': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.archivePatient,
+  },
+  // `pacientes.md` · las dos pantallas de la PACIENTE. El alcance es `completo` porque las
+  // dos llegan despues de que ella eligio su contrasena; el rol lo comprueba el caso de uso,
+  // que devuelve `403 rol_no_corresponde` si llama una doctora.
+  'GET /v1/vinculos': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.patientLinks,
+  },
+  'POST /v1/vinculos/:vinculo_id/aceptar': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.patientLinks,
+  },
+  'POST /v1/vinculos/:vinculo_id/rechazar': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.patientLinks,
+  },
+  'PUT /v1/vinculos/:vinculo_id/ficha-medica': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.patientHistory,
+  },
   'GET /v1/inquilinos/mio': {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.readOwnPractice,

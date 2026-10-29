@@ -204,7 +204,7 @@ export function readRegistration(input: unknown, now: Date): PatientRegistration
   };
 }
 
-function readName(value: unknown): string | null {
+export function readName(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const name = value.trim().slice(0, NAME_MAX);
   return name === '' ? null : name;
@@ -215,7 +215,7 @@ function readName(value: unknown): string | null {
  * que vale para los dos casos, y un nombre que no afirma ninguno —`nacimiento_vacio` era
  * falso con un `18/04/1992`— (decidido el 28 de octubre de 2026).
  */
-function readBirthDate(value: unknown, now: Date): string {
+export function readBirthDate(value: unknown, now: Date): string {
   const text = typeof value === 'string' ? value.trim() : '';
   const parts = DATE.exec(text);
   if (parts === null) throw new ContractError('nacimiento_no_valido');
@@ -236,7 +236,7 @@ function readBirthDate(value: unknown, now: Date): string {
 }
 
 /** El correo de la paciente, con la frase de ESTE endpoint para el campo vacío. */
-function readPatientEmail(value: unknown): string {
+export function readPatientEmail(value: unknown): string {
   try {
     return readEmail(value);
   } catch (failure) {
@@ -253,14 +253,14 @@ function readPatientEmail(value: unknown): string {
 }
 
 /** Opcional, E.164. «Para llamarla y recordarle la cita. No sirve para entrar.» */
-function readPhone(value: unknown): string | null {
+export function readPhone(value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
   const phone = typeof value === 'string' ? value.replace(/[\s()-]/g, '') : '';
   if (!E164.test(phone)) throw new ContractError('celular_mal_escrito');
   return phone;
 }
 
-function readReminders(value: unknown): RemindersVia {
+export function readReminders(value: unknown): RemindersVia {
   if (value === undefined || value === null) return 'app';
   if (!isOneOf(value, REMINDERS)) throw new ContractError('cuerpo_no_valido', undefined, undefined, 'recordatorios_por');
   return value;
@@ -272,7 +272,7 @@ function readReminders(value: unknown): RemindersVia {
  * uno que no es de esta consulta: `404 referida_no_existe`, y no se distingue una cosa de
  * la otra (OWASP A01).
  */
-function readHowArrived(
+export function readHowArrived(
   howArrived: unknown,
   referredBy: unknown,
 ): { howArrived: string; referredBy: string | null } {
@@ -372,7 +372,7 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
 }
 
 /** Un cuerpo que no es un objeto se lee como vacío: lo que falte lo dirá su propio 400. */
-function asRecord(value: unknown): Record<string, unknown> {
+export function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
