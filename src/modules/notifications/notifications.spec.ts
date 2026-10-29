@@ -466,3 +466,102 @@ describe('la bandeja con dos trabajadores, y su retención', () => {
     expect(rows.map((r) => r.dedupe_key)).toEqual(['retencion-nueva']);
   });
 });
+
+describe('los dos programadores que miran la agenda', () => {
+  // ESTAS DOS PRUEBAS SON LA RAZÓN DE UN DEFECTO. Las de arriba llamaban a `send()`, al
+  // horario de silencio, a la higiene de tokens y a la deduplicación —y pasaban—, pero
+  // ninguna llamaba a `remind()` ni a `callBack()`: dos de los ocho trabajos se entregaron sin
+  // ejecutarse una sola vez, y fallaban con «permission denied for table treatment» cada vez
+  // que la cola los disparaba. Lo destapó mirar `bull:avisos-higiene:failed` en Redis.
+  let repetido = '';
+
+  beforeAll(async () => {
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [N.practice]);
+    const { rows } = await owner.query<{ id: string }>(
+      `insert into treatment (practice_id, name, category, duration_minutes, planned_sessions,
+                              min_interval_days, requires_consent)
+       values ($1, 'Peeling en serie', 'peeling', 45, 4, 21, true) returning id`,
+      [N.practice],
+    );
+    repetido = rows[0]!.id;
+  });
+
+  it('el recordatorio de 24 h encola push y correo, y el consentimiento que falta', async () => {
+    // Una cita dentro de la ventana que la función mira: entre 24 h y 24 h 10 min.
+    const { rows: cita } = await owner.query<{ id: string }>(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents)
+       values ($1, $2, $3, now() + interval '24 hours 5 minutes',
+               now() + interval '24 hours 50 minutes', 'confirmada', 192000)
+       returning id`,
+      [N.practice, N.patient, repetido],
+    );
+
+    const encolados = await new Notifications(outbox, [], null, clock).remind();
+    expect(encolados).toBeGreaterThanOrEqual(3);
+
+    const { rows } = await owner.query<{ kind: string; channel: string; data: Record<string, unknown> }>(
+      `select kind, channel, data from notification_outbox
+        where practice_id = $1 and (data->>'cita_id') = $2
+        order by kind, channel`,
+      [N.practice, cita[0]!.id],
+    );
+    // Push y correo del recordatorio —«es el que genera la re-reserva»— y el consentimiento,
+    // que es el momento en que todavía se puede firmar sin perder tiempo en la consulta.
+    expect(rows.map((r) => `${r.kind}/${r.channel}`)).toEqual([
+      'consentimiento_por_firmar/push',
+      'recordatorio_cita/correo',
+      'recordatorio_cita/push',
+    ]);
+    // Y ni el nombre del tratamiento ni el de la paciente viajan: solo identificadores.
+    expect(JSON.stringify(rows.map((r) => r.data))).not.toContain('Peeling');
+
+    // Dos pasadas no encolan dos veces: es la idempotencia de los ocho trabajos.
+    expect(await new Notifications(outbox, [], null, clock).remind()).toBe(0);
+  });
+
+  it('«toca volver» sale cuando el intervalo del tratamiento ya pasó', async () => {
+    // Las sesiones primero: `clinical_session` nombra la cita y la base no deja borrarla antes.
+    await owner.query(`delete from clinical_session where practice_id = $1`, [N.practice]);
+    await owner.query(`delete from appointment where practice_id = $1`, [N.practice]);
+    // Una sesión FIRMADA hace 30 días de un tratamiento con 21 de intervalo: ya toca.
+    const { rows: cita } = await owner.query<{ id: string }>(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents, attended)
+       values ($1, $2, $3, now() - interval '30 days', now() - interval '30 days' + interval '45 minutes',
+               'atendida', 192000, true)
+       returning id`,
+      [N.practice, N.patient, repetido],
+    );
+    await owner.query(
+      `insert into clinical_session (practice_id, patient_id, appointment_id,
+                                     practitioner_account_id, started_at, ended_at, status)
+       values ($1, $2, $3, $4, now() - interval '30 days',
+               now() - interval '30 days' + interval '45 minutes', 'firmada')`,
+      [N.practice, N.patient, cita[0]!.id, N.doctor],
+    );
+
+    const encolados = await new Notifications(outbox, [], null, clock).callBack();
+    expect(encolados).toBe(2);
+
+    const { rows } = await owner.query<{ channel: string; data: Record<string, unknown> }>(
+      `select channel, data from notification_outbox
+        where practice_id = $1 and kind = 'toca_volver' order by channel`,
+      [N.practice],
+    );
+    expect(rows.map((r) => r.channel)).toEqual(['correo', 'push']);
+    // Trae el tratamiento para que la app abra sus huecos: es el aviso que genera la re-reserva.
+    expect(rows[0]?.data.tratamiento_id).toBe(repetido);
+
+    // Y con una cita viva de ese tratamiento por delante, deja de salir: ya volvió.
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [N.practice]);
+    await owner.query(
+      `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                status, price_cents)
+       values ($1, $2, $3, now() + interval '3 days', now() + interval '3 days 45 minutes',
+               'confirmada', 192000)`,
+      [N.practice, N.patient, repetido],
+    );
+    expect(await new Notifications(outbox, [], null, clock).callBack()).toBe(0);
+  });
+});
