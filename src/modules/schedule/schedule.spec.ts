@@ -784,23 +784,35 @@ describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
     // liberó. Y ese rango es «avísame si se libera algo esos días» (`agenda.md`), así que el
     // aviso estrella del tramo 4 disparaba a la persona equivocada: quien esperaba el 15 no se
     // enteraba del hueco del 15, y quien esperaba el 1 recibía uno del 20 que no le servía.
-    const hueco = '2026-11-03T13:00:00.000Z';
+    // Y EL HUECO ES A LAS 21:00 DE LA PAZ A PROPÓSITO: 01:00Z del día 4 es el día 3 en la zona
+    // de la consulta y el día 4 en UTC. Con un hueco de media mañana las dos zonas contestan lo
+    // mismo y esta prueba seguiría verde si alguien cambiara `dayOf(...)` por un `::date` sobre
+    // el instante, que es la mitad del defecto. Así no.
+    //
+    // La cita se inserta con el rol dueño porque las nueve de la noche están fuera del horario
+    // de la consulta y `book()` la rechazaría: lo que se prueba es a quién se le ofrece el hueco
+    // al cancelar, no si ese hueco se podía reservar.
+    const hueco = '2026-11-04T01:00:00.000Z';
 
     for (const [desde, hasta, avisados] of [
-      // Espera HOY (el reloj de esta prueba es el 2 de noviembre) y el hueco es del 3: nada.
-      ['2026-11-02', '2026-11-02', 0],
-      // Espera el día del hueco: ahí sí.
+      // Espera el día del hueco EN UTC, que no es el día de la consulta: nada.
+      ['2026-11-04', '2026-11-04', 0],
+      // Espera el día del hueco en la zona de la consulta: ahí sí.
       ['2026-11-03', '2026-11-03', 1],
     ] as const) {
       await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
       await owner.query(`delete from waitlist_entry where practice_id = $1`, [MINE.practice]);
       await owner.query(`delete from notification_outbox where practice_id = $1`, [MINE.practice]);
 
-      const booked = (await appointments.book(
-        { paciente_id: BEA.patient, tratamiento_id: treatment, empieza_en: hueco },
-        doctor(MINE.practice, MINE.doctor),
-        key(`dia-${desde}`),
-      )) as { id: string };
+      const { rows: puesta } = await owner.query<{ id: string }>(
+        `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
+                                  status, price_cents)
+         values ($1, $2, $3, $4::timestamptz, $4::timestamptz + interval '30 minutes',
+                 'confirmada', 150000)
+         returning id`,
+        [MINE.practice, BEA.patient, treatment, hueco],
+      );
+      const booked = puesta[0]!;
 
       await appointments.joinWaitlist(
         { practice_id: MINE.practice, tratamiento_id: treatment, desde, hasta },
