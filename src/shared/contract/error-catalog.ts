@@ -51,6 +51,29 @@ export type ErrorCode =
   // PATCH /v1/accounts/mine/password
   | 'contrasena_igual_a_la_actual'
   | 'contrasena_actual_no_coincide'
+  // `agenda.md` · la agenda
+  | 'franja_al_reves'
+  | 'franjas_que_se_cruzan'
+  | 'dia_desconocido'
+  | 'paso_no_valido'
+  | 'zona_horaria_desconocida'
+  | 'feriado_con_citas'
+  | 'rango_demasiado_grande'
+  | 'tratamiento_no_disponible'
+  | 'hueco_ocupado'
+  | 'fuera_de_horario'
+  | 'antes_del_aviso_minimo'
+  | 'fuera_de_plazo'
+  | 'promocion_no_aplica'
+  | 'ya_tiene_cita'
+  | 'cita_no_existe'
+  | 'cita_ya_atendida'
+  | 'cita_cancelada'
+  | 'reagendar_tarde'
+  | 'sena_no_requerida'
+  | 'sena_ya_confirmada'
+  | 'sena_vencida'
+  | 'demasiadas_esperas'
   // `tratamientos.md` · el catalogo de la consulta
   | 'categoria_desconocida'
   | 'duracion_fuera_de_rango'
@@ -332,6 +355,94 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------
+  // `agenda.md`. Las frases son las del contrato, literales.
+  //
+  // `hueco_ocupado` ES EL ERROR MAS IMPORTANTE DEL TRAMO, y su valor esta en `datos`: sin los
+  // tres huecos cercanos la paciente vuelve al paso 1 y la mitad abandona ahi. Con ellos, la
+  // hoja se redibuja y confirma en un toque.
+  // -------------------------------------------------------------------------------------
+  hueco_ocupado: { status: 409, message: 'Ese horario se acaba de ocupar.', field: null },
+  fuera_de_horario: { status: 409, message: 'Ese horario ya no está disponible.', field: null },
+  antes_del_aviso_minimo: {
+    status: 409,
+    message: 'Para hoy ya no podemos: reserva con más tiempo.',
+    field: null,
+  },
+  fuera_de_plazo: {
+    status: 409,
+    message: 'Todavía no abrimos la agenda de esas fechas.',
+    field: null,
+  },
+  // El motivo solo se da cuando es TIEMPO, nunca cuando es diagnostico: `datos` lleva
+  // `disponible_desde` en el primer caso y nada en el segundo.
+  tratamiento_no_disponible: {
+    status: 409,
+    message: 'Consúltalo con tu doctora.',
+    field: null,
+  },
+  promocion_no_aplica: {
+    status: 409,
+    message: 'Esa promoción ya no aplica. Puedes reservar sin ella.',
+    field: null,
+  },
+  ya_tiene_cita: { status: 409, message: 'Ya tienes una cita para esto.', field: null },
+  cita_no_existe: { status: 404, message: 'Esa cita ya no está.', field: null },
+  cita_ya_atendida: {
+    status: 409,
+    message: 'Esa cita ya se atendió. No se puede mover.',
+    field: null,
+  },
+  cita_cancelada: { status: 409, message: 'Esa cita está cancelada.', field: null },
+  reagendar_tarde: {
+    status: 409,
+    message: 'Para cambiarla con tan poco tiempo, escríbele a tu doctora.',
+    field: null,
+  },
+  sena_no_requerida: { status: 409, message: 'Esta cita no necesita seña.', field: null },
+  // Mensaje vacio: «nada, la app recarga».
+  sena_ya_confirmada: { status: 409, message: '', field: null },
+  sena_vencida: {
+    status: 410,
+    message: 'Se pasó el plazo y el horario se liberó. Puedes reservar otro.',
+    field: null,
+  },
+  demasiadas_esperas: {
+    status: 409,
+    message: 'Ya tienes tres avisos pedidos en esta consulta. Quita uno para pedir otro.',
+    field: null,
+  },
+  franja_al_reves: {
+    status: 400,
+    message: 'La hora de fin va después de la de inicio.',
+    field: 'franjas',
+  },
+  franjas_que_se_cruzan: {
+    status: 400,
+    message: 'Esas dos franjas se cruzan. Júntalas.',
+    field: 'franjas',
+  },
+  dia_desconocido: { status: 400, message: 'Elige un día de la semana.', field: 'franjas' },
+  paso_no_valido: {
+    status: 400,
+    message: 'El paso de la agenda tiene que ser de 5, 10, 15, 20, 30 o 60 minutos.',
+    field: 'paso_de_agenda_minutos',
+  },
+  zona_horaria_desconocida: {
+    status: 400,
+    message: 'Esa zona horaria no existe.',
+    field: 'zona_horaria',
+  },
+  // «Un dia cerrado con citas vivas es una paciente que se presenta a una puerta cerrada»: el
+  // feriado no se impone, y `datos` lleva la lista de lo que hay ese dia.
+  feriado_con_citas: {
+    status: 409,
+    message: 'Ese día ya tienes citas agendadas. Cancélalas o avísales antes de cerrar el día.',
+    field: 'feriados',
+  },
+  // Mensaje vacio: la app pide de semana en semana y no llega a provocarlo.
+  rango_demasiado_grande: { status: 400, message: '', field: null },
+
   // -------------------------------------------------------------------------------------
   // `tratamientos.md`. Las frases son las del contrato, literales.
   // -------------------------------------------------------------------------------------
@@ -1008,6 +1119,27 @@ export const FAILURE_PHRASES = {
   /** `pacientes.md` · `GET /v1/patients/{id}`. Lo mismo con la ficha. */
   readPatient:
     'No pudimos cargar su ficha. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
+
+  /** `agenda.md` · los horarios y la agenda. */
+  saveSchedule:
+    'No pudimos guardar tus horarios. El servidor no respondió. Siguen los de antes: puedes volver a intentarlo.',
+  readAvailability:
+    'No pudimos cargar los horarios. El servidor no respondió: puedes volver a intentarlo.',
+  /** La segunda frase dice lo que importa: no se reservó nada y no se te cobró. */
+  bookAppointment:
+    'No pudimos confirmar tu cita. El servidor no respondió. No se reservó nada y no se te cobró: puedes volver a intentarlo.',
+  readAppointments:
+    'No pudimos cargar tu agenda. El servidor no respondió. Te mostramos la última guardada: puedes volver a intentarlo.',
+  moveAppointment:
+    'No pudimos mover tu cita. El servidor no respondió. Sigue agendada a la hora de antes: puedes volver a intentarlo.',
+  cancelAppointment:
+    'No pudimos cancelar tu cita. El servidor no respondió. Sigue agendada: puedes volver a intentarlo.',
+  saveDeposit:
+    'No pudimos registrar tu pago. El servidor no respondió. Tu horario sigue guardado: puedes volver a intentarlo.',
+  saveWaitlist:
+    'No pudimos guardar tu aviso. El servidor no respondió: puedes volver a intentarlo.',
+  syncBatch:
+    'No pudimos sincronizar. El servidor no respondió. Lo que hiciste sin conexión sigue guardado en este teléfono: puedes volver a intentarlo.',
 
   /** `tratamientos.md` · el catalogo de la doctora. */
   saveTreatment:

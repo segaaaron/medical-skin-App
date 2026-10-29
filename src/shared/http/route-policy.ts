@@ -154,6 +154,54 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     scopes: ['completo'],
     failurePhrase: FAILURE_PHRASES.patientHistory,
   },
+  // `agenda.md` · la agenda. `GET /v1/availability`, `POST /v1/appointments` y los de la seña
+  // los llaman LAS DOS puertas —la consulta y la paciente—, y quien decide cual es el caso de
+  // uso: el rol sale del token, nunca del cuerpo.
+  'GET /v1/schedules': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveSchedule },
+  'PUT /v1/schedules': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveSchedule },
+  'GET /v1/availability': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readAvailability,
+  },
+  'POST /v1/appointments': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.bookAppointment,
+  },
+  'GET /v1/appointments': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readAppointments,
+  },
+  'GET /v1/appointments/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readAppointments,
+  },
+  'PATCH /v1/appointments/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.moveAppointment,
+  },
+  'POST /v1/appointments/:id/cancel': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.cancelAppointment,
+  },
+  'POST /v1/appointments/:id/deposit': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveDeposit,
+  },
+  'POST /v1/appointments/:id/deposit/confirm': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveDeposit,
+  },
+  'POST /v1/appointments/:id/attendance': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.readAppointments,
+  },
+  'POST /v1/waitlist': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.saveWaitlist },
+  'DELETE /v1/waitlist/:id': {
+    scopes: ['completo'],
+    failurePhrase: FAILURE_PHRASES.saveWaitlist,
+  },
+  'POST /v1/sync': { scopes: ['completo'], failurePhrase: FAILURE_PHRASES.syncBatch },
+
   // `tratamientos.md` · el catalogo de la doctora. El permiso lo comprueba el caso de uso:
   // `catalogo:editar` para el catalogo, `precios:editar` para el dinero, `promociones:editar`
   // para las promociones. Son tres porque una asistente ve el catalogo y no toca el dinero.

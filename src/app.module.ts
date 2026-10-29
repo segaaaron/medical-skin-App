@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
 import { AccessModule } from './modules/access/access.module';
+import { ScheduleModule } from './modules/schedule/schedule.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
@@ -26,6 +27,7 @@ import { CONFIG, SharedModule } from './shared/shared.module';
 // metadatos de los que depender y las dos rutas de ejecución se comportan igual.
 @Module({
   imports: [
+    ScheduleModule,
     CatalogModule,
     PatientsModule,
     SharedModule,

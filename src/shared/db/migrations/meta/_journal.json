@@ -211,6 +211,41 @@
       "when": 1793236500819,
       "tag": "0029_access_reads_birth_date",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793236718310,
+      "tag": "0030_tramo4_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793236747785,
+      "tag": "0031_busy_intervals",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793236887104,
+      "tag": "0032_no_two_appointments_in_one_slot",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793237029072,
+      "tag": "0033_patient_reads_time_zone",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793237537805,
+      "tag": "0034_booking_reads",
+      "breakpoints": true
     }
   ]
 }
