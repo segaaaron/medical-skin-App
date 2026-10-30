@@ -15,6 +15,7 @@ import {
   startRetentionSweep,
 } from './idempotency/idempotency-sweep';
 import { SmtpMail } from './mail/mailer';
+import { PlatformTokens } from './platform/platform-token';
 import {
   queueConnection,
   type AppQueue,
@@ -66,6 +67,15 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
       inject: [CONFIG],
     },
     { provide: Tokens, useFactory: (cfg: Config) => Tokens.fromFiles(cfg), inject: [CONFIG] },
+    // Lo usan DOS: el guardia, que verifica el token de consola, y `PlatformSignIn`, que lo
+    // firma desde el 30 de octubre de 2026. Antes se construía suelto en `app.module.ts`
+    // con el comentario «no lo usa nadie más»; dos usuarios y una sola llave en memoria es
+    // lo que garantiza que el `kid` que se firma sea el que se verifica.
+    {
+      provide: PlatformTokens,
+      useFactory: (cfg: Config) => PlatformTokens.fromFiles(cfg),
+      inject: [CONFIG],
+    },
     {
       provide: SystemClock,
       useFactory: (cfg: Config) => new SystemClock(cfg.ZONA_HORARIA),
@@ -104,6 +114,7 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
     POOL,
     QUEUES,
     Tokens,
+    PlatformTokens,
     SystemClock,
     Argon2Passwords,
     Counters,

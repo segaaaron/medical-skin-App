@@ -1,17 +1,29 @@
 // EL TOKEN DE PLATAFORMA · `plataforma-acceso.md`. La puerta de los cinco endpoints de
-// consola, y la única frontera de autenticación del backend que NO acuña nada:
+// consola.
 //
-//   «La identidad de la plataforma vive fuera de la región. Cada backend de región no tiene
-//   cuentas de plataforma: verifica un token firmado por el servicio de plataforma y actúa
-//   según sus permisos.»
+// ESTE ARCHIVO FIRMABA NADA Y AHORA FIRMA, decidido el 30 de octubre de 2026
+// (`plataforma-acceso.md` · «La entrada de la consola»). La cabecera anterior decía que era
+// «la única frontera de autenticación del backend que NO acuña nada», y dejó de ser verdad:
+// un comentario que explica una propiedad que el archivo ya no tiene es peor que ninguno.
 //
-// De ahí las tres diferencias con `security/tokens.ts`, que es el de las sesiones:
-//   1. Aquí solo se VERIFICA. No hay `sign()`: no existe `POST /v1/platform/access` y el
-//      contrato lo dice en «Lo que este contrato no hace». El token llega ya firmado.
-//   2. La llave es OTRA —la pública del servicio de plataforma, que pone el despliegue— y
-//      por eso el `kid` también es otro. Un token de sesión no abre la consola y un token de
-//      consola no abre la app: no comparten llave.
-//   3. No hay `alcance` ni `practice`: lo que autoriza es la lista cerrada de `permisos`, y
+// Lo que lo obligó: el servicio de identidad de plataforma no existe y no tiene fecha. Sin
+// alguien que firme, los cinco endpoints de consola son inalcanzables y no hay forma de dar
+// de alta la primera consulta. Así que la identidad de plataforma pasa a vivir DENTRO de la
+// región, contra la tabla `platform_account` (migración 0068).
+//
+// Lo que acota esa concesión, y está medido en el contrato:
+//   · La privada solo se carga si `PLATFORM_JWT_PRIVATE_KEY_PATH` está puesta. Un despliegue
+//     que no quiere firmar no firma, y `sign()` lanza en vez de inventarse una llave.
+//   · El `aud` que se firma es SIEMPRE `cfg.REGION`, nunca nada que venga del cuerpo. Un
+//     despliegue no puede emitirse permisos sobre otra región.
+//   · Los permisos se validan contra `PLATFORM_PERMISSIONS` antes de firmar: emitir un token
+//     que el verificador va a rechazar entero sería fabricar el fallo que esa regla previene.
+//
+// De ahí las dos diferencias que quedan con `security/tokens.ts`, que es el de las sesiones:
+//   1. La llave es OTRA —el par de plataforma del despliegue— y por eso el `kid` también es
+//      otro. Un token de sesión no abre la consola y un token de consola no abre la app: no
+//      comparten llave.
+//   2. No hay `alcance` ni `practice`: lo que autoriza es la lista cerrada de `permisos`, y
 //      el inquilino de cada petición sale de la RUTA.
 //
 // Sin NestJS, sin Fastify y sin Drizzle: esto se verifica igual desde una cola.
@@ -23,8 +35,10 @@ import {
   calculateJwkThumbprint,
   errors as joseErrors,
   exportJWK,
+  importPKCS8,
   importSPKI,
   jwtVerify,
+  SignJWT,
   type CryptoKey,
   type JWTPayload,
 } from 'jose';
@@ -123,23 +137,28 @@ export class PlatformTokens {
    * `401`, y nadie de soporte podía entrar hasta que los dos lados coincidieran.
    *
    * La primera de la lista es la del despliegue; las demás vienen de
-   * `PLATFORM_JWT_PUBLIC_KEYS_EXTRA` y existen para la ventana de la rotación. Lo que NO
-   * cambia es que aquí solo viven llaves PÚBLICAS: este proceso no puede firmar un token de
-   * consola ni por error.
+   * `PLATFORM_JWT_PUBLIC_KEYS_EXTRA` y existen para la ventana de la rotación.
+   *
+   * `signing` es el par con el que se FIRMA, y es opcional: `undefined` cuando el despliegue
+   * no pone `PLATFORM_JWT_PRIVATE_KEY_PATH`. Su `kid` es la huella de la pública del
+   * despliegue —la primera de `keys`—, así que lo que este proceso firma lo verifica este
+   * mismo proceso por construcción, sin que nadie mantenga un número a mano.
    */
   private constructor(
     private readonly keys: ReadonlyMap<string, CryptoKey>,
     private readonly region: Region,
+    private readonly signing: { readonly key: CryptoKey; readonly kid: string } | undefined,
   ) {}
 
   /**
-   * La llave PÚBLICA del servicio de plataforma, del despliegue. La privada no existe en
-   * esta región: este proceso no puede firmar un token de consola ni por error.
+   * Las llaves del despliegue: la PÚBLICA siempre —con la que se verifica—, y la PRIVADA
+   * solo si la configuración la nombra. Esa condición es la que decide si este despliegue
+   * puede emitir tokens de consola o únicamente aceptarlos.
    *
-   * En `development` sí se genera un par local —y solo si la configuración nombra dónde—
-   * porque el servicio que firma no corre en la máquina de nadie y sin eso no hay forma de
-   * acuñar un token a mano para probar la consola. Fuera de `development` no se genera
-   * nada, igual que las llaves de la sesión (OWASP A02).
+   * En `development` se genera el par si falta, porque sin él no hay forma de probar la
+   * consola en la máquina de nadie. Fuera de `development` no se genera nada: si la ruta
+   * está puesta y el archivo no existe, el arranque falla en vez de inventarse una llave
+   * (OWASP A02).
    */
   static async fromFiles(cfg: Config): Promise<PlatformTokens> {
     if (cfg.NODE_ENV === 'development' && cfg.PLATFORM_JWT_PRIVATE_KEY_PATH !== undefined) {
@@ -170,7 +189,73 @@ export class PlatformTokens {
       const kid = await calculateJwkThumbprint(await exportJWK(publicKey));
       if (!keys.has(kid)) keys.set(kid, publicKey);
     }
-    return new PlatformTokens(keys, cfg.REGION);
+
+    // El `kid` de la firma es el de la PRIMERA pública, que es la del despliegue. Tomarlo de
+    // ahí y no recalcularlo desde la privada es lo que garantiza que `verify()` encuentre la
+    // llave: las dos miran el mismo mapa.
+    const signingKid = [...keys.keys()][0];
+    const signing =
+      cfg.PLATFORM_JWT_PRIVATE_KEY_PATH !== undefined && signingKid !== undefined
+        ? {
+            key: await importPKCS8(readFileSync(cfg.PLATFORM_JWT_PRIVATE_KEY_PATH, 'utf8'), 'Ed25519'),
+            kid: signingKid,
+          }
+        : undefined;
+
+    return new PlatformTokens(keys, cfg.REGION, signing);
+  }
+
+  /**
+   * ACUÑA EL TOKEN DE CONSOLA · `POST /v1/platform/access`.
+   *
+   * Lo que NO sale de aquí y por eso no se puede falsear desde el cuerpo de una petición:
+   * el `aud`, que es siempre la región del despliegue, y el `exp`, que es la constante del
+   * contrato. Lo único que entra son los tres campos de la fila de `platform_account`.
+   *
+   * Y se valida antes de firmar, porque lo contrario es fabricar el fallo que la regla de la
+   * lista cerrada previene: un `permisos` con una cadena desconocida hace que `verify()`
+   * rechace el token ENTERO, así que emitirlo sería entregarle a la consola una credencial
+   * que no vale, con un 200. Lo mismo el `sub` y la `etiqueta`: lo que esta función emite
+   * tiene que pasar por `read()`, y esa es la prueba bloqueante de la fase.
+   */
+  async sign(caller: {
+    subject: string;
+    label: string;
+    permissions: readonly PlatformPermission[];
+  }): Promise<{ token: string; expiresAt: Date }> {
+    if (this.signing === undefined) {
+      throw new Error(
+        'este despliegue no firma tokens de consola: falta PLATFORM_JWT_PRIVATE_KEY_PATH',
+      );
+    }
+    if (!UUID.test(caller.subject)) {
+      throw new Error('platform sign: el sub tiene que ser un uuid');
+    }
+    const label = caller.label.trim();
+    if (label === '' || label.length > LABEL_MAX) {
+      throw new Error('platform sign: etiqueta vacia o demasiado larga');
+    }
+    const known = new Set<string>(PLATFORM_PERMISSIONS);
+    for (const permission of caller.permissions) {
+      if (!known.has(permission)) {
+        throw new Error(`platform sign: permiso desconocido ${permission}`);
+      }
+    }
+    if (caller.permissions.length === 0) {
+      throw new Error('platform sign: una cuenta sin permisos no puede entrar');
+    }
+
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const expiresAt = issuedAt + PLATFORM_TOKEN_LIFETIME_SECONDS;
+    const token = await new SignJWT({ etiqueta: label, permisos: [...caller.permissions] })
+      .setProtectedHeader({ alg: 'EdDSA', kid: this.signing.kid })
+      .setIssuer(PLATFORM_ISSUER)
+      .setAudience(this.region)
+      .setSubject(caller.subject)
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(expiresAt)
+      .sign(this.signing.key);
+    return { token, expiresAt: new Date(expiresAt * 1000) };
   }
 
   /**

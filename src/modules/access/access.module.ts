@@ -5,6 +5,8 @@ import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 
 import { SystemClock } from '../../shared/clock';
+import { config } from '../../shared/config/config';
+import { PlatformTokens } from '../../shared/platform/platform-token';
 import { Counters } from '../../shared/security/counters';
 import { Argon2Passwords } from '../../shared/security/passwords';
 import { Tokens } from '../../shared/security/tokens';
@@ -13,15 +15,23 @@ import { AccessController } from './access.controller';
 import { ChoosePassword } from './application/choose-password';
 import { CloseOtherSessions, CloseSession, ListSessions, SignOut } from './application/sessions';
 import { SignIn } from './application/sign-in';
+import { PlatformSignIn } from './application/platform-sign-in';
 import { AccessPause } from './infrastructure/access-pause';
 import { AccessRepository } from './infrastructure/access.repository';
+import { PlatformAccessRepository } from './infrastructure/platform-access.repository';
+import { PlatformAccessController } from './platform-access.controller';
 
 @Module({
-  controllers: [AccessController],
+  controllers: [AccessController, PlatformAccessController],
   providers: [
     {
       provide: AccessRepository,
       useFactory: (pool: Pool) => new AccessRepository(pool),
+      inject: [POOL],
+    },
+    {
+      provide: PlatformAccessRepository,
+      useFactory: (pool: Pool) => new PlatformAccessRepository(pool),
       inject: [POOL],
     },
     {
@@ -39,6 +49,20 @@ import { AccessRepository } from './infrastructure/access.repository';
         clock: SystemClock,
       ) => new SignIn(repo, passwords, pause, repo, tokens, clock),
       inject: [AccessRepository, Argon2Passwords, AccessPause, Tokens, SystemClock],
+    },
+    {
+      // La entrada de la consola. Comparte `Argon2Passwords` y `AccessPause` con la de la
+      // app a propósito: el señuelo y los contadores son los mismos, que es lo que hace que
+      // un correo sin fila responda igual aquí y allá.
+      provide: PlatformSignIn,
+      useFactory: (
+        repo: PlatformAccessRepository,
+        passwords: Argon2Passwords,
+        pause: AccessPause,
+        tokens: PlatformTokens,
+        clock: SystemClock,
+      ) => new PlatformSignIn(repo, passwords, pause, tokens, clock, config()),
+      inject: [PlatformAccessRepository, Argon2Passwords, AccessPause, PlatformTokens, SystemClock],
     },
     {
       provide: ChoosePassword,

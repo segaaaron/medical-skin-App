@@ -74,13 +74,9 @@ const esquema = z.object({
   JWT_PUBLIC_KEY_PATH: z.string().min(1),
 
   // LA LLAVE DEL TOKEN DE PLATAFORMA, y es OTRA llave (`plataforma-acceso.md`): la consola
-  // entra con un token que firma el servicio de plataforma, fuera de la región, «con su
-  // propio `kid` y su propio par de llaves, distinto del de las sesiones de la app». Aquí
-  // solo vive la PÚBLICA: este proceso no puede firmar un token de consola ni por error.
-  //
-  // La privada es OPCIONAL y solo sirve en `development`, donde el servicio que firma no
-  // corre en la máquina de nadie y hace falta poder acuñar un token a mano. En producción no
-  // se pone, y nada la lee.
+  // entra con un token «con su propio `kid` y su propio par de llaves, distinto del de las
+  // sesiones de la app». La PÚBLICA es obligatoria: sin ella no se verifica nada y los cinco
+  // endpoints de consola quedarían abiertos o muertos.
   PLATFORM_JWT_PUBLIC_KEY_PATH: z.string().min(1),
 
   // LA VENTANA DE ROTACIÓN DE LA LLAVE DE LA CONSOLA. Una lista de rutas separadas por coma,
@@ -94,6 +90,22 @@ const esquema = z.object({
   // plataforma empieza a firmar con ella, se mueve a `PLATFORM_JWT_PUBLIC_KEY_PATH` y la
   // vieja se quita de aquí. En ningún paso hay un hueco sin llave válida.
   PLATFORM_JWT_PUBLIC_KEYS_EXTRA: z.string().optional(),
+
+  // LA PRIVADA DEL TOKEN DE PLATAFORMA, y desde el 30 de octubre de 2026 **también sirve en
+  // producción** (`plataforma-acceso.md` · «La entrada de la consola»). Este comentario decía
+  // «solo sirve en development» y «en producción no se pone, y nada la lee»: las dos frases
+  // dejaron de ser verdad el día que se decidió que este backend firma la entrada de la
+  // consola contra su propia tabla de cuentas, porque el servicio de identidad de plataforma
+  // no existe y sin alguien que firme no hay forma de dar de alta la primera consulta.
+  //
+  // SIGUE SIENDO OPCIONAL, y eso es lo que acota la concesión: un despliegue que no la pone
+  // no puede emitir un token de consola ni por error —`PlatformTokens.sign()` lanza— y
+  // conserva la propiedad que esta región tenía antes. Ponerla es una decisión por
+  // despliegue, no una consecuencia de actualizar el código.
+  //
+  // Lo que hay que deshacer el día que el servicio de plataforma exista: quitar esta variable
+  // del despliegue, borrar la ruta `POST /v1/platform/access` de `route-policy.ts` y dejar
+  // `platform_account` vacía. Ninguna de las tres es una migración de datos.
   PLATFORM_JWT_PRIVATE_KEY_PATH: z.string().min(1).optional(),
 
   // La llave del servicio con la que se calcula el HMAC de los correos de las claves de

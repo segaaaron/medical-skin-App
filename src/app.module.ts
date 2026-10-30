@@ -50,12 +50,11 @@ import { CONFIG, SharedModule } from './shared/shared.module';
   providers: [
     {
       provide: APP_GUARD,
-      // `PlatformTokens` se construye aquí y no en `SharedModule` porque no lo usa nadie
-      // más: la consola solo necesita lo que el guardia deja en la petición, no el
-      // verificador. La fábrica es `async` porque leer e importar la llave pública lo es.
-      useFactory: async (tokens: Tokens, cfg: Config) =>
-        new ScopeGuard(tokens, await PlatformTokens.fromFiles(cfg)),
-      inject: [Tokens, CONFIG],
+      // `PlatformTokens` sale de `SharedModule` y ya no se construye aquí: desde que
+      // `POST /v1/platform/access` lo FIRMA, son dos los que lo necesitan, y dos instancias
+      // serían dos lecturas de la misma llave con el riesgo de que no cuadraran.
+      useFactory: (tokens: Tokens, platform: PlatformTokens) => new ScopeGuard(tokens, platform),
+      inject: [Tokens, PlatformTokens],
     },
     {
       provide: APP_FILTER,

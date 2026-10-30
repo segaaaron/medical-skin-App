@@ -1,5 +1,7 @@
-// LA PUERTA DE LA CONSOLA. Esta es la frontera de autenticación del backend que no acuña
-// nada: lo único que hace es decir no, así que lo que hay que probar es cada no.
+// LA PUERTA DE LA CONSOLA. Casi todo lo que hace esta frontera es decir no, así que lo que
+// hay que probar es cada no. Desde el 30 de octubre de 2026 también acuña —ver el bloque
+// «PlatformTokens · lo que firma» al final—, y eso añade una prueba que antes no tenía
+// sentido: que lo que firma lo acepte su propio verificador.
 //
 // Las dos que importan y que el dueño pidió por nombre:
 //   · un token que NO está firmado por la llave del servicio de plataforma no pasa, aunque
@@ -401,5 +403,107 @@ describe('ScopeGuard · las cinco rutas de la consola', () => {
     );
     expect(error.code).toBe('fallo_de_servicio');
     expect(error.status).toBe(500);
+  });
+});
+
+// =========================================================================================
+// LO QUE FIRMA · `POST /v1/platform/access`, decidido el 30 de octubre de 2026.
+//
+// La prueba bloqueante de la fase es la primera: lo que `sign()` emite tiene que pasar por
+// el verificador DE ESTE MISMO ARCHIVO. Si no pasara, el endpoint devolvería un 200 con una
+// credencial que el guardia rechaza, y eso se descubriría en el despliegue en vez de aquí.
+// =========================================================================================
+describe('PlatformTokens · lo que firma', () => {
+  it('lo que firma lo acepta su propio verificador', async () => {
+    const { token, expiresAt } = await plataforma.sign({
+      subject: SUB,
+      label: ETIQUETA,
+      permissions: ['plataforma:inquilinos:crear', 'plataforma:inquilinos:leer'],
+    });
+
+    const quien = await plataforma.verify(token);
+    expect(quien.via).toBe('plataforma');
+    expect(quien.subject).toBe(SUB);
+    expect(quien.label).toBe(ETIQUETA);
+    expect(quien.region).toBe('latam');
+    expect(quien.permissions).toEqual([
+      'plataforma:inquilinos:crear',
+      'plataforma:inquilinos:leer',
+    ]);
+
+    // Los quince minutos del contrato, con un margen por el segundo que tarda la prueba.
+    const vida = (expiresAt.getTime() - Date.now()) / 1000;
+    expect(vida).toBeGreaterThan(14 * 60);
+    expect(vida).toBeLessThanOrEqual(15 * 60);
+  });
+
+  it('el `aud` es la región del despliegue y no hay por dónde pedir otra', async () => {
+    // No es una comprobación de un argumento: es que `sign()` no acepta región. La firma no
+    // tiene por dónde recibirla, igual que `signRecovery` no tiene por dónde recibir un rol.
+    const { token } = await plataforma.sign({
+      subject: SUB,
+      label: ETIQUETA,
+      permissions: ['plataforma:pausa:levantar'],
+    });
+    expect((await plataforma.verify(token)).region).toBe('latam');
+  });
+
+  it('un permiso desconocido lanza ANTES de firmar', async () => {
+    await expect(
+      plataforma.sign({
+        subject: SUB,
+        label: ETIQUETA,
+        permissions: ['plataforma:inventado'] as unknown as readonly PlatformPermission[],
+      }),
+    ).rejects.toThrow(/permiso desconocido/);
+  });
+
+  it('una cuenta sin permisos no puede entrar', async () => {
+    await expect(
+      plataforma.sign({ subject: SUB, label: ETIQUETA, permissions: [] }),
+    ).rejects.toThrow(/sin permisos/);
+  });
+
+  it('un `sub` que no es uuid lanza: el verificador lo rechazaría', async () => {
+    await expect(
+      plataforma.sign({ subject: 'andrea', label: ETIQUETA, permissions: ['plataforma:pausa:levantar'] }),
+    ).rejects.toThrow(/uuid/);
+  });
+
+  it('una etiqueta vacía o de más de 120 lanza, por lo mismo', async () => {
+    await expect(
+      plataforma.sign({ subject: SUB, label: '   ', permissions: ['plataforma:pausa:levantar'] }),
+    ).rejects.toThrow(/etiqueta/);
+    await expect(
+      plataforma.sign({ subject: SUB, label: 'x'.repeat(121), permissions: ['plataforma:pausa:levantar'] }),
+    ).rejects.toThrow(/etiqueta/);
+  });
+
+  it('un despliegue sin privada verifica pero NO firma', async () => {
+    // Es la propiedad que acota la concesión entera: poner la privada es una decisión por
+    // despliegue. Sin ella esta región sigue sin poder emitir un token de consola.
+    const sinPrivada = await PlatformTokens.fromFiles(
+      loadConfig({
+        ...process.env,
+        NODE_ENV: 'development',
+        REGION: 'latam',
+        JWT_PRIVATE_KEY_PATH: join(carpeta, 'jwt.key'),
+        JWT_PUBLIC_KEY_PATH: join(carpeta, 'jwt.pub'),
+        PLATFORM_JWT_PUBLIC_KEY_PATH: PUBLICA,
+        PLATFORM_JWT_PRIVATE_KEY_PATH: undefined,
+      }),
+    );
+
+    await expect(
+      sinPrivada.sign({ subject: SUB, label: ETIQUETA, permissions: ['plataforma:pausa:levantar'] }),
+    ).rejects.toThrow(/PLATFORM_JWT_PRIVATE_KEY_PATH/);
+
+    // Y sigue verificando lo que firma el que sí tiene la llave.
+    const { token } = await plataforma.sign({
+      subject: SUB,
+      label: ETIQUETA,
+      permissions: ['plataforma:pausa:levantar'],
+    });
+    expect((await sinPrivada.verify(token)).subject).toBe(SUB);
   });
 });

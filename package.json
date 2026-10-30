@@ -18,7 +18,8 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.ts\"",
-    "db:seed": "tsx --env-file=.env src/shared/db/seed.ts"
+    "db:seed": "tsx --env-file=.env src/shared/db/seed.ts",
+    "platform:seed": "tsx --env-file=.env src/shared/db/seed-platform.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",

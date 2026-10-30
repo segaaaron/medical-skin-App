@@ -1670,7 +1670,23 @@ export const FAILURE_PHRASES = {
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
   liftAccessPause:
     'No pudimos levantar la pausa. El servidor no respondió: puedes volver a intentarlo.',
+
+  /**
+   * `plataforma-acceso.md` · «La entrada de la consola». No dice «tu contraseña no cambió»
+   * como la de la app: aquí no hay ninguna pantalla de contraseña nueva detrás, y una frase
+   * que tranquiliza sobre algo que no estaba en juego sobra.
+   */
+  platformSignIn:
+    'No pudimos entrar. El servidor no respondió: puedes volver a intentarlo.',
 } as const;
+
+/**
+ * La frase del `403 cuenta_suspendida` de `POST /v1/platform/access`, literal del contrato.
+ * Es el patrón ya establecido del catálogo —un `codigo`, dos frases—: la genérica del
+ * catálogo habla de escribir a `hola@medskin.app`, que es lo que le toca a una paciente y no
+ * a alguien del equipo de MedSkin mirando una pantalla interna.
+ */
+export const PLATFORM_SUSPENDED_MESSAGE = 'Tu cuenta de consola está suspendida.';
 
 /**
  * El código del transporte que le toca a cada estado de HTTP. Es la tabla de

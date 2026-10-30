@@ -440,6 +440,19 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   // (`plataforma:suplantar`) está en `propuesto` y sin entrada aquí la ruta no se puede
   // servir ni por descuido.
   // ---------------------------------------------------------------------------------
+  // LA ENTRADA DE LA CONSOLA, y es la ÚNICA de `/v1/platform/…` sin token: decidido el 30 de
+  // octubre de 2026 (`plataforma-acceso.md`). Va marcada `anonymous` y no con un
+  // `platformPermission`, porque cuando llega esta petición todavía no hay token que
+  // verificar — es la que lo emite.
+  //
+  // Que sea la única alcanzable desde internet sin credencial es exactamente por lo que su
+  // `401` no distingue «ese correo no existe» de «esa contraseña está mal»: lo contrario
+  // sería servir la lista de los correos del equipo a quien pregunte.
+  'POST /v1/platform/access': {
+    anonymous: true,
+    failurePhrase: FAILURE_PHRASES.platformSignIn,
+  },
+
   'POST /v1/platform/tenants': {
     platformPermission: 'plataforma:inquilinos:crear',
     failurePhrase: FAILURE_PHRASES.createTenant,
