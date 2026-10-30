@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.git
+.github
+.githooks
+.claude
+.flujo
+docs
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
