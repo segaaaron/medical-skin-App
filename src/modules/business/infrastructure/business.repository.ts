@@ -266,7 +266,7 @@ export class BusinessRepository implements BusinessPort {
         `select p.id as product_id, p.name,
                 coalesce(sum(l.units_left), 0)::text as units_left,
                 coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'code', l.code,
-                                   'expiresOn', l.expires_on::text, 'unitsLeft', l.units_left)
+                                   'expiresOn', to_char(l.expires_on, 'YYYY-MM-DD'), 'unitsLeft', l.units_left)
                                    order by l.expires_on)
                          filter (where l.id is not null), '[]'::jsonb) as lots
            from product p
@@ -449,7 +449,7 @@ export class BusinessRepository implements BusinessPort {
   async plan(caller: BusinessCaller): Promise<PlanRow | null> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const { rows } = await c.query<Record<string, unknown>>(
-        `select p.plan, p.patient_limit, p.currency, p.plan_renews_on::text as renews_on,
+        `select p.plan, p.patient_limit, p.currency, to_char(p.plan_renews_on, 'YYYY-MM-DD') as renews_on,
                 (select count(*) from patient where practice_id = p.id and status = 'activa')::text
                   as patients,
                 medskin_practice_photo_bytes(p.id)::text as photo_bytes

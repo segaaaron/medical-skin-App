@@ -78,7 +78,7 @@ export class PatientCatalogRepository implements PatientCatalogPort {
                               from treatment_contraindication ci
                              where ci.treatment_id = t.id), '[]'::jsonb) as contraindications,
                   (select jsonb_build_object('id', pr.id, 'name', pr.name,
-                                             'endsOn', pr.ends_on::text,
+                                             'endsOn', to_char(pr.ends_on, 'YYYY-MM-DD'),
                                              'discountType', pr.discount_type,
                                              'discountValue', pr.discount_value)
                      from promotion pr

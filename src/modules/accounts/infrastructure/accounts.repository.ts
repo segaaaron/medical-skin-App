@@ -208,7 +208,7 @@ export class AccountsRepository
         patient_count: number | null;
         plan_renews_on: string | null;
       }>(
-        `select verdict, deleted_at, patient_count, plan_renews_on::text as plan_renews_on
+        `select verdict, deleted_at, patient_count, to_char(plan_renews_on, 'YYYY-MM-DD') as plan_renews_on
            from medskin_delete_own_account($1::date, $2)`,
         [p.retentionUntil, p.reason],
       );

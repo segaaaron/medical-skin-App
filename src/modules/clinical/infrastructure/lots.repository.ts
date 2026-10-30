@@ -19,7 +19,7 @@ function contextOf(caller: ClinicalCaller): TenantContext {
 }
 
 const LOT_SELECT = `
-  select l.id, l.product_id, l.code, l.expires_on::text as expires_on, l.units, l.units_left,
+  select l.id, l.product_id, l.code, to_char(l.expires_on, 'YYYY-MM-DD') as expires_on, l.units, l.units_left,
          l.cost_cents, p.name as product_name
     from product_lot l join product p on p.id = l.product_id`;
 

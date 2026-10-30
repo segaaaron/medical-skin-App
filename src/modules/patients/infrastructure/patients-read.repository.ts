@@ -58,7 +58,7 @@ export class PatientsReadRepository implements PatientReadPort {
       // Los dos los soporta `gin_trgm_ops`, y ninguno es LEAKPROOF: con RLS puesta lo que
       // recorre el índice es el inquilino y esto filtra encima.
       const { rows } = await c.query<ListRow>(
-        `select p.id, p.first_name, p.last_name, p.birth_date::text as birth_date, p.phone,
+        `select p.id, p.first_name, p.last_name, to_char(p.birth_date, 'YYYY-MM-DD') as birth_date, p.phone,
                 l.status as link_status,
                 h.has_allergies, h.pregnancy_or_lactation,
                 count(*) over () ::text as total
@@ -102,7 +102,7 @@ export class PatientsReadRepository implements PatientReadPort {
   async file(caller: PracticeCaller, patientId: string): Promise<PatientFileRow | null> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const { rows } = await c.query<Record<string, unknown>>(
-        `select p.id, p.first_name, p.last_name, p.birth_date::text as birth_date,
+        `select p.id, p.first_name, p.last_name, to_char(p.birth_date, 'YYYY-MM-DD') as birth_date,
                 p.email::text as email, p.phone, p.has_whatsapp, p.reminders_via,
                 p.how_arrived, p.referred_by, p.status, p.created_at,
                 r.first_name as referred_first, r.last_name as referred_last,

@@ -75,14 +75,27 @@ export class ClinicalRepository implements ClinicalPort {
 
       // Los lotes, antes de escribir nada: vencido BLOQUEA, y sin stock también.
       for (const application of draft.applications) {
-        const { rows } = await c.query<{ expires_on: string; units_left: number }>(
-          `select to_char(expires_on, 'YYYY-MM-DD') as expires_on, units_left from product_lot
-            where id = $1 for update`,
+        // SI ESTÁ VENCIDO LO DECIDE LA BASE, y contra EL DÍA DE LA CONSULTA. Antes se comparaba
+        // con `new Date().toISOString().slice(0, 10)`, que es el día en UTC: en La Paz, de las
+        // 20:00 a medianoche, UTC ya es mañana, así que un lote que caduca HOY se rechazaba
+        // cuatro horas antes de caducar. Erraba hacia el lado seguro —rechaza de más— pero es la
+        // misma familia que el día del hueco de la lista de espera, y aquí lo que decide es si un
+        // producto se usa en una paciente.
+        //
+        // `FOR UPDATE OF l` y no `FOR UPDATE` a secas: con el `join`, el segundo bloquearía
+        // también la fila de `practice` en cada sesión que se firma (la lección de la 0057).
+        const { rows } = await c.query<{ expired: boolean; units_left: number }>(
+          `select l.units_left,
+                  (l.expires_on < (now() AT TIME ZONE pr.time_zone)::date) as expired
+             from product_lot l
+             join practice pr on pr.id = medskin_current_practice()
+            where l.id = $1
+              for update of l`,
           [application.lotId],
         );
         const lot = rows[0];
         if (lot === undefined) return fail('no_lot');
-        if (lot.expires_on < new Date().toISOString().slice(0, 10)) return fail('expired_lot');
+        if (lot.expired) return fail('expired_lot');
         if (lot.units_left < application.totalUnits) return fail('no_stock');
       }
 

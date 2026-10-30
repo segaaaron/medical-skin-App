@@ -66,7 +66,8 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
         [practiceId],
       );
       const { rows: holidays } = await c.query<{ from_date: string; to_date: string; reason: string | null }>(
-        `select from_date::text as from_date, to_date::text as to_date, reason
+        `select to_char(from_date, 'YYYY-MM-DD') as from_date,
+                to_char(to_date, 'YYYY-MM-DD') as to_date, reason
            from holiday where practice_id = $1 order by from_date`,
         [practiceId],
       );

@@ -91,7 +91,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       const { rows } = await c.query<PracticeRow>(
         `select p.id, p.name, p.address, p.city, p.phone, p.logo_url,
                 p.region, p.time_zone, p.currency,
-                p.plan, p.patient_limit, p.plan_renews_on::text as plan_renews_on,
+                p.plan, p.patient_limit, to_char(p.plan_renews_on, 'YYYY-MM-DD') as plan_renews_on,
                 p.first_day_practice_data, p.first_day_schedule,
                 p.first_day_first_treatment, p.first_day_dismissed,
                 l.status as license_status, l.submitted_at, l.response_estimated_at,
