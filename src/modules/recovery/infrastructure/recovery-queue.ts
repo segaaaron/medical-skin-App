@@ -5,11 +5,16 @@
 // viaja en el trabajo porque cuando el trabajo se encola el código todavía no existe
 // (`recuperacion.md`): «la cola recibe a quién escribirle, no qué escribirle».
 
-import type { Queue, Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
 
 import { FailureLog } from '../../../shared/failures/service-failure';
-import { QUEUE_NAMES, createQueue, createWorker } from '../../../shared/queues/queues';
+import {
+  QUEUE_NAMES,
+  createQueue,
+  createWorker,
+  type QueueConnection,
+  type AppQueue,
+  type AppWorker,
+} from '../../../shared/queues/queues';
 import type { SendRecoveryCode } from '../application/send-code';
 import type { RecoveryMailJob, RecoveryQueuePort } from '../domain/ports';
 
@@ -17,10 +22,10 @@ import type { RecoveryMailJob, RecoveryQueuePort } from '../domain/ports';
 type JobData = { email: string; expiresAt: string };
 
 export class RecoveryQueue implements RecoveryQueuePort {
-  private readonly queue: Queue;
+  private readonly queue: AppQueue;
 
-  constructor(redis: Redis) {
-    this.queue = createQueue(QUEUE_NAMES.recoveryMail, redis);
+  constructor(queues: QueueConnection) {
+    this.queue = createQueue(QUEUE_NAMES.recoveryMail, queues);
   }
 
   async enqueue(job: RecoveryMailJob): Promise<void> {
@@ -47,11 +52,11 @@ export class RecoveryQueue implements RecoveryQueuePort {
  * variable del caso de uso y el cuerpo del correo.
  */
 export function startRecoveryWorker(
-  redis: Redis,
+  queues: QueueConnection,
   send: SendRecoveryCode,
   failures: FailureLog,
-): Worker {
-  const worker = createWorker(QUEUE_NAMES.recoveryMail, redis, async (job) => {
+): AppWorker {
+  const worker = createWorker(QUEUE_NAMES.recoveryMail, queues, async (job) => {
     const data = job.data as JobData;
     await send.run({ email: data.email, expiresAt: new Date(data.expiresAt) });
   });

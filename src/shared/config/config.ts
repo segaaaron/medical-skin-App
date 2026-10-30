@@ -17,7 +17,6 @@ const esquema = z.object({
   DATABASE_URL: urlPostgres,
   DATABASE_URL_POOLER: urlPostgres.optional(),
 
-  REDIS_URL: z.string().min(1).startsWith('redis'),
 
   // §7.4: un despliegue por región. La etiqueta sale de aquí y no de la base (decisión 6
   // de preguntas-abiertas): todos los inquilinos de un despliegue comparten la etiqueta.

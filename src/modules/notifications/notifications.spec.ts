@@ -210,7 +210,39 @@ describe('la frase que afirmaba un aviso ahora deja la fila que lo manda', () =>
   });
 });
 
+/**
+ * EL SILENCIO, PUESTO A MANO. Sin esto la suite dependía de la hora del reloj REAL: la consulta
+ * de la bandeja calcula el silencio con `(now() AT TIME ZONE zona)::time`, no con el reloj falso
+ * de la prueba, así que tres pruebas de envío pasaban de día y fallaban entre las 22:00 y las
+ * 07:00 de La Paz. Una suite que falla de noche es peor que una que falla siempre: nadie la cree.
+ *
+ * `from = to` significa «nunca hay silencio» (`medskin_in_quiet_hours`, 0056), y es la forma
+ * limpia de desactivarlo sin tocar la hora del sistema.
+ */
+const silencio = async (from: string, to: string): Promise<void> => {
+  await owner.query(
+    `insert into alert_preference (account_id, quiet_from, quiet_to) values ($1, $2::time, $3::time)
+     on conflict (account_id) do update
+        set quiet_from = excluded.quiet_from, quiet_to = excluded.quiet_to`,
+    [N.doctor, from, to],
+  );
+};
+
+/** Devuelve las filas a «vencidas»: `due()` las arrienda cinco minutos al entregarlas. */
+const devolverALaCola = async (): Promise<void> => {
+  await owner.query(
+    `update notification_outbox set send_after = now() where practice_id = $1 and status = 'pendiente'`,
+    [N.practice],
+  );
+};
+
 describe('el envío, el silencio y la higiene de tokens', () => {
+  // Las pruebas de ESTE bloque mandan push: el silencio queda desactivado a propósito, y la que
+  // lo comprueba se pone su propia ventana.
+  beforeAll(async () => {
+    await silencio('00:00', '00:00');
+  });
+
   beforeAll(async () => {
     await owner.query(`delete from device where account_id = $1`, [N.doctor]);
     await owner.query(
@@ -297,12 +329,6 @@ describe('el envío, el silencio y la higiene de tokens', () => {
       [N.doctor],
     );
 
-    // La hora de la consulta es America/La_Paz (-4): a las 03:00Z son las 23:00 allí.
-    const { rows: hour } = await owner.query<{ h: string }>(
-      `select to_char((now() at time zone 'America/La_Paz'), 'HH24') as h`,
-    );
-    const quiet = Number(hour[0]!.h) >= 22 || Number(hour[0]!.h) < 7;
-
     for (const [kind, subject, dedupeKey] of [
       ['cuidado', 'cuidado', 'silencio-cuidado'],
       ['seguridad', 'seguridad', 'silencio-seguridad'],
@@ -316,14 +342,30 @@ describe('el envío, el silencio y la higiene de tokens', () => {
       );
     }
 
-    const due = await outbox.due(50, 3);
-    const kinds = due.filter((row) => row.practiceId === N.practice).map((row) => row.kind);
+    // CON UNA VENTANA QUE CONTIENE A AHORA —da igual qué hora sea—: el cuidado se calla y las
+    // dos excepciones del contrato salen igual.
+    await owner.query(
+      `insert into alert_preference (account_id, quiet_from, quiet_to)
+       values ($1, ((now() at time zone 'America/La_Paz') - interval '1 hour')::time,
+                   ((now() at time zone 'America/La_Paz') + interval '1 hour')::time)
+       on conflict (account_id) do update
+          set quiet_from = excluded.quiet_from, quiet_to = excluded.quiet_to`,
+      [N.doctor],
+    );
+    const callados = (await outbox.due(50, 3))
+      .filter((row) => row.practiceId === N.practice)
+      .map((row) => row.kind);
+    expect(callados).toContain('seguridad');
+    expect(callados).toContain('hueco_libre');
+    expect(callados).not.toContain('cuidado');
 
-    // Las dos excepciones salen SIEMPRE.
-    expect(kinds).toContain('seguridad');
-    expect(kinds).toContain('hueco_libre');
-    // Y el cuidado solo si no es de noche en la consulta.
-    expect(kinds.includes('cuidado')).toBe(!quiet);
+    // Y FUERA DE LA VENTANA, el cuidado sale. `due()` arrendó las filas, así que se devuelven.
+    await devolverALaCola();
+    await silencio('00:00', '00:00');
+    const hablados = (await outbox.due(50, 3))
+      .filter((row) => row.practiceId === N.practice)
+      .map((row) => row.kind);
+    expect(hablados).toContain('cuidado');
   });
 
   it('el interruptor de la cuenta apaga su tipo de aviso, y solo el suyo', async () => {

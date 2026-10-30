@@ -1,35 +1,36 @@
-// Los contadores y la pausa, contra el Redis de verdad (6380). Sin dobles: lo que se
-// prueba aquí es el comportamiento del almacén, y un doble de Redis probaría el doble.
+// Los contadores y la pausa, contra la BASE de verdad. Sin dobles: lo que se prueba aquí es el
+// comportamiento del almacén, y un doble probaría el doble.
 //
 // Las tres reglas de `_convenciones.md` · «Los contadores» son las tres primeras pruebas:
 // cuenta exista o no la cuenta, la clave lleva el HMAC del correo y nunca el correo, y un
-// fallo de Redis NO abre la puerta.
+// fallo del almacén NO abre la puerta.
 
-import { Redis } from 'ioredis';
+import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AccessPause, LIMIT_PER_EMAIL, LIMIT_PER_IP } from '../../modules/access/infrastructure/access-pause';
 import { ContractError } from '../contract/error-catalog';
 import { COUNTER_KEYS, Counters } from './counters';
 
-const url = process.env.REDIS_URL ?? 'redis://localhost:6380';
+const url =
+  process.env.DATABASE_URL ?? 'postgresql://medskin:dev_local_only@localhost:5433/medskin';
 const LLAVE = 'llave_de_prueba_de_32_bytes_o_mas_aqui';
 const CORREO = 'carla.rojas@contadores.local';
 const IP = '201.131.0.77';
 
-const redis = new Redis(url, { maxRetriesPerRequest: 1 });
-const counters = new Counters(redis, LLAVE);
+const pool = new Pool({ connectionString: url, max: 3 });
+const counters = new Counters(pool, LLAVE);
 const pause = new AccessPause(counters);
 
 async function limpiar(): Promise<void> {
   const huella = counters.fingerprint(CORREO);
-  await redis.del(COUNTER_KEYS.signInByEmail(huella), COUNTER_KEYS.signInByIp(IP));
+  await counters.forget(COUNTER_KEYS.signInByEmail(huella), COUNTER_KEYS.signInByIp(IP));
 }
 
 beforeEach(limpiar);
 afterAll(async () => {
   await limpiar();
-  await redis.quit();
+  await pool.end();
 });
 
 describe('Counters', () => {
@@ -47,7 +48,7 @@ describe('Counters', () => {
   });
 
   it('la huella depende de la llave del servicio: no es un hash desnudo', () => {
-    const otra = new Counters(redis, 'otra_llave_de_servicio_de_32_bytes_x');
+    const otra = new Counters(pool, 'otra_llave_de_servicio_de_32_bytes_x');
     expect(otra.fingerprint(CORREO)).not.toBe(counters.fingerprint(CORREO));
   });
 
@@ -122,23 +123,22 @@ describe('AccessPause · la pausa del acceso', () => {
     const ipSola = '198.51.100.7';
     const clave = COUNTER_KEYS.signInByIp(ipSola);
     try {
-      await redis.set(clave, String(LIMIT_PER_IP), 'EX', 900);
+      for (let i = 0; i < LIMIT_PER_IP; i += 1) await counters.increment(clave, 900);
       const estado = await pause.peek('otro.correo@contadores.local', ipSola);
       expect(estado.paused).toBe(true);
       // Y los intentos por correo siguen intactos: son dos contadores.
       expect(estado.attemptsLeft).toBe(LIMIT_PER_EMAIL);
     } finally {
-      await redis.del(clave);
+      await counters.forget(clave);
     }
   });
 
-  it('si Redis no responde, el endpoint da 500 y NO deja pasar', async () => {
+  it('si el almacén no responde, el endpoint da 500 y NO deja pasar', async () => {
     // Un límite de intentos que falla hacia el lado cómodo no es un límite.
-    const caido = new Redis('redis://127.0.0.1:1', {
-      maxRetriesPerRequest: 0,
-      enableOfflineQueue: false,
-      retryStrategy: () => null,
-      lazyConnect: true,
+    const caido = new Pool({
+      connectionString: 'postgresql://nadie:nada@127.0.0.1:1/ninguna',
+      max: 1,
+      connectionTimeoutMillis: 500,
     });
     caido.on('error', () => undefined);
     const pausaCaida = new AccessPause(new Counters(caido, LLAVE));
@@ -151,7 +151,7 @@ describe('AccessPause · la pausa del acceso', () => {
       expect((fallo as ContractError).code).toBe('fallo_de_servicio');
       expect((fallo as ContractError).status).toBe(500);
     } finally {
-      caido.disconnect();
+      await caido.end().catch(() => undefined);
     }
   });
 });

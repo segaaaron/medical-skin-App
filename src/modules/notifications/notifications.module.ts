@@ -7,16 +7,21 @@
 // tener una respuesta que afirma un aviso que no sale, que es justo el defecto que esto cierra.
 
 import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import type { Queue, Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 
 import { SystemClock } from '../../shared/clock';
 import type { Config } from '../../shared/config/config';
 import { FailureLog } from '../../shared/failures/service-failure';
 import { SmtpMail } from '../../shared/mail/mailer';
-import { QUEUE_NAMES, createQueue, createWorker } from '../../shared/queues/queues';
-import { CONFIG, POOL, REDIS } from '../../shared/shared.module';
+import {
+  QUEUE_NAMES,
+  createQueue,
+  createWorker,
+  type QueueConnection,
+  type AppQueue,
+  type AppWorker,
+} from '../../shared/queues/queues';
+import { CONFIG, POOL, QUEUES } from '../../shared/shared.module';
 import { Notifications } from './application/notifications';
 import type { PushPort } from './domain/ports';
 import { ApnsPush } from './infrastructure/apns';
@@ -65,7 +70,7 @@ export function pushSendersOf(cfg: Config): readonly PushPort[] {
   return senders;
 }
 
-type Running = { queues: readonly Queue[]; workers: readonly Worker[] };
+type Running = { queues: readonly AppQueue[]; workers: readonly AppWorker[] };
 
 /**
  * Las tres colas con su trabajo repetible. `upsertJobScheduler` por lo mismo que el barrido de
@@ -77,7 +82,7 @@ type Running = { queues: readonly Queue[]; workers: readonly Worker[] };
  * leer la misma bandeja y manda lo mismo otra vez.
  */
 export function startNotifications(
-  redis: Redis,
+  conexion: QueueConnection,
   notifications: Notifications,
   failures: FailureLog,
 ): Running {
@@ -97,11 +102,11 @@ export function startNotifications(
     },
   ] as const;
 
-  const queues: Queue[] = [];
-  const workers: Worker[] = [];
+  const queues: AppQueue[] = [];
+  const workers: AppWorker[] = [];
 
   for (const job of plan) {
-    const queue = createQueue(job.name, redis);
+    const queue = createQueue(job.name, conexion);
     queue
       .upsertJobScheduler(
         job.name,
@@ -110,7 +115,7 @@ export function startNotifications(
       )
       .catch((cause: unknown) => record(failures, job.name, cause, 'programacion'));
 
-    const worker = createWorker(job.name, redis, job.run);
+    const worker = createWorker(job.name, conexion, job.run);
     worker.on('failed', (bullJob, cause) => {
       void record(failures, job.name, cause, bullJob?.id);
     });
@@ -157,9 +162,9 @@ async function record(
     },
     {
       provide: NOTIFICATION_WORKERS,
-      useFactory: (redis: Redis, notifications: Notifications, failures: FailureLog) =>
-        startNotifications(redis, notifications, failures),
-      inject: [REDIS, Notifications, FailureLog],
+      useFactory: (conexion: QueueConnection, notifications: Notifications, failures: FailureLog) =>
+        startNotifications(conexion, notifications, failures),
+      inject: [QUEUES, Notifications, FailureLog],
     },
   ],
   exports: [Notifications],

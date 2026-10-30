@@ -1,4 +1,15 @@
-// Las colas · BullMQ sobre el mismo Redis de los contadores.
+// Las colas · BullMQ sobre POSTGRES, no sobre Redis.
+//
+// BullMQ 6 trae un backend de PostgreSQL con la MISMA API de `Queue` y `Worker`: reclama los
+// trabajos con `FOR UPDATE SKIP LOCKED` y espera con `LISTEN/NOTIFY`, así que no sondea. Se
+// cambió porque Redis se había quedado sin trabajo propio: el estado de la cola —la carga del
+// aviso, el arrendamiento, el retroceso— ya vivía en `notification_outbox` y sus funciones, y
+// lo único que quedaba en Redis era el reloj. Una dependencia entera, con su servicio, su
+// memoria y su modo de fallo, para disparar un tic.
+//
+// Y hay una razón de fondo que pesa más que el ahorro: un trabajo encolado y el hecho que lo
+// origina ahora pueden confirmarse en la MISMA base. Con Redis, «se guardó la cita» y «se
+// encoló su recordatorio» eran dos sistemas que podían discrepar.
 //
 // Lo que va a una cola es «lo que puede tardar o reintentarse»: aquí, el correo del código
 // de recuperación. Lo que NO va es nada que el ciclo de la petición necesite para
@@ -9,8 +20,14 @@
 // trabajo lo hace un caso de uso del módulo (`SendRecoveryCode`), porque un procesador con
 // reglas de negocio dentro es una regla que vive fuera de su capa.
 
-import { Queue, Worker, type ConnectionOptions, type JobsOptions, type Processor } from 'bullmq';
-import type { Redis } from 'ioredis';
+import { createPostgresBackend, withBackend, type JobsOptions, type Processor } from 'bullmq';
+
+/**
+ * Los constructores LIGADOS al backend de Postgres. `withBackend` existe para esto: sin él,
+ * `Queue` y `Worker` a secas llevan los tipos del backend de Redis y TypeScript rechaza la
+ * conexión —el error es real, no cosmético: delata que estarías mezclando los dos—.
+ */
+const { Queue, Worker } = withBackend(createPostgresBackend);
 
 // Con guion y no con dos puntos: BullMQ rechaza el `:` en el nombre de una cola, porque lo
 // usa él para componer sus propias claves de Redis («Queue name cannot contain :»). Las
@@ -71,14 +88,31 @@ export const JOB_OPTIONS: JobsOptions = {
  * contrario a propósito —un contador que espera en vez de fallar no es un contador—, así
  * que la cola usa un duplicado con su propia política y no la de los contadores.
  */
-export function queueConnection(redis: Redis): ConnectionOptions {
-  return redis.duplicate({ maxRetriesPerRequest: null, enableOfflineQueue: true });
+export type QueueConnection = { connectionString: string; schema: string };
+
+/** Las tablas de BullMQ viven en su propio esquema, fuera de las 54 del dominio. */
+export const QUEUE_SCHEMA = 'bullmq';
+
+/**
+ * `{ connectionString, schema }` y NO un `pg.Pool` nuestro, a propósito: con un pool ya
+ * construido BullMQ **no puede fijar el `search_path`** y sus consultas sin cualificar no
+ * encuentran sus tablas. Dándole la cadena, lo construye él y el `schema` surte efecto.
+ *
+ * Y que sea un pool aparte es además lo que se quiere: el nuestro va con `SET ROLE` por petición
+ * (`withTenantContext`), y las colas no tienen inquilino.
+ */
+export function queueConnection(databaseUrl: string): QueueConnection {
+  return { connectionString: databaseUrl, schema: QUEUE_SCHEMA };
 }
 
-export function createQueue(name: string, redis: Redis): Queue {
-  return new Queue(name, { connection: queueConnection(redis), defaultJobOptions: JOB_OPTIONS });
+export function createQueue(name: string, connection: QueueConnection) {
+  return new Queue(name, { connection, defaultJobOptions: JOB_OPTIONS });
 }
 
-export function createWorker(name: string, redis: Redis, run: Processor): Worker {
-  return new Worker(name, run, { connection: queueConnection(redis) });
+export function createWorker(name: string, connection: QueueConnection, run: Processor) {
+  return new Worker(name, run, { connection });
 }
+
+/** Lo que devuelven los dos de arriba, para quien tenga que guardarlos en una lista. */
+export type AppQueue = ReturnType<typeof createQueue>;
+export type AppWorker = ReturnType<typeof createWorker>;

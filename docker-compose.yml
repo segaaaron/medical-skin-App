@@ -20,19 +20,6 @@ services:
       timeout: 3s
       retries: 20
 
-  redis:
-    image: redis:7.4-alpine
-    container_name: medskin-redis
-    ports: ["6380:6379"]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - medskin-redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   # S3 de desarrollo. MinIO salió de Docker Hub en 2025 y su imagen pide cuenta;
   # LocalStack da el mismo S3 para desarrollo sin registro ninguno.
   s3:
@@ -95,5 +82,4 @@ services:
 # No se duplica en un contenedor: ya está, y dos procesos no pueden escuchar el mismo puerto.
 volumes:
   medskin-pg:
-  medskin-redis:
   medskin-s3:

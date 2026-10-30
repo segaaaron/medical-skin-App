@@ -1,15 +1,20 @@
 // El cableado del negocio.
 
 import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import type { Queue, Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 
 import type { Config } from '../../shared/config/config';
 import { FailureLog } from '../../shared/failures/service-failure';
 import { SmtpMail } from '../../shared/mail/mailer';
-import { QUEUE_NAMES, createQueue, createWorker } from '../../shared/queues/queues';
-import { CONFIG, POOL, REDIS } from '../../shared/shared.module';
+import {
+  QUEUE_NAMES,
+  createQueue,
+  createWorker,
+  type QueueConnection,
+  type AppQueue,
+  type AppWorker,
+} from '../../shared/queues/queues';
+import { CONFIG, POOL, QUEUES } from '../../shared/shared.module';
 import type { StorageConfig } from '../../shared/storage/signed-url';
 import { ExportWorker } from './infrastructure/export-worker';
 import { Business } from './application/business';
@@ -64,8 +69,8 @@ const EXPORT_EVERY_MS = 60 * 1000;
     },
     {
       provide: EXPORT_WORKER,
-      useFactory: (redis: Redis, worker: ExportWorker, failures: FailureLog) => {
-        const queue = createQueue(QUEUE_NAMES.dataExport, redis);
+      useFactory: (queues: QueueConnection, worker: ExportWorker, failures: FailureLog) => {
+        const queue = createQueue(QUEUE_NAMES.dataExport, queues);
         const recordFailure = (cause: unknown, jobId?: string) =>
           failures.record({
             service: 'worker',
@@ -92,7 +97,7 @@ const EXPORT_EVERY_MS = 60 * 1000;
             { name: QUEUE_NAMES.dataExport, opts: { attempts: 1, removeOnFail: 1_000 } },
           )
           .catch((cause: unknown) => recordFailure(cause, 'programacion'));
-        const running = createWorker(QUEUE_NAMES.dataExport, redis, async () => ({
+        const running = createWorker(QUEUE_NAMES.dataExport, queues, async () => ({
           armadas: await worker.run(),
           vencidas: await worker.expire(),
         }));
@@ -101,7 +106,7 @@ const EXPORT_EVERY_MS = 60 * 1000;
         });
         return { queue, worker: running };
       },
-      inject: [REDIS, ExportWorker, FailureLog],
+      inject: [QUEUES, ExportWorker, FailureLog],
     },
     {
       provide: Business,
@@ -113,7 +118,7 @@ const EXPORT_EVERY_MS = 60 * 1000;
 })
 export class BusinessModule implements OnApplicationShutdown {
   constructor(
-    @Inject(EXPORT_WORKER) private readonly running: { queue: Queue; worker: Worker },
+    @Inject(EXPORT_WORKER) private readonly running: { queue: AppQueue; worker: AppWorker },
   ) {}
 
   async onApplicationShutdown(): Promise<void> {

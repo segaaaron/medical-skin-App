@@ -11,7 +11,6 @@ import { loadConfig } from './config';
 const COMPLETO = {
   NODE_ENV: 'development',
   DATABASE_URL: 'postgresql://medskin:x@localhost:5433/medskin',
-  REDIS_URL: 'redis://localhost:6380',
   REGION: 'latam',
   REGION_ETIQUETA: 'Bolivia · bo-1',
   ZONA_HORARIA: 'America/La_Paz',
@@ -55,7 +54,6 @@ describe('loadConfig', () => {
   it('nombra TODAS las que faltan, no solo la primera', () => {
     const fallo = capturar(() => loadConfig({ NODE_ENV: 'development' }));
     expect(fallo).toMatch(/DATABASE_URL/);
-    expect(fallo).toMatch(/REDIS_URL/);
     expect(fallo).toMatch(/REGION/);
     expect(fallo).toMatch(/JWT_PRIVATE_KEY_PATH/);
   });

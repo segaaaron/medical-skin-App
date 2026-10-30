@@ -6,8 +6,6 @@
 // `startRecoveryWorker()` desde otro `main`, no reescribir nada.
 
 import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import type { Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 
 import { SystemClock } from '../../shared/clock';
@@ -17,7 +15,8 @@ import { SmtpMail } from '../../shared/mail/mailer';
 import { Counters } from '../../shared/security/counters';
 import { Argon2Passwords } from '../../shared/security/passwords';
 import { Tokens } from '../../shared/security/tokens';
-import { CONFIG, POOL, REDIS } from '../../shared/shared.module';
+import type { AppWorker, QueueConnection } from '../../shared/queues/queues';
+import { CONFIG, POOL, QUEUES } from '../../shared/shared.module';
 import { RecoveryController } from './recovery.controller';
 import { CheckRecoveryCode } from './application/check-code';
 import { RequestRecoveryCode } from './application/request-code';
@@ -45,8 +44,8 @@ const RECOVERY_WORKER = Symbol('RECOVERY_WORKER');
     },
     {
       provide: RecoveryQueue,
-      useFactory: (redis: Redis) => new RecoveryQueue(redis),
-      inject: [REDIS],
+      useFactory: (queues: QueueConnection) => new RecoveryQueue(queues),
+      inject: [QUEUES],
     },
     {
       provide: RecoveryMail,
@@ -83,15 +82,15 @@ const RECOVERY_WORKER = Symbol('RECOVERY_WORKER');
     },
     {
       provide: RECOVERY_WORKER,
-      useFactory: (redis: Redis, send: SendRecoveryCode, failures: FailureLog) =>
-        startRecoveryWorker(redis, send, failures),
-      inject: [REDIS, SendRecoveryCode, FailureLog],
+      useFactory: (queues: QueueConnection, send: SendRecoveryCode, failures: FailureLog) =>
+        startRecoveryWorker(queues, send, failures),
+      inject: [QUEUES, SendRecoveryCode, FailureLog],
     },
   ],
 })
 export class RecoveryModule implements OnApplicationShutdown {
   constructor(
-    @Inject(RECOVERY_WORKER) private readonly worker: Worker,
+    @Inject(RECOVERY_WORKER) private readonly worker: AppWorker,
     @Inject(RecoveryQueue) private readonly queue: RecoveryQueue,
   ) {}
 

@@ -1,29 +1,41 @@
 // Los contadores de ritmo · `_convenciones.md` · «Los contadores».
 //
-// No son filas, y la razón no es el rendimiento: es que tienen que poder contar para un
+// No son filas del dominio, y la razón no es el rendimiento: tienen que poder contar para un
 // correo que NO tiene cuenta. Si solo contaran para los correos reales, `intentos_restantes`
 // bajaría solo para ellos y el contador sería el oráculo que la respuesta idéntica cierra.
 //
 // Tres reglas, las tres del contrato:
 //   1. se incrementa exista o no la cuenta;
-//   2. la clave lleva el HMAC del correo, NUNCA el correo (un volcado de Redis no es un
+//   2. la clave lleva el HMAC del correo, NUNCA el correo (un volcado de esta tabla no es un
 //      padrón de pacientes de clínicas de estética), y HMAC y no un hash desnudo porque el
 //      espacio de los correos es enumerable;
-//   3. un fallo de Redis NO abre la puerta: lanza, y el endpoint responde 500.
+//   3. un fallo NO abre la puerta: lanza, y el endpoint responde 500.
+//
+// VIVÍAN EN REDIS Y AHORA VIVEN EN POSTGRES (0067). Era lo último que quedaba allí después de
+// pasar las colas al backend de PostgreSQL de BullMQ 6, y mantener un servicio entero para cinco
+// operaciones sobre claves con caducidad no se sostenía. Lo que no cambia es la semántica: la
+// ventana se fija en el PRIMER incremento —una que se renueva en cada intento no caduca nunca y
+// convierte una pausa de quince minutos en perpetua— y lo caducado se lee como ausente.
+//
+// Se entra por funciones y no por la tabla: un intento de acceso ocurre antes de saber de quién
+// es, así que no hay inquilino que poner en el contexto y la tabla no se lee directamente.
 
 import { createHmac } from 'node:crypto';
 
-import type { Redis } from 'ioredis';
+import type { Pool } from 'pg';
 
 import { config } from '../config/config';
+import { withTenantContext } from '../db/tenant-context';
 
 export type Count = { hits: number; expiresAt: Date | null };
+
+type Fila = { hits: number; expires_at: Date };
 
 export class Counters {
   private readonly key: Buffer;
 
   constructor(
-    private readonly redis: Redis,
+    private readonly pool: Pool,
     hmacKey: string = config().SERVICE_HMAC_KEY,
   ) {
     this.key = Buffer.from(hmacKey, 'utf8');
@@ -34,11 +46,10 @@ export class Counters {
     return createHmac('sha256', this.key).update(value.trim().toLowerCase()).digest('hex');
   }
 
-  /** Lee sin tocar. Un error de Redis se propaga: el límite falla hacia el lado incómodo. */
+  /** Lee sin tocar. Un error de la base se propaga: el límite falla hacia el lado incómodo. */
   async peek(name: string): Promise<Count> {
-    const result = await this.redis.multi().get(name).pttl(name).exec();
-    if (result === null) throw new Error('Redis abortó la transacción del contador.');
-    return this.toCount(Number(result[0]?.[1] ?? 0), Number(result[1]?.[1] ?? -2));
+    const rows = await this.query<Fila>('select * from medskin_counter_peek($1)', [name]);
+    return this.toCount(rows[0]);
   }
 
   /**
@@ -46,14 +57,11 @@ export class Counters {
    * en cada intento no caduca nunca y convierte una pausa de 15 minutos en una perpetua.
    */
   async increment(name: string, windowSeconds: number): Promise<Count> {
-    const result = await this.redis
-      .multi()
-      .incr(name)
-      .expire(name, windowSeconds, 'NX')
-      .pttl(name)
-      .exec();
-    if (result === null) throw new Error('Redis abortó la transacción del contador.');
-    return this.toCount(Number(result[0]?.[1] ?? 0), Number(result[2]?.[1] ?? -2));
+    const rows = await this.query<Fila>('select * from medskin_counter_increment($1, $2)', [
+      name,
+      windowSeconds,
+    ]);
+    return this.toCount(rows[0]);
   }
 
   /**
@@ -63,30 +71,45 @@ export class Counters {
    * mueve esa hora.
    */
   async mark(name: string, seconds: number): Promise<void> {
-    await this.redis.set(name, '1', 'EX', seconds);
+    await this.query('select medskin_counter_mark($1, $2)', [name, seconds]);
   }
 
   async has(name: string): Promise<boolean> {
-    return (await this.redis.exists(name)) === 1;
+    const rows = await this.query<{ medskin_counter_has: boolean }>(
+      'select medskin_counter_has($1)',
+      [name],
+    );
+    return rows[0]?.medskin_counter_has === true;
   }
 
   async forget(...names: string[]): Promise<void> {
-    if (names.length > 0) await this.redis.del(...names);
+    if (names.length === 0) return;
+    await this.query('select medskin_counter_forget($1::text[])', [names]);
   }
 
-  private toCount(hits: number, ttlMs: number): Count {
-    return {
-      hits: Number.isFinite(hits) ? hits : 0,
-      expiresAt: ttlMs > 0 ? new Date(Date.now() + ttlMs) : null,
-    };
+  /** Lo caducado, que en Redis borraba el propio servidor. Lo llama el barrido de la hora. */
+  async purgeExpired(limit = 10_000): Promise<number> {
+    const rows = await this.query<{ medskin_counter_purge: number | null }>(
+      'select medskin_counter_purge($1)',
+      [limit],
+    );
+    return rows[0]?.medskin_counter_purge ?? 0;
+  }
+
+  private async query<T extends object>(sql: string, params: unknown[]): Promise<T[]> {
+    return withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
+      const { rows } = await c.query<T>(sql, params);
+      return rows;
+    });
+  }
+
+  /** Sin fila es «no existe»: lo caducado ya lo descartó la consulta. */
+  private toCount(row: Fila | undefined): Count {
+    if (row === undefined) return { hits: 0, expiresAt: null };
+    return { hits: Number(row.hits), expiresAt: row.expires_at };
   }
 }
 
-/**
- * Las claves del tramo, escritas una sola vez. Cada una es la del contrato, literal: si
- * alguien las reescribe en otro sitio, dos endpoints cuentan en dos cubos distintos y el
- * límite deja de ser un límite.
- */
 export const COUNTER_KEYS = {
   signInByEmail: (fingerprint: string) => `acceso:intentos:${fingerprint}`,
   signInByIp: (ip: string) => `acceso:intentos:ip:${ip}`,

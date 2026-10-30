@@ -3,8 +3,6 @@
 // fallos. Lo usan los 23 endpoints del tramo, así que se construye una vez.
 
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import type { Queue, Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 
 import { SystemClock } from './clock';
@@ -17,13 +15,20 @@ import {
   startRetentionSweep,
 } from './idempotency/idempotency-sweep';
 import { SmtpMail } from './mail/mailer';
+import {
+  queueConnection,
+  type AppQueue,
+  type AppWorker,
+  type QueueConnection,
+} from './queues/queues';
 import { Counters } from './security/counters';
 import { Argon2Passwords } from './security/passwords';
 import { Tokens } from './security/tokens';
 
 export const CONFIG = Symbol('CONFIG');
 export const POOL = Symbol('POOL');
-export const REDIS = Symbol('REDIS');
+/** La conexión de las colas: Postgres, no Redis. Su propio pool y su propio esquema. */
+export const QUEUES = Symbol('QUEUES');
 
 /**
  * EL BARRIDO DE `idempotency_key`, cada hora. Vive aquí y no en un módulo de recurso porque
@@ -54,12 +59,10 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
       inject: [CONFIG],
     },
     {
-      provide: REDIS,
-      // `maxRetriesPerRequest: 1` y sin cola fuera de línea: si Redis no está, el contador
-      // falla rápido y el endpoint responde 500. Un límite de intentos que espera en vez
-      // de fallar es un límite que no cuenta (_convenciones.md · «Los contadores»).
-      useFactory: (cfg: Config): Redis =>
-        new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false }),
+      provide: QUEUES,
+      // Las colas van por la cadena de conexión y NO por el pool de arriba: ese lleva `SET ROLE`
+      // por petición y BullMQ no puede fijarle el `search_path` a un pool que no construyó.
+      useFactory: (cfg: Config): QueueConnection => queueConnection(cfg.DATABASE_URL),
       inject: [CONFIG],
     },
     { provide: Tokens, useFactory: (cfg: Config) => Tokens.fromFiles(cfg), inject: [CONFIG] },
@@ -78,28 +81,28 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
     },
     {
       provide: Counters,
-      useFactory: (redis: Redis, cfg: Config) => new Counters(redis, cfg.SERVICE_HMAC_KEY),
-      inject: [REDIS, CONFIG],
+      useFactory: (pool: Pool, cfg: Config) => new Counters(pool, cfg.SERVICE_HMAC_KEY),
+      inject: [POOL, CONFIG],
     },
     { provide: SmtpMail, useFactory: (cfg: Config) => new SmtpMail(cfg), inject: [CONFIG] },
     { provide: FailureLog, useFactory: (pool: Pool) => new FailureLog(pool), inject: [POOL] },
     {
       provide: IDEMPOTENCY_SWEEP,
-      useFactory: (pool: Pool, redis: Redis, failures: FailureLog) =>
-        startIdempotencySweep(redis, new IdempotencySweep(pool), failures),
-      inject: [POOL, REDIS, FailureLog],
+      useFactory: (pool: Pool, queues: QueueConnection, failures: FailureLog, counters: Counters) =>
+        startIdempotencySweep(queues, new IdempotencySweep(pool), failures, counters),
+      inject: [POOL, QUEUES, FailureLog, Counters],
     },
     {
       provide: RETENTION_SWEEP,
-      useFactory: (pool: Pool, redis: Redis, failures: FailureLog) =>
-        startRetentionSweep(redis, new RetentionSweep(pool), failures),
-      inject: [POOL, REDIS, FailureLog],
+      useFactory: (pool: Pool, queues: QueueConnection, failures: FailureLog) =>
+        startRetentionSweep(queues, new RetentionSweep(pool), failures),
+      inject: [POOL, QUEUES, FailureLog],
     },
   ],
   exports: [
     CONFIG,
     POOL,
-    REDIS,
+    QUEUES,
     Tokens,
     SystemClock,
     Argon2Passwords,
@@ -111,15 +114,15 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
 export class SharedModule implements OnApplicationShutdown {
   constructor(
     @Inject(POOL) private readonly pool: Pool,
-    @Inject(REDIS) private readonly redis: Redis,
-    @Inject(IDEMPOTENCY_SWEEP) private readonly sweep: { queue: Queue; worker: Worker },
-    @Inject(RETENTION_SWEEP) private readonly retention: { queue: Queue; worker: Worker },
+    @Inject(IDEMPOTENCY_SWEEP) private readonly sweep: { queue: AppQueue; worker: AppWorker },
+    @Inject(RETENTION_SWEEP) private readonly retention: { queue: AppQueue; worker: AppWorker },
   ) {}
 
   /**
-   * El trabajador y su cola PRIMERO, y después el pool y Redis: cerrarlos al revés deja al
-   * trabajador leyendo de una conexión que ya no está y convierte un apagado limpio en un
-   * fallo registrado.
+   * El trabajador y su cola PRIMERO, y después el pool: cerrarlos al revés deja al trabajador
+   * leyendo de una conexión que ya no está y convierte un apagado limpio en un fallo registrado.
+   *
+   * Las colas tienen su propio pool —lo construye BullMQ— y lo cierran ellas en su `close()`.
    */
   async onApplicationShutdown(): Promise<void> {
     await Promise.allSettled([
@@ -128,6 +131,6 @@ export class SharedModule implements OnApplicationShutdown {
       this.retention.worker.close(),
       this.retention.queue.close(),
     ]);
-    await Promise.allSettled([this.pool.end(), this.redis.quit()]);
+    await this.pool.end();
   }
 }

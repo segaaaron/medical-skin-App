@@ -19,12 +19,18 @@
 // funciones como esta (napkin §1.6).
 
 import type { Pool } from 'pg';
-import type { Queue, Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
 
 import { withTenantContext } from '../db/tenant-context';
 import { FailureLog } from '../failures/service-failure';
-import { QUEUE_NAMES, createQueue, createWorker } from '../queues/queues';
+import type { Counters } from '../security/counters';
+import {
+  QUEUE_NAMES,
+  createQueue,
+  createWorker,
+  type QueueConnection,
+  type AppQueue,
+  type AppWorker,
+} from '../queues/queues';
 
 /** Cada hora. No hace falta más: lo que barre caducó hace rato y la lectura ya lo ignora. */
 export const SWEEP_EVERY_MS = 60 * 60 * 1000;
@@ -102,21 +108,22 @@ export class IdempotencySweep {
  * vuelve igual** y lo que barre no se ha movido. Lo que sí hace falta es que un barrido que
  * lleva días fallando se vea, y de eso se encargan la cola de fallidos —acotada a los mil
  * últimos desde el 29 de octubre de 2026, porque `false` era «no borres nunca» sobre un Redis
- * de 100 MB— y una fila de `service_failure` por CADA intento fallido, no solo por el último.
+ * últimos— y una fila de `service_failure` por CADA intento fallido, no solo por el último.
  * El diagnóstico vive en esa tabla; la cola solo sirve para verlo desde el panel.
  */
 export function startIdempotencySweep(
-  redis: Redis,
+  queues: QueueConnection,
   sweep: IdempotencySweep,
   failures: FailureLog,
-): { queue: Queue; worker: Worker } {
-  const queue = createQueue(QUEUE_NAMES.idempotencySweep, redis);
+  counters: Counters,
+): { queue: AppQueue; worker: AppWorker } {
+  const queue = createQueue(QUEUE_NAMES.idempotencySweep, queues);
 
   // `upsertJobScheduler` y no `add({ repeat })`: es la forma viva en BullMQ 6 y, siendo
   // `upsert`, arrancar dos veces el proceso no deja dos programaciones.
   //
   // Con su `catch`: esta promesa no la espera nadie —el módulo se construye sin bloquear el
-  // arranque por un trabajo de higiene— y una programación que falla porque Redis no está
+  // arranque por un trabajo de higiene— y una programación que falla porque la base no está
   // sería, sin esto, un rechazo sin dueño. Que no se programe es un fallo registrable, no un
   // motivo para que la API no arranque: lo que esto barre puede esperar una hora.
   queue
@@ -127,7 +134,22 @@ export function startIdempotencySweep(
     )
     .catch((cause: unknown) => recordSweepFailure(failures, cause, 'programacion'));
 
-  const worker = createWorker(QUEUE_NAMES.idempotencySweep, redis, () => sweep.run());
+  // LOS CONTADORES DE RITMO VAN EN LA MISMA PASADA. Desde la 0067 viven en una tabla y no en
+  // Redis, que borraba lo caducado él solo; ahora hay que barrerlo. Es la misma clase de trabajo
+  // —filas vencidas que ya no pueden cambiar ninguna decisión— y la misma cadencia.
+  //
+  // `allSettled` y relanzar al final: si uno de los dos falla, el otro corre igual y la causa
+  // llega entera a `service_failure`. Dos barridos sin relación no comparten la suerte.
+  const worker = createWorker(QUEUE_NAMES.idempotencySweep, queues, async () => {
+    const [claves, contadores] = await Promise.allSettled([sweep.run(), counters.purgeExpired()]);
+    if (claves.status === 'rejected' || contadores.status === 'rejected') {
+      const motivos = [claves, contadores]
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+      throw new Error(motivos.join(' · '));
+    }
+    return { claves: claves.value, contadores: contadores.value };
+  });
 
   worker.on('failed', (job, cause) => {
     void recordSweepFailure(failures, cause, job?.id);
@@ -238,11 +260,11 @@ export class RetentionSweep {
  * silenciando, y lo que hace falta aquí es una decisión de producto, no un reintento.
  */
 export function startRetentionSweep(
-  redis: Redis,
+  queues: QueueConnection,
   sweep: RetentionSweep,
   failures: FailureLog,
-): { queue: Queue; worker: Worker } {
-  const queue = createQueue(QUEUE_NAMES.retentionSweep, redis);
+): { queue: AppQueue; worker: AppWorker } {
+  const queue = createQueue(QUEUE_NAMES.retentionSweep, queues);
 
   // Y LA PROGRAMACIÓN QUE YA ESTUVIERA ESCRITA SE BORRA. Quitar la llamada a
   // `upsertJobScheduler` no borra lo que dejó: el `scheduler` sigue en Redis con su diferido
@@ -254,7 +276,7 @@ export function startRetentionSweep(
     .removeJobScheduler(QUEUE_NAMES.retentionSweep)
     .catch((cause: unknown) => recordSweepFailure(failures, cause, 'desprogramar-retencion'));
 
-  const worker = createWorker(QUEUE_NAMES.retentionSweep, redis, () => sweep.run());
+  const worker = createWorker(QUEUE_NAMES.retentionSweep, queues, () => sweep.run());
   worker.on('failed', (job, cause) => {
     void recordSweepFailure(failures, cause, job?.id);
   });
