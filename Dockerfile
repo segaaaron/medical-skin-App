@@ -11,7 +11,13 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+# `pnpm-workspace.yaml` VIAJA CON LOS OTROS DOS, y no es opcional: pnpm 11 lee desde ahí los
+# `overrides` —`fastify` 5.12.7 y `esbuild` 0.27.2, que son dos avisos de `pnpm audit` cerrados— y
+# la lista `onlyBuiltDependencies`. Sin él, dentro de la imagen pnpm no ve ningún `override`, el
+# candado sí los tiene, y la instalación muere con `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Y si no
+# muriera sería peor: sin `onlyBuiltDependencies` no corre el script de instalación de `sharp`, y
+# `require('sharp')` revienta al arrancar el trabajador de imágenes.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # `--frozen-lockfile`: si el candado no cuadra con el `package.json`, la construcción FALLA en vez
 # de resolver otra versión por su cuenta. Un despliegue no es el sitio donde descubrir una subida
 # de versión.
@@ -31,7 +37,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/dist ./dist
