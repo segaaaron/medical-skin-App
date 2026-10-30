@@ -7,3 +7,11 @@ coverage/
 .secrets/
 *.log
 .DS_Store
+
+# Nada de agentes, ni notas de trabajo, ni documentación: se quedan en local.
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/
+.flujo/
+docs/
