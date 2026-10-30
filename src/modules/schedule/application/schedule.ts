@@ -165,7 +165,7 @@ export class Schedule {
     caller: Caller,
     query: Record<string, unknown>,
   ): Promise<{ asking: ScheduleCaller; practiceId: string; patientId: string | null }> {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       const practiceId = asText(query.practice_id);
       if (practiceId === '') throw new ContractError('vinculo_no_existe');
       const link = await this.schedule.linkedPractice(caller.accountId, practiceId);

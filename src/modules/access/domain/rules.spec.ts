@@ -9,45 +9,49 @@ import { checkNewPassword, MIN_LENGTH } from './password-rules';
 import { PERMISSIONS_BY_ROLE, resolvePermissions, resolveRole } from './role';
 
 describe('resolveRole · el `rol` que viaja al cliente', () => {
-  it('`practitioner` NUNCA se devuelve: sale el rol dentro de la consulta', () => {
-    expect(resolveRole('practitioner', 'doctora')).toBe('doctora');
-    expect(resolveRole('practitioner', 'recepcion')).toBe('recepcion');
-    expect(resolveRole('practitioner', 'asistente_clinico')).toBe('asistente_clinico');
+  it('una cuenta de doctor sale como `doctor`', () => {
+    expect(resolveRole('doctor', 'doctor')).toBe('doctor');
   });
 
-  it('una cuenta de paciente es `paciente`, aunque no tenga fila de consulta', () => {
-    expect(resolveRole('paciente', null)).toBe('paciente');
+  it('una cuenta de paciente es `patient`, aunque no tenga fila de consulta', () => {
+    expect(resolveRole('patient', null)).toBe('patient');
   });
 
-  it('una cuenta `practitioner` sin fila de consulta no tiene rol: devuelve null', () => {
+  it('una cuenta de doctor sin fila de consulta no tiene rol: devuelve null', () => {
     // No se inventa uno. Quien llama lo convierte en 500 con su causa real.
-    expect(resolveRole('practitioner', null)).toBeNull();
+    expect(resolveRole('doctor', null)).toBeNull();
   });
 });
 
 describe('resolvePermissions', () => {
   it('la lista explícita gana sobre la del rol', () => {
-    expect(resolvePermissions('recepcion', ['agenda:editar'])).toEqual(['agenda:editar']);
+    // Es el mecanismo que queda para acotar a alguien: «permisos como interruptores, no
+    // como roles», que es lo que el estado del diseño pedía.
+    expect(resolvePermissions('doctor', ['agenda:leer'])).toEqual(['agenda:leer']);
   });
 
   it('una lista explícita vacía es una lista vacía, no «los de su rol»', () => {
     // Nulo significa «los de su rol»; vacío significa «ninguno», y son dos cosas.
-    expect(resolvePermissions('recepcion', [])).toEqual([]);
+    expect(resolvePermissions('doctor', [])).toEqual([]);
   });
 
   it('nulo resuelve los del rol', () => {
-    expect(resolvePermissions('doctora', null)).toEqual(PERMISSIONS_BY_ROLE.doctora);
+    expect(resolvePermissions('doctor', null)).toEqual(PERMISSIONS_BY_ROLE.doctor);
   });
 
-  it('la paciente no tiene permisos de consulta', () => {
-    expect(resolvePermissions('paciente', null)).toEqual([]);
+  it('el paciente no tiene permisos de consulta', () => {
+    expect(resolvePermissions('patient', null)).toEqual([]);
   });
 
-  it('`pacientes:crear` es de doctora y asistente clínico · recepción NO', () => {
-    // `cuentas.md` · POST /v1/patients, literal.
-    expect(PERMISSIONS_BY_ROLE.doctora).toContain('pacientes:crear');
-    expect(PERMISSIONS_BY_ROLE.asistente_clinico).toContain('pacientes:crear');
-    expect(PERMISSIONS_BY_ROLE.recepcion).not.toContain('pacientes:crear');
+  it('el doctor puede crear pacientes y registrar sesiones', () => {
+    expect(PERMISSIONS_BY_ROLE.doctor).toContain('pacientes:crear');
+    expect(PERMISSIONS_BY_ROLE.doctor).toContain('sesiones:registrar');
+    expect(PERMISSIONS_BY_ROLE.doctor).toContain('historia:leer');
+  });
+
+  it('ya no hay permisos de equipo: los endpoints que los pedían se fueron', () => {
+    expect(PERMISSIONS_BY_ROLE.doctor).not.toContain('equipo:crear');
+    expect(PERMISSIONS_BY_ROLE.doctor).not.toContain('equipo:permisos');
   });
 });
 
@@ -56,7 +60,7 @@ describe('resolveNextStep · el servidor manda el paso', () => {
 
   it('la contraseña temporal gana sobre todo lo demás', () => {
     expect(
-      resolveNextStep('doctora', {
+      resolveNextStep('doctor', {
         passwordIsTemporary: true,
         licenseStatus: 'sin_enviar',
         firstDayDone: false,
@@ -66,22 +70,22 @@ describe('resolveNextStep · el servidor manda el paso', () => {
 
   it('la licencia sin enviar manda a `licencia`', () => {
     expect(
-      resolveNextStep('doctora', { ...nada, licenseStatus: 'sin_enviar', firstDayDone: false }),
+      resolveNextStep('doctor', { ...nada, licenseStatus: 'sin_enviar', firstDayDone: false }),
     ).toBe('licencia');
   });
 
   it('con la licencia en revisión y el primer día a medias, va a `primer_dia`', () => {
     expect(
-      resolveNextStep('doctora', { ...nada, licenseStatus: 'en_revision', firstDayDone: false }),
+      resolveNextStep('doctor', { ...nada, licenseStatus: 'en_revision', firstDayDone: false }),
     ).toBe('primer_dia');
   });
 
   it('todo en orden es `inicio`', () => {
-    expect(resolveNextStep('doctora', { ...nada, licenseStatus: 'aprobada' })).toBe('inicio');
+    expect(resolveNextStep('doctor', { ...nada, licenseStatus: 'aprobada' })).toBe('inicio');
   });
 
   it('nunca devuelve `segundo_factor`: va apagado en esta entrega', () => {
-    const pasos = (['doctora', 'recepcion', 'asistente_clinico', 'paciente'] as const).flatMap(
+    const pasos = (['doctor', 'doctor', 'doctor', 'patient'] as const).flatMap(
       (rol) =>
         [true, false].flatMap((temporal) =>
           ['sin_enviar', 'en_revision', 'aprobada', null].flatMap((licencia) =>
@@ -100,7 +104,7 @@ describe('resolveNextStep · el servidor manda el paso', () => {
 
   it('una paciente con su contraseña definitiva va a `inicio` hasta el tramo 2', () => {
     // `vincular` y `ficha_medica` dependen de `patient_link`, que no existe todavía.
-    expect(resolveNextStep('paciente', { ...nada, licenseStatus: 'sin_enviar' })).toBe('inicio');
+    expect(resolveNextStep('patient', { ...nada, licenseStatus: 'sin_enviar' })).toBe('inicio');
   });
 });
 

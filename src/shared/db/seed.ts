@@ -86,7 +86,7 @@ async function seed(): Promise<void> {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, 'operador@medskin.local', 'practitioner', $2, 'Operador', 'Plataforma')
+       values ($1, 'operador@medskin.local', 'doctor', $2, 'Operador', 'Plataforma')
        on conflict (id) do nothing`,
       [OPERATOR, cfg.REGION],
     );

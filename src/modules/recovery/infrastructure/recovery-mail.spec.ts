@@ -52,6 +52,9 @@ describe('el correo del código', () => {
       .replace(ANTI_SCAM, '')
       .replace(NOT_YOU, '');
 
+    // La lista está en ESPAÑOL a propósito: es el idioma del correo que lee la persona, y
+    // lo que se comprueba es que ninguna de esas palabras aparezca en el cuerpo. No tiene
+    // nada que ver con los valores de rol, que sí son inglés.
     for (const prohibida of [
       'doctora',
       'Dra',

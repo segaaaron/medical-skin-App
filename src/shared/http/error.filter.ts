@@ -21,6 +21,7 @@ import {
 import type { Region } from '../contract/session';
 import { FailureLog, type FailureContext } from '../failures/service-failure';
 import type { PlatformCaller } from '../platform/platform-token';
+import { metaOf } from './envelope.interceptor';
 import { registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
 
@@ -45,7 +46,7 @@ export class ErrorFilter implements ExceptionFilter {
 
     if (thrown instanceof ContractError) {
       if (thrown instanceof ServiceFailure) void this.record(req, thrown.code, thrown.cause);
-      this.reply(res, thrown.status, thrown.body());
+      this.reply(res, thrown.status, thrown.body(), req);
       return;
     }
 
@@ -66,9 +67,12 @@ export class ErrorFilter implements ExceptionFilter {
     const status = statusOf(thrown);
     const code = status === null ? undefined : TRANSPORT_CODE_BY_STATUS[status];
     if (status !== null && code !== undefined && status < 500) {
-      this.reply(res, status, {
-        error: { codigo: code, mensaje: CATALOG[code].message, campo: null },
-      });
+      this.reply(
+        res,
+        status,
+        { error: { codigo: code, mensaje: CATALOG[code].message, campo: null } },
+        req,
+      );
       return;
     }
 
@@ -77,11 +81,23 @@ export class ErrorFilter implements ExceptionFilter {
     const policy = req.medskin?.policy ?? policyFor(req.method, registeredRoute(req));
     const failure = new ServiceFailure(policy?.failurePhrase ?? FAILURE_PHRASES.fallback, thrown);
     void this.record(req, failure.code, thrown);
-    this.reply(res, failure.status, failure.body());
+    this.reply(res, failure.status, failure.body(), req);
   }
 
-  private reply(res: FastifyReply, status: number, body: ErrorBody): void {
-    void res.status(status).send(body);
+  /**
+   * El error sale con el MISMO `meta` que el éxito (`envelope.interceptor.ts`): un sobre que
+   * solo acompaña a la mitad buena no es un sobre. Y con él va `X-Request-Id`, que es lo que
+   * convierte «me dio error» en una línea que se puede buscar en `service_failure`.
+   */
+  private reply(
+    res: FastifyReply,
+    status: number,
+    body: ErrorBody,
+    req: RequestWithContext,
+  ): void {
+    const meta = metaOf(req, this.region, new Date());
+    void res.header('X-Request-Id', meta.peticion_id);
+    void res.status(status).send({ ...body, meta });
   }
 
   private async record(req: RequestWithContext, code: string, cause: unknown): Promise<void> {

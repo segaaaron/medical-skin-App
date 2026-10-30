@@ -19,19 +19,19 @@ import { SubmitLicense } from './submit-license';
 const DOCTORA: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: '22222222-2222-4222-8222-222222222222',
   permissions: [],
 };
 
-const RECEPCION: Caller = { ...DOCTORA, role: 'recepcion' };
+const RECEPCION: Caller = { ...DOCTORA, role: 'doctor' };
 const PACIENTE: Caller = {
   ...DOCTORA,
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   practiceId: null,
 };
 

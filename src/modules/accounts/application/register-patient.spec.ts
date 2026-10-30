@@ -42,8 +42,8 @@ const CUENTA_PACIENTE = '44444444-4444-4444-8444-444444444444';
 const DOCTORA: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: CONSULTA,
@@ -556,7 +556,7 @@ describe('POST /v1/patients · los veredictos de la base', () => {
     );
     // Lo que esta prueba defiende es lo que la frase NO dice: si nombrara el motivo, el alta
     // sería un directorio del personal de MedSkin consultable de uno en uno.
-    for (const prohibido of ['practicante', 'doctora', 'equipo', 'recepción', 'personal']) {
+    for (const prohibido of ['practicante', 'doctor', 'equipo', 'recepción', 'personal']) {
       expect(fallo.userMessage.toLowerCase()).not.toContain(prohibido.toLowerCase());
     }
     expect(fallo.data).toBeUndefined();

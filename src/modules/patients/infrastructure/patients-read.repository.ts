@@ -156,7 +156,7 @@ export class PatientsReadRepository implements PatientReadPort {
     await c.query(
       `insert into access_audit (practice_id, actor_account_id, action, subject_type, subject_id,
                                  data)
-       values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'paciente', $2, '{}')`,
+       values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'patient', $2, '{}')`,
       [caller.accountId, patientId],
     );
   }

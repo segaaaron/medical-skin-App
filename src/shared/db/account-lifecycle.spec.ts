@@ -86,11 +86,6 @@ const ctxCleanOwner: TenantContext = {
   accountId: CLEAN.owner,
 };
 const ctxPaidOwner: TenantContext = { role: 'app_practitioner', practiceId: PAID.practice, accountId: PAID.owner };
-const ctxOtherOwner: TenantContext = {
-  role: 'app_practitioner',
-  practiceId: OTHER.practice,
-  accountId: OTHER.owner,
-};
 const ctxLeaving: TenantContext = { role: 'app_patient', accountId: LEAVING.account };
 const ctxLeavingRestricted: TenantContext = { role: 'app_account', accountId: LEAVING.account };
 const ctxPlatform: TenantContext = { role: 'app_platform', accountId: PLATFORM.account };
@@ -119,7 +114,7 @@ async function seedPractice(t: { practice: string; owner: string; ownerEmail: st
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name, phone)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz', '+59170000001')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz', '+59170000001')`,
     [t.owner, t.ownerEmail],
   );
   await owner.query(
@@ -128,7 +123,7 @@ async function seedPractice(t: { practice: string; owner: string; ownerEmail: st
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, 'Andrea', 'Paz', 'doctor')`,
     [t.practice, t.owner],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [t.owner, t.practice]);
@@ -152,19 +147,19 @@ async function seed() {
   // `not_owner` del alta de equipo comprueban.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Rosa', 'Mamani')`,
+     values ($1, $2, 'doctor', 'latam', 'Rosa', 'Mamani')`,
     [BUSY.team, BUSY.teamEmail],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Rosa', 'Mamani', 'recepcion')`,
+     values ($1, $2, 'Rosa', 'Mamani', 'doctor')`,
     [BUSY.practice, BUSY.team],
   );
 
   // La paciente que se va: una cuenta, DOS fichas de DOS consultas que no comparten nada.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name, phone)
-     values ($1, $2, 'paciente', 'latam', 'Valeria', 'Antelo', '+59177124408')`,
+     values ($1, $2, 'patient', 'latam', 'Valeria', 'Antelo', '+59177124408')`,
     [LEAVING.account, LEAVING.email],
   );
   await owner.query(
@@ -202,7 +197,7 @@ async function seed() {
   // Las dos del reenvío de la consola: una que ya eligió y una que sigue con la temporal.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Carla', 'Rojas'), ($3, $4, 'paciente', 'latam', 'Lucia', 'Suarez')`,
+     values ($1, $2, 'patient', 'latam', 'Carla', 'Rojas'), ($3, $4, 'patient', 'latam', 'Lucia', 'Suarez')`,
     [CHOSEN.account, CHOSEN.email, WAITING.account, WAITING.email],
   );
   await owner.query(
@@ -527,118 +522,6 @@ describe('el borrado de la propia cuenta', () => {
 
 // =========================================================================================
 // POST /v1/team · medskin_create_team_member()
-// =========================================================================================
-describe('el alta del equipo', () => {
-  it('la dueña crea recepción con una temporal, y sus permisos nacen nulos', async () => {
-    const [result] = await read(
-      app,
-      ctxBusyOwner,
-      'select * from medskin_create_team_member($1::citext, $2, $3, $4, $5, $6::timestamptz)',
-      [NEW_TEAM_EMAIL, ' Rosa ', ' Mamani ', 'recepcion', HASH, new Date(Date.now() + 72 * 3600_000).toISOString()],
-    );
-    expect(result?.verdict).toBe('created');
-
-    const { rows } = await owner.query(
-      `select a.role as account_role, a.email::text, p.role as practitioner_role, p.permissions,
-              p.first_name, p.practice_id, c.is_temporary
-         from account a
-         join practitioner p on p.account_id = a.id
-         join credential c on c.account_id = a.id
-        where a.id = $1`,
-      [result?.account_id],
-    );
-    // `account.role` es `practitioner` —«una recepcionista entra por la misma puerta que la
-    // dueña»— y el rol dentro de la consulta es `recepcion`. Son dos vocabularios.
-    expect(rows[0]).toMatchObject({
-      account_role: 'practitioner',
-      email: NEW_TEAM_EMAIL,
-      practitioner_role: 'recepcion',
-      permissions: null,
-      first_name: 'Rosa',
-      practice_id: BUSY.practice,
-      is_temporary: true,
-    });
-  });
-
-  it('la consulta de al lado no ve la fila nueva ni nombrándola', async () => {
-    // La prueba bloqueante de §7.3 sobre lo que la 0014 escribe: A no lee del B.
-    const mine = (await read(app, ctxBusyOwner, 'select account_id from practitioner')).map((r) => r.account_id);
-    expect(mine).toContain(BUSY.owner);
-    const theirs = await read(app, ctxOtherOwner, 'select account_id from practitioner where account_id = any($1::uuid[])', [
-      mine,
-    ]);
-    expect(theirs).toHaveLength(0);
-  });
-
-  it('recepción no da de alta a nadie, y un rol que no se asigna no se asigna', async () => {
-    const expires = new Date(Date.now() + 72 * 3600_000).toISOString();
-    const call = (ctx: TenantContext, email: string, role: string) =>
-      read(app, ctx, 'select * from medskin_create_team_member($1::citext, $2, $3, $4, $5, $6::timestamptz)', [
-        email,
-        'Ana',
-        'Lopez',
-        role,
-        HASH,
-        expires,
-      ]);
-    expect({
-      // No es la dueña: no importa que su token diga `app_practitioner` de esta consulta.
-      notOwner: (await call(ctxBusyTeam, 'otra.recepcion@ciclo.local', 'recepcion'))[0]?.verdict,
-      // `400 rol_no_asignable`, y se comprueba ANTES de mirar el correo para que un cuerpo
-      // mal formado no revele nada del padrón.
-      doctora: (await call(ctxBusyOwner, 'otra.doctora@ciclo.local', 'doctora'))[0]?.verdict,
-      paciente: (await call(ctxBusyOwner, 'otra.paciente@ciclo.local', 'paciente'))[0]?.verdict,
-      // Un correo que ya tiene cuenta NO se reusa: una cuenta tiene un solo
-      // `account.role`, así que convertir en recepcionista la cuenta de otra persona le
-      // cambiaría el rol de autenticación por debajo.
-      taken: (await call(ctxBusyOwner, NEW_TEAM_EMAIL, 'asistente_clinico'))[0]?.verdict,
-    }).toEqual({
-      notOwner: 'not_owner',
-      doctora: 'role_not_assignable',
-      paciente: 'role_not_assignable',
-      taken: 'email_taken',
-    });
-    // Y ninguno de los cuatro dejó una cuenta detrás.
-    const { rows } = await owner.query<{ n: number }>(
-      `select count(*)::int as n from account where email like 'otra.%@ciclo.local'`,
-    );
-    expect(rows[0]?.n).toBe(0);
-  });
-
-  it('un correo de otra consulta devuelve el mismo veredicto que uno de este equipo', async () => {
-    // Dos veredictos distintos serían el oráculo que §12.2.1 cierra: la dueña no tiene por
-    // qué saber que ese correo tiene cuenta en otra clínica. El endpoint traduce los dos al
-    // único 409 que el contrato define, `correo_ya_en_el_equipo`.
-    const [result] = await read(
-      app,
-      ctxBusyOwner,
-      'select * from medskin_create_team_member($1::citext, $2, $3, $4, $5, $6::timestamptz)',
-      [OTHER.ownerEmail, 'Ana', 'Lopez', 'recepcion', HASH, new Date(Date.now() + 72 * 3600_000).toISOString()],
-    );
-    expect(result?.verdict).toBe('email_taken');
-    expect(result?.account_id).toBeNull();
-  });
-
-  it('el correo no es sensible a mayúsculas, que es para lo que el parámetro es citext', async () => {
-    const [result] = await read(
-      app,
-      ctxBusyOwner,
-      'select * from medskin_create_team_member($1::citext, $2, $3, $4, $5, $6::timestamptz)',
-      [
-        NEW_TEAM_EMAIL.toUpperCase(),
-        'Ana',
-        'Lopez',
-        'recepcion',
-        HASH,
-        new Date(Date.now() + 72 * 3600_000).toISOString(),
-      ],
-    );
-    expect(result?.verdict).toBe('email_taken');
-  });
-});
-
-// =========================================================================================
-// POST /v1/platform/accounts/{account_id}/access/resend · medskin_platform_resend_access()
 // =========================================================================================
 describe('el reenvío de acceso de la consola', () => {
   const expires = () => new Date(Date.now() + 72 * 3600_000).toISOString();

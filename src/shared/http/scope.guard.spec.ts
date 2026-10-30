@@ -68,7 +68,7 @@ async function comoPaciente(alcance: Scope): Promise<string> {
   const claims: Claims = {
     sub: CUENTA,
     sid: SESION,
-    rol: 'paciente',
+    rol: 'patient',
     alcance,
     region: 'latam',
     permisos: [],
@@ -90,7 +90,7 @@ async function comoDoctora(alcance: Scope, conConsulta = true): Promise<string> 
   const claims: Claims = {
     sub: CUENTA,
     sid: SESION,
-    rol: 'doctora',
+    rol: 'doctor',
     alcance,
     region: 'latam',
     ...(conConsulta ? { practice: CONSULTA } : {}),
@@ -252,8 +252,8 @@ describe('GuardiaDeAlcance · el portador y la coherencia del token', () => {
     expect(req.medskin?.caller).toEqual({
       accountId: CUENTA,
       sessionId: SESION,
-      role: 'doctora',
-      accountRole: 'practitioner',
+      role: 'doctor',
+      accountRole: 'doctor',
       scope: 'completo',
       region: 'latam',
       practiceId: CONSULTA,

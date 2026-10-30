@@ -60,7 +60,7 @@ export class ReadOwnPractice {
     // «403 rol_no_corresponde · Llama una paciente». Se decide por el rol del token y antes
     // de tocar la base: una paciente no pertenece a ninguna consulta, así que no hay
     // contexto que abrir ni consulta que leer (OWASP A01, denegar por defecto).
-    if (caller.accountRole === 'paciente' || caller.practiceId === null) {
+    if (caller.accountRole === 'patient' || caller.practiceId === null) {
       throw new ContractError('rol_no_corresponde');
     }
 

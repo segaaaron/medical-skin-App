@@ -44,12 +44,17 @@ let expiredLot = '';
 let appointment = '';
 let session = '';
 
-function caller(account: string, role: 'doctora' | 'asistente_clinico', practice = P.practice): Caller {
+/**
+ * Quien llama desde la consulta. `P.assistant` ya no es «el asistente clínico» —ese rol se
+ * fue el 30 de octubre de 2026—: es SEGUNDA PERSONA de la misma consulta, que es lo que
+ * estas pruebas necesitan para la nota a cuatro manos y sus conflictos.
+ */
+function caller(account: string, practice = P.practice): Caller {
   return {
     accountId: account,
     sessionId: '11111111-0000-4000-8000-0000000000ff',
-    role,
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
@@ -60,8 +65,8 @@ function caller(account: string, role: 'doctora' | 'asistente_clinico', practice
 const ana: Caller = {
   accountId: P.patientAccount,
   sessionId: '11111111-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -90,14 +95,14 @@ beforeAll(async () => {
     );
   }
   const team: readonly [string, string, string][] = [
-    [P.doctor, P.practice, 'doctora'],
-    [P.assistant, P.practice, 'asistente_clinico'],
-    [P.otherDoctor, P.other, 'doctora'],
+    [P.doctor, P.practice, 'doctor'],
+    [P.assistant, P.practice, 'doctor'],
+    [P.otherDoctor, P.other, 'doctor'],
   ];
   for (const [account, practice, role] of team) {
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [account, `${account.slice(-3)}@tramo5.local`],
     );
     await owner.query(
@@ -109,7 +114,7 @@ beforeAll(async () => {
 
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo5.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo5.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [P.patientAccount],
   );
   await owner.query(
@@ -219,7 +224,7 @@ describe('registrar lo que se hizo', () => {
         ],
         observaciones: 'Tolerancia buena.',
       },
-      caller(P.assistant, 'asistente_clinico'),
+      caller(P.assistant),
       key('s1'),
     )) as { id: string; estado: string; stock_descontado: { quedan: number }[] };
 
@@ -258,7 +263,7 @@ describe('registrar lo que se hizo', () => {
             },
           ],
         },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('s-nocuadra'),
       ),
     ).rejects.toMatchObject({ code: 'unidades_no_cuadran' });
@@ -280,7 +285,7 @@ describe('registrar lo que se hizo', () => {
           appointment_id: rows[0]!.id,
           aplicaciones: [{ lot_id: expiredLot, zona: 'frente', unidades_totales: 4 }],
         },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('s-vencido'),
       ),
     ).rejects.toMatchObject({ code: 'lote_vencido' });
@@ -292,7 +297,7 @@ describe('registrar lo que se hizo', () => {
           appointment_id: appointment,
           aplicaciones: [{ lot_id: lot, zona: 'frente', unidades_totales: 4 }],
         },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('s-repetida'),
       ),
     ).rejects.toMatchObject({ code: 'cita_ya_tiene_sesion' });
@@ -304,7 +309,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     const first = (await sessions.saveDraft(
       session,
       { campos: { motivo: 'Líneas de expresión.', procedimiento: '20 U en 5 puntos.' } },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     )) as { guardado: string[]; en_conflicto: unknown[] };
     expect(first.guardado.sort()).toEqual(['motivo', 'procedimiento']);
     expect(first.en_conflicto).toEqual([]);
@@ -317,7 +322,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
         campos: { procedimiento: '20 U, cuatro por punto.' },
         visto_en: '2026-11-03T19:00:00Z',
       },
-      caller(P.assistant, 'asistente_clinico'),
+      caller(P.assistant),
     )) as { guardado: string[]; en_conflicto: { campo: string; tuyo: string; del_servidor: string }[] };
 
     expect(second.guardado).toEqual([]);
@@ -328,11 +333,14 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     });
   });
 
-  it('con un conflicto abierto no se firma, y el asistente no firma nunca', async () => {
-    await expect(sessions.sign(session, caller(P.assistant, 'asistente_clinico'))).rejects.toMatchObject(
-      { code: 'solo_la_doctora_firma' },
-    );
-    await expect(sessions.sign(session, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+  it('con un conflicto abierto no se firma, y una paciente no firma nunca', async () => {
+    // Una paciente choca antes con `sin_permiso`: no tiene `sesiones:registrar`, y esa
+    // comprobación va primero. `solo_la_doctora_firma` queda como red de seguridad y hoy es
+    // INALCANZABLE: desde que hay un solo rol, cualquiera que llegue con ese permiso es un
+    // doctor. Se deja puesta a propósito —si mañana vuelve a haber más de un rol, la puerta
+    // sigue cerrada— pero no se finge que esta prueba la ejercita.
+    await expect(sessions.sign(session, ana)).rejects.toMatchObject({ code: 'sin_permiso' });
+    await expect(sessions.sign(session, caller(P.doctor))).rejects.toMatchObject({
       code: 'conflictos_sin_resolver',
     });
 
@@ -340,12 +348,12 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     await sessions.saveDraft(
       session,
       { campos: { procedimiento: '20 U en 5 puntos, 4 por punto.' } },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     );
   });
 
   it('sin consentimiento firmado no se cierra la sesión', async () => {
-    await expect(sessions.sign(session, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+    await expect(sessions.sign(session, caller(P.doctor))).rejects.toMatchObject({
       code: 'consentimiento_pendiente',
     });
   });
@@ -365,7 +373,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
       key('c1'),
     );
 
-    const signed = (await sessions.sign(session, caller(P.doctor, 'doctora'))) as {
+    const signed = (await sessions.sign(session, caller(P.doctor))) as {
       estado: string;
       cuidados_programados: number;
       semaforo_entregado: boolean;
@@ -381,13 +389,13 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
 
     // Por la puerta de la app, el 409 del contrato.
     await expect(
-      sessions.saveDraft(session, { campos: { motivo: 'otro' } }, caller(P.doctor, 'doctora')),
+      sessions.saveDraft(session, { campos: { motivo: 'otro' } }, caller(P.doctor)),
     ).rejects.toMatchObject({ code: 'nota_ya_firmada' });
 
     // «Firmar lo firmado devuelve el MISMO 200», y eso incluye el recuento de cuidados: la
     // doctora firma con mala señal, la respuesta se pierde y la app reintenta. Devolver 0 aquí
     // dejaba a la app sin poder distinguir «firmada sin cuidados» de «ya estaba firmada».
-    const again = (await sessions.sign(session, caller(P.doctor, 'doctora'))) as {
+    const again = (await sessions.sign(session, caller(P.doctor))) as {
       estado: string;
       cuidados_programados: number;
     };
@@ -426,7 +434,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     const correction = (await sessions.correct(
       session,
       { texto: 'Fueron 5 puntos, no 4.', motivo: 'error_de_transcripcion' },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     )) as { id: string };
     expect(correction.id).toBeTruthy();
 
@@ -434,7 +442,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     await sessions.correct(
       session,
       { texto: 'Aclaración sobre la zona.', motivo: 'aclaracion' },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     );
     const { rows } = await owner.query<{ n: string; chained: string }>(
       `select count(*)::text as n,
@@ -445,14 +453,14 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     expect(rows[0]).toEqual({ n: '2', chained: '1' });
 
     await expect(
-      sessions.voidSession(session, { motivo: 'me equivoqué de paciente' }, caller(P.doctor, 'doctora')),
+      sessions.voidSession(session, { motivo: 'me equivoqué de paciente' }, caller(P.doctor)),
     ).rejects.toMatchObject({ code: 'nota_firmada' });
   });
 });
 
 describe('el lote, el retiro y lo que otra consulta no ve', () => {
   it('dado un lote, a qué pacientes se les aplicó', async () => {
-    const found = (await lots.patients(lot, caller(P.doctor, 'doctora'))) as {
+    const found = (await lots.patients(lot, caller(P.doctor))) as {
       cuantas: number;
       pacientes: { paciente_id: string; celular: string | null; unidades: number }[];
     };
@@ -474,14 +482,14 @@ describe('el lote, el retiro y lo que otra consulta no ve', () => {
   });
 
   it('el lote de al lado no existe, y su código no se puede repetir aquí', async () => {
-    await expect(lots.patients(lot, caller(P.otherDoctor, 'doctora', P.other))).rejects.toMatchObject(
+    await expect(lots.patients(lot, caller(P.otherDoctor, P.other))).rejects.toMatchObject(
       { code: 'lote_no_existe' },
     );
 
     await expect(
       lots.create(
         { product_id: product, codigo: 'BTX-2291', vence_en: '2027-06-01', unidades: 50 },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('l-repetido'),
       ),
     ).rejects.toMatchObject({ code: 'codigo_de_lote_repetido' });
@@ -491,7 +499,7 @@ describe('el lote, el retiro y lo que otra consulta no ve', () => {
     await expect(
       lots.create(
         { product_id: product, codigo: 'BTX-NUEVO', vence_en: '2026-01-01', unidades: 10 },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('l-vencido'),
       ),
     ).rejects.toMatchObject({ code: 'vencimiento_en_el_pasado' });
@@ -532,7 +540,7 @@ describe('el consentimiento y su comprensión verificada', () => {
           proposito: 'clinico',
           respuestas: { q1: 0, q2: 2, q3: 0 },
         },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('c-mal'),
       ),
     ).rejects.toMatchObject({ code: 'respuestas_incorrectas', data: { fallidas: ['q2'] } });
@@ -548,7 +556,7 @@ describe('el consentimiento y su comprensión verificada', () => {
           proposito: 'clinico',
           respuestas: { q1: 0, q2: 0, q3: 0 },
         },
-        caller(P.doctor, 'doctora'),
+        caller(P.doctor),
         key('c-vieja'),
       ),
     ).rejects.toMatchObject({ code: 'version_desactualizada' });
@@ -562,7 +570,7 @@ describe('el consentimiento y su comprensión verificada', () => {
         proposito: 'marketing',
         respuestas: { q1: 0, q2: 0, q3: 0 },
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('c-marketing'),
     );
 
@@ -589,19 +597,19 @@ describe('anular devuelve el stock', () => {
         appointment_id: appointments[0]!.id,
         aplicaciones: [{ lot_id: lot, zona: 'frente', unidades_totales: 10 }],
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('s-anular'),
     )) as { id: string; stock_descontado: { quedan: number }[] };
     expect(created.stock_descontado[0]?.quedan).toBe(82);
 
     await expect(
-      sessions.voidSession(created.id, { motivo: 'corto' }, caller(P.doctor, 'doctora')),
+      sessions.voidSession(created.id, { motivo: 'corto' }, caller(P.doctor)),
     ).rejects.toMatchObject({ code: 'motivo_muy_corto' });
 
     const voided = await sessions.voidSession(
       created.id,
       { motivo: 'me equivoqué de paciente al registrar' },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     );
     expect(voided).toMatchObject({ estado: 'anulada' });
 
@@ -626,8 +634,8 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
     // documento que protege a la doctora en una reclamación lo podía crear quien no estaba en
     // la sala. «La paciente O la consulta CON ELLA PRESENTE», y presente es `sesiones:registrar`.
     const recepcion: Caller = {
-      ...caller(P.doctor, 'doctora'),
-      role: 'recepcion',
+      ...caller(P.doctor),
+      role: 'doctor',
       permissions: ['pacientes:leer', 'agenda:leer', 'citas:crear', 'cobros:registrar'],
     };
     await expect(
@@ -672,7 +680,7 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
         proposito: 'clinico',
         respuestas: { q1: 0, q2: 0, q3: 0 },
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('c-carla'),
     );
 
@@ -688,13 +696,13 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
           },
         ],
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('s-carla'),
     )) as { id: string };
     await sessions.saveDraft(
       created.id,
       { campos: { motivo: 'Primera sesión.' } },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     );
 
     // Y AHORA la consulta publica un texto nuevo porque añadió un riesgo. El de 2026-09-01
@@ -709,7 +717,7 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
       [P.practice, treatment],
     );
 
-    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+    await expect(sessions.sign(created.id, caller(P.doctor))).rejects.toMatchObject({
       code: 'consentimiento_desactualizado',
     });
 
@@ -722,10 +730,10 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
         proposito: 'clinico',
         respuestas: { q1: 0, q2: 0, q3: 0 },
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('c-carla-2'),
     );
-    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).resolves.toMatchObject({
+    await expect(sessions.sign(created.id, caller(P.doctor))).resolves.toMatchObject({
       estado: 'firmada',
     });
 
@@ -756,7 +764,7 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
         proposito: 'clinico',
         respuestas: { q1: 0, q2: 0, q3: 0 },
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('c-dana'),
     );
     const created = (await sessions.create(
@@ -771,13 +779,13 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
           },
         ],
       },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
       key('s-dana'),
     )) as { id: string };
     await sessions.saveDraft(
       created.id,
       { campos: { motivo: 'Primera sesión.' } },
-      caller(P.doctor, 'doctora'),
+      caller(P.doctor),
     );
 
     // Su ficha de profesional se retira entre que abrió la sesión y firma. El `CHECK` de
@@ -785,7 +793,7 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
     await owner.query(`update practitioner set status = 'retirada' where account_id = $1`, [
       P.doctor,
     ]);
-    await expect(sessions.sign(created.id, caller(P.doctor, 'doctora'))).rejects.toMatchObject({
+    await expect(sessions.sign(created.id, caller(P.doctor))).rejects.toMatchObject({
       code: 'practicante_no_activo',
     });
     await owner.query(`update practitioner set status = 'activa' where account_id = $1`, [P.doctor]);

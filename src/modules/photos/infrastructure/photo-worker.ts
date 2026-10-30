@@ -264,7 +264,7 @@ export class PhotoWorker {
         // El contexto es el de la CONSULTA de la foto, no el del trabajador: un trabajador no
         // actúa en nombre de nadie, y quien tiene que ver este fallo es la doctora cuya foto
         // no se procesó. `accountId` es la cuenta que la subió.
-        context: { accountId: uploader, accountRole: 'practitioner', practiceId },
+        context: { accountId: uploader, accountRole: 'doctor', practiceId },
       });
     }
   }

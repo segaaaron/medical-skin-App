@@ -154,7 +154,7 @@ export class LotsRepository implements LotPort {
         await c.query(
           `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                      subject_id, data)
-           values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'paciente', $2,
+           values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'patient', $2,
                    jsonb_build_object('motivo', 'retiro_de_lote'))`,
           [caller.accountId, row.patient_id],
         );

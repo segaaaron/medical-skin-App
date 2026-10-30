@@ -58,7 +58,7 @@ export class PatientLinks {
  * lo que el contrato escribe: «esta pantalla no es de tu cuenta».
  */
 export function patientOf(caller: Caller): string {
-  if (caller.accountRole !== 'paciente') throw new ContractError('rol_no_corresponde');
+  if (caller.accountRole !== 'patient') throw new ContractError('rol_no_corresponde');
   return caller.accountId;
 }
 

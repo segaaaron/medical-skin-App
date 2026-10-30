@@ -16,35 +16,33 @@ export function resolveRole(
   accountRole: AccountRole,
   practitionerRole: PractitionerRole | null,
 ): Role | null {
-  if (accountRole === 'paciente') return 'paciente';
+  if (accountRole === 'patient') return 'patient';
   return practitionerRole;
 }
 
 /**
- * Los permisos por rol, para cuando `practitioner.permissions` es nulo — que es el 100 %
+ * Los permisos del doctor, para cuando `practitioner.permissions` es nulo — que es el 100 %
  * de las filas de la primera entrega.
  *
- * ESTA ES LA TABLA DE `_convenciones.md` · «Los permisos de cada rol», copiada fila por
- * fila (decisión 22, 27 de octubre de 2026). No se edita aquí: se edita allí y se copia.
- * El criterio que la ordena: recepción **no abre historias y no registra tratamientos**;
- * el asistente clínico sí, porque está en la sala, pero no toca precios ni dinero ni
- * informes; y lo de la consulta como negocio —catálogo, márgenes, equipo, licencia— es de
- * la doctora.
+ * UNA SOLA FILA desde el 30 de octubre de 2026. Antes eran tres —doctora, asistente clínico
+ * y recepción— con una tabla de dieciséis permisos repartidos entre ellas. Esa tabla no la
+ * pidió nadie: salió de un paréntesis del documento de diseño, y el propio diseño pone el
+ * «equipo con roles» en la FASE 3. Estaba además construida en la capa débil: NINGUNA de las
+ * 136 políticas de la base distinguía esos sub-roles, así que lo único que separaba a
+ * recepción de una historia clínica eran dieciséis comprobaciones en TypeScript que un
+ * endpoint nuevo podía olvidar.
  *
- * Los cuatro de LECTURA —`catalogo:leer`, `horarios:leer`, `plan:leer`, `plan:ampliar`— se
- * añadieron el 29 de octubre de 2026 y son el arreglo de un hallazgo, no una función nueva:
- * leer el catálogo pedía `pacientes:leer`, leer el protocolo pedía `catalogo:editar`, LEER el
- * horario pedía `horarios:definir` y ver el plan pedía `equipo:crear`. Una tabla de permisos
- * cuyo nombre no corresponde con lo que acota deja de significar nada en cuanto la dueña la
- * edite, que es la única razón por la que existe la columna `practitioner.permissions`.
+ * La columna `practitioner.permissions` se queda, y ahora es lo único que acota: si algún
+ * día hay más de una persona en una consulta, se le escribe su lista explícita. Eso es lo
+ * que el estado del diseño pedía desde el principio — «permisos como interruptores, no como
+ * roles» — y es lo contrario de lo que había.
  *
- * `consulta:licencia:enviar` es «solo la dueña» y por eso NO está aquí: la dueña es la
- * `doctora` cuya cuenta está en `practice.owner_account_id`, que es una fila y no una
- * cadena, así que ese permiso no sale de una tabla por rol. Lo resuelve quien conozca esa
- * fila, y hoy no lo resuelve nadie: `consultas.md` es de otro encargo.
+ * `equipo:crear` y `equipo:permisos` salen de la lista con los endpoints que los pedían.
+ * `consulta:licencia:enviar` nunca estuvo aquí: es «solo la dueña», y la dueña es una FILA
+ * (`practice.owner_account_id`), no una cadena.
  */
 export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly string[]>> = {
-  doctora: [
+  doctor: [
     'pacientes:leer',
     'pacientes:crear',
     'pacientes:acceso:enviar',
@@ -65,31 +63,6 @@ export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly str
     'margenes:leer',
     'plan:leer',
     'plan:ampliar',
-    'equipo:crear',
-    'equipo:permisos',
-  ],
-  asistente_clinico: [
-    'pacientes:leer',
-    'pacientes:crear',
-    'pacientes:acceso:enviar',
-    'agenda:leer',
-    'citas:crear',
-    'citas:cancelar',
-    'sesiones:registrar',
-    'historia:leer',
-    'catalogo:leer',
-    'horarios:leer',
-    'inventario:editar',
-  ],
-  recepcion: [
-    'pacientes:leer',
-    'agenda:leer',
-    'citas:crear',
-    'citas:cancelar',
-    'catalogo:leer',
-    'horarios:leer',
-    'horarios:definir',
-    'cobros:registrar',
   ],
 };
 
@@ -101,7 +74,7 @@ export function resolvePermissions(
   role: Role,
   explicit: readonly string[] | null,
 ): readonly string[] {
-  if (role === 'paciente') return [];
+  if (role === 'patient') return [];
   if (explicit !== null) return explicit;
   return PERMISSIONS_BY_ROLE[role];
 }

@@ -311,7 +311,7 @@ export class AftercareRepository implements AftercarePort {
         `insert into message (practice_id, thread_id, author, author_account_id, body)
          select t.practice_id, t.id, $2, $3, $4 from message_thread t where t.id = $1
          returning id`,
-        [threadId, caller.isPatient ? 'paciente' : 'consulta', caller.accountId, body],
+        [threadId, caller.isPatient ? 'patient' : 'practice', caller.accountId, body],
       );
       // SI NO SE INSERTÓ NADA, NO SE ENVIÓ NADA. El `insert … select from message_thread`
       // no afecta ninguna fila si el hilo no existe o la política no lo ve, y

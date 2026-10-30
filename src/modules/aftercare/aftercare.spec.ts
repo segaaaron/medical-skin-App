@@ -41,8 +41,8 @@ function doctor(practice: string, account: string): Caller {
   return {
     accountId: account,
     sessionId: '33333333-0000-4000-8000-0000000000ff',
-    role: 'doctora',
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
@@ -53,8 +53,8 @@ function doctor(practice: string, account: string): Caller {
 const ana: Caller = {
   accountId: A.account,
   sessionId: '33333333-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -87,12 +87,12 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [account, `${account.slice(-3)}@tramo7.local`],
     );
     await owner.query(
       `insert into practitioner (practice_id, account_id, role, status, first_name, last_name)
-       values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'activa', 'Andrea', 'Paz')`,
       [id, account],
     );
     // LA DUEÑA REGISTRADA. `practice.owner_account_id` es nullable desde el tramo 1, y sin ella
@@ -103,7 +103,7 @@ beforeAll(async () => {
   // Ana, paciente de LAS DOS consultas: es lo que prueba que los hilos no se cruzan.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo7.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo7.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [A.account],
   );
   for (const [patient, practice, name] of [

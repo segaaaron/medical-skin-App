@@ -23,8 +23,8 @@ const REFRESCO_CADUCA = new Date('2026-10-28T02:31:00.000Z');
 const DOCTORA: Caller = {
   accountId: CUENTA,
   sessionId: SESION,
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: CONSULTA,
@@ -34,8 +34,8 @@ const DOCTORA: Caller = {
 const PACIENTE: Caller = {
   accountId: CUENTA,
   sessionId: SESION,
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -98,7 +98,7 @@ describe('GET /v1/session · el 200', () => {
     ]);
     expect(vista.sesion_id).toBe(SESION);
     expect(vista.cuenta_id).toBe(CUENTA);
-    expect(vista.rol).toBe('doctora');
+    expect(vista.rol).toBe('doctor');
     expect(vista.alcance).toBe('completo');
     expect(vista.consulta).toEqual({ id: CONSULTA, nombre: 'Clínica Paz' });
     expect(vista.token_caduca_en).toBe(CADUCA.toISOString());
@@ -109,7 +109,7 @@ describe('GET /v1/session · el 200', () => {
         accountId: CUENTA,
         sessionId: SESION,
         practiceId: CONSULTA,
-        accountRole: 'practitioner',
+        accountRole: 'doctor',
       },
     ]);
   });
@@ -123,16 +123,18 @@ describe('GET /v1/session · el 200', () => {
   it('con `practitioner.permissions` nula resuelve la lista de su rol, no el rol', async () => {
     const { port } = puerto(CONSULTA_VIVA);
     const vista = await new ReadSession(port).run(DOCTORA, CADUCA);
-    expect(vista.permisos).toEqual(PERMISSIONS_BY_ROLE.doctora);
+    expect(vista.permisos).toEqual(PERMISSIONS_BY_ROLE.doctor);
   });
 
-  it('recepción no recibe `pacientes:crear` ni `historia:leer`', async () => {
-    const { port } = puerto(CONSULTA_VIVA);
-    const recepcion: Caller = { ...DOCTORA, role: 'recepcion' };
+  it('con la lista explícita recortada no recibe lo que esa lista no dice', async () => {
+    // Lo que acota a alguien dentro de una consulta es `practitioner.permissions`, no un
+    // rol: «permisos como interruptores, no como roles». Con un solo rol esta es la única
+    // forma de que una persona tenga menos que otra, y por eso se prueba.
+    const { port } = puerto({ ...CONSULTA_VIVA, permissions: ['agenda:leer', 'citas:crear'] });
 
-    const vista = await new ReadSession(port).run(recepcion, CADUCA);
+    const vista = await new ReadSession(port).run(DOCTORA, CADUCA);
 
-    expect(vista.permisos).toEqual(PERMISSIONS_BY_ROLE.recepcion);
+    expect(vista.permisos).toEqual(['agenda:leer', 'citas:crear']);
     expect(vista.permisos).not.toContain('pacientes:crear');
     expect(vista.permisos).not.toContain('historia:leer');
   });

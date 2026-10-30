@@ -43,8 +43,8 @@ function doctor(practice: string, account: string): Caller {
   return {
     accountId: account,
     sessionId: 'ffffffff-0000-4000-8000-0000000000ff',
-    role: 'doctora',
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
@@ -63,8 +63,8 @@ function patient(account: string): Caller {
   return {
     accountId: account,
     sessionId: 'ffffffff-0000-4000-8000-0000000000fe',
-    role: 'paciente',
-    accountRole: 'paciente',
+    role: 'patient',
+    accountRole: 'patient',
     scope: 'completo',
     region: 'latam',
     practiceId: null,
@@ -94,12 +94,12 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [p.account, `duena.${p.practice.slice(-1)}@tramo4.local`],
     );
     await owner.query(
       `insert into practitioner (practice_id, account_id, role, status, first_name, last_name)
-       values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'activa', 'Andrea', 'Paz')`,
       [p.practice, p.account],
     );
   }
@@ -111,7 +111,7 @@ beforeAll(async () => {
   ]) {
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'paciente', 'latam', $3, 'Antelo')`,
+       values ($1, $2, 'patient', 'latam', $3, 'Antelo')`,
       [p.account, `${p.name.toLowerCase()}@tramo4.local`, p.name],
     );
     await owner.query(
@@ -434,7 +434,7 @@ describe('la seña y la cancelación', () => {
       sena: { estado: string; como: string } | null;
       hueco_liberado: boolean;
     };
-    expect(cancelled).toMatchObject({ estado: 'cancelada', cancelo: 'paciente', hueco_liberado: true });
+    expect(cancelled).toMatchObject({ estado: 'cancelada', cancelo: 'patient', hueco_liberado: true });
     expect(cancelled.sena).toMatchObject({ estado: 'devuelta', como: 'entera' });
 
     // Y cancelar lo cancelado devuelve el mismo 200: idempotente por naturaleza.
@@ -610,7 +610,7 @@ describe('lo que el 29 de octubre de 2026 dejó de ser un 500', () => {
     await owner.query(
       `insert into medical_history (practice_id, patient_id, pregnancy_or_lactation,
                                     pregnancy_or_lactation_source, pregnancy_or_lactation_source_at)
-       values ($1, $2, 'embarazo', 'doctora', now())`,
+       values ($1, $2, 'embarazo', 'doctor', now())`,
       [MINE.practice, ANA.patient],
     );
 

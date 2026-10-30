@@ -92,9 +92,9 @@ beforeAll(async () => {
   await owner.query(`insert into license (practice_id) values ($1)`, [DOCTOR.practice]);
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz'),
-            ($3, $4, 'paciente', 'latam', 'Rocio', 'Vargas'),
-            ($5, $6, 'paciente', 'latam', 'Lucia', 'Suarez')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz'),
+            ($3, $4, 'patient', 'latam', 'Rocio', 'Vargas'),
+            ($5, $6, 'patient', 'latam', 'Lucia', 'Suarez')`,
     [DOCTOR.account, DOCTOR.email, USED.account, USED.email, NEVER.account, NEVER.email],
   );
   await owner.query(`insert into credential (account_id, hash, is_temporary, set_at) values ($1, $2, false, now())`, [
@@ -110,7 +110,7 @@ beforeAll(async () => {
   );
   await owner.query(
     `insert into practitioner (id, practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, $3, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, $3, 'Andrea', 'Paz', 'doctor')`,
     [DOCTOR.practitioner, DOCTOR.practice, DOCTOR.account],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [DOCTOR.account, DOCTOR.practice]);
@@ -296,8 +296,8 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
       verdict: 'rotated',
       // `role` es `account.role` y se queda como estaba: el rol de autenticación. El del
       // token sale de `practitioner_role`, que es lo que faltaba.
-      role: 'practitioner',
-      practitioner_role: 'doctora',
+      role: 'doctor',
+      practitioner_role: 'doctor',
       // Nulo es «los de su rol» (decisión 11), que es el 100 % de las filas de hoy.
       permissions: null,
       account_status: 'activa',
@@ -323,7 +323,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     const [graced] = await refresh(used, '3'.repeat(64));
     expect(graced?.verdict).toBe('rotated');
     expect(graced?.graced).toBe(true);
-    expect(graced?.practitioner_role).toBe('doctora');
+    expect(graced?.practitioner_role).toBe('doctor');
 
     // La ventana NO se desliza y el anterior se queda donde está: por eso el mismo
     // reintento vuelve a entrar —tres peticiones en paralelo con el refresco guardado— y
@@ -377,7 +377,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     expect(expiry).toBeInstanceOf(Date);
     expect(facts).toEqual({
       verdict: 'rotated',
-      role: 'paciente',
+      role: 'patient',
       practitioner_role: null,
       permissions: null,
       account_status: 'activa',

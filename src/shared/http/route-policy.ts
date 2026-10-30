@@ -389,18 +389,10 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     failurePhrase: FAILURE_PHRASES.deleteOwnAccount,
   },
 
-  'POST /v1/team': {
-    scopes: ['completo'],
-    failurePhrase: FAILURE_PHRASES.createTeamMember,
-  },
 
   // El reenvío del acceso del equipo, que es el endpoint que cierra el hueco del alta: si el
   // relé falla, la cuenta ya existe y reintentar el alta da `409 correo_no_disponible`. Solo
   // `completo`, igual que el alta y que el reenvío de pacientes.
-  'POST /v1/team/:member_id/access': {
-    scopes: ['completo'],
-    failurePhrase: FAILURE_PHRASES.resendTeamAccess,
-  },
 
   'GET /v1/access/sessions': {
     scopes: ['completo'],

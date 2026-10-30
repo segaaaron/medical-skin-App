@@ -90,7 +90,7 @@ async function seed(p: { practice: string; account: string; name: string; licens
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [p.account, `duena.${p.practice.slice(-1)}@plataforma.local`],
   );
   await owner.query(
@@ -99,7 +99,7 @@ async function seed(p: { practice: string; account: string; name: string; licens
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, 'Andrea', 'Paz', 'doctor')`,
     [p.practice, p.account],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [

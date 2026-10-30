@@ -36,8 +36,8 @@ function doctor(practice: string, account: string): Caller {
   return {
     accountId: account,
     sessionId: 'eeeeeeee-0000-4000-8000-0000000000ff',
-    role: 'doctora',
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
@@ -54,8 +54,8 @@ function doctor(practice: string, account: string): Caller {
 const ana: Caller = {
   accountId: ANA.account,
   sessionId: 'eeeeeeee-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -93,12 +93,12 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [p.account, `duena.${p.practice.slice(-1)}@tramo3.local`],
     );
     await owner.query(
       `insert into practitioner (practice_id, account_id, role, status, first_name, last_name)
-       values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'activa', 'Andrea', 'Paz')`,
       [p.practice, p.account],
     );
   }
@@ -106,7 +106,7 @@ beforeAll(async () => {
   // Ana, vinculada a la mía, EMBARAZADA en su ficha: es lo que cierra el tratamiento.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo3.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo3.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [ANA.account],
   );
   await owner.query(
@@ -117,7 +117,7 @@ beforeAll(async () => {
   await owner.query(
     `insert into medical_history (practice_id, patient_id, pregnancy_or_lactation,
                                   pregnancy_or_lactation_source, pregnancy_or_lactation_source_at)
-     values ($1, $2, 'embarazo', 'paciente', now())`,
+     values ($1, $2, 'embarazo', 'patient', now())`,
     [MINE.practice, ANA.patient],
   );
   await owner.query(

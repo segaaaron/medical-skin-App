@@ -57,8 +57,8 @@ const app = new Pool({ connectionString: appUrl, max: 2 });
 const DOCTORA: Caller = {
   accountId: DOCTORA_CUENTA,
   sessionId: SESION,
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: CONSULTA,
@@ -121,7 +121,7 @@ beforeAll(async () => {
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [DOCTORA_CUENTA, CORREO_DOCTORA],
   );
   await owner.query(
@@ -131,7 +131,7 @@ beforeAll(async () => {
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, 'Andrea', 'Paz', 'doctor')`,
     [CONSULTA, DOCTORA_CUENTA],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [
@@ -141,7 +141,7 @@ beforeAll(async () => {
   // La paciente: su temporal SIN estrenar, que es el caso que el reenvío atiende.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Rocio', 'Vargas')`,
+     values ($1, $2, 'patient', 'latam', 'Rocio', 'Vargas')`,
     [PACIENTE_CUENTA, CORREO_PACIENTE],
   );
   await owner.query(

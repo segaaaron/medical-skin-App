@@ -128,7 +128,7 @@ export class HistoryWriteRepository {
 
         const sets = [
           `${field.value} = $2`,
-          `${field.source} = 'doctora'`,
+          `${field.source} = 'doctor'`,
           `${field.at} = now()`,
           'updated_at = now()',
         ];
@@ -163,7 +163,7 @@ export class HistoryWriteRepository {
       `insert into medical_history_audit (practice_id, patient_id, field, previous_value,
                                           previous_source, previous_source_at,
                                           actor_account_id, actor_source)
-       select h.practice_id, $1, $2, $3::jsonb, $4::medskin_history_source, $5, $6, 'doctora'
+       select h.practice_id, $1, $2, $3::jsonb, $4::medskin_history_source, $5, $6, 'doctor'
          from medical_history h where h.patient_id = $1`,
       [
         p.patientId,

@@ -31,6 +31,7 @@ describe('el correo del reenvío de la consola', () => {
   it('no nombra a ninguna doctora, ninguna clínica, ni a soporte', () => {
     const cuerpo = platformAccessMailBody(ROCIO).toLowerCase();
 
+    // En español: es el idioma del correo, no el de los valores de rol.
     for (const prohibida of ['dra.', 'doctora', 'clínica', 'consulta', 'soporte', 'tratamiento']) {
       expect(cuerpo, prohibida).not.toContain(prohibida);
     }

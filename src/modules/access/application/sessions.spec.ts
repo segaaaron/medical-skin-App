@@ -17,8 +17,8 @@ const OTRA = '44444444-4444-4444-8444-444444444444';
 const PACIENTE: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: ESTA,
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,

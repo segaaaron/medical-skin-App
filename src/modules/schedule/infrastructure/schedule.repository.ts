@@ -530,7 +530,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
   async cancel(
     caller: ScheduleCaller,
     appointmentId: string,
-    by: 'paciente' | 'consulta',
+    by: 'patient' | 'practice',
     now: Date,
   ): Promise<
     | { outcome: 'cancelled'; row: AppointmentRow; deposit: { status: string; how: string; why: string } | null; waitlisted: number }
@@ -758,7 +758,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
     if (found.deposit_due_at !== null && found.deposit_due_at < now && !confirming) {
       await c.query(
         `update appointment set status = 'cancelada', cancelled_at = $2,
-                                cancelled_by = 'sistema', deposit_status = 'vencida',
+                                cancelled_by = 'system', deposit_status = 'vencida',
                                 updated_at = now()
           where id = $1 and status = 'pendiente_de_sena'`,
         [appointmentId, now],

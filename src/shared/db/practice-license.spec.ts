@@ -70,7 +70,7 @@ beforeAll(async () => {
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [B.account, B.email],
   );
   await owner.query(`insert into credential (account_id, hash, is_temporary, set_at) values ($1, $2, false, now())`, [
@@ -79,7 +79,7 @@ beforeAll(async () => {
   ]);
   await owner.query(
     `insert into practitioner (id, practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, $3, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, $3, 'Andrea', 'Paz', 'doctor')`,
     [B.practitioner, B.practice, B.account],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [B.account, B.practice]);

@@ -97,7 +97,7 @@ async function seed() {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [t.account, t.email],
     );
     await owner.query(
@@ -106,7 +106,7 @@ async function seed() {
     );
     await owner.query(
       `insert into practitioner (id, practice_id, account_id, first_name, last_name, role)
-       values ($1, $2, $3, 'Andrea', 'Paz', 'doctora')`,
+       values ($1, $2, $3, 'Andrea', 'Paz', 'doctor')`,
       [t.practitioner, t.practice, t.account],
     );
     await owner.query('update practice set owner_account_id = $1 where id = $2', [t.account, t.practice]);
@@ -139,12 +139,12 @@ async function seed() {
   // dueña y nadie más.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Rosa', 'Mamani')`,
+     values ($1, $2, 'doctor', 'latam', 'Rosa', 'Mamani')`,
     [A.teamAccount, A.teamEmail],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role, permissions)
-     values ($1, $2, 'Rosa', 'Mamani', 'recepcion', $3)`,
+     values ($1, $2, 'Rosa', 'Mamani', 'doctor', $3)`,
     [A.practice, A.teamAccount, ['pacientes:leer', 'agenda:editar']],
   );
 
@@ -152,7 +152,7 @@ async function seed() {
   // credencial TEMPORAL sin consumir, que es lo que `contrasena-nueva` va a consumir.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Valeria', 'Antelo')`,
+     values ($1, $2, 'patient', 'latam', 'Valeria', 'Antelo')`,
     [PATIENT.account, PATIENT.email],
   );
   await owner.query(
@@ -182,7 +182,7 @@ async function seed() {
   // en B no hay ninguna ficha, y eso es la otra mitad de la prueba.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Rocio', 'Vargas')`,
+     values ($1, $2, 'patient', 'latam', 'Rocio', 'Vargas')`,
     [RESEND.account, RESEND.email],
   );
   await owner.query(
@@ -289,7 +289,7 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
         app,
         ctxAnonymous,
         `insert into account (email, role, region, first_name, last_name)
-         values ('colado@funciones.local', 'paciente', 'latam', 'X', 'Y')`,
+         values ('colado@funciones.local', 'patient', 'latam', 'X', 'Y')`,
       ),
       insert_audit: await whatItSees(app, ctxAnonymous, `insert into access_audit (action) values ('inventada')`),
     }).toEqual({
@@ -428,14 +428,14 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       role: exists[0]?.role,
       practice_id: exists[0]?.practice_id,
       attempts: exists[0]?.attempts_left,
-    }).toEqual({ account_id: PATIENT.account, role: 'paciente', practice_id: null, attempts: 5 });
+    }).toEqual({ account_id: PATIENT.account, role: 'patient', practice_id: null, attempts: 5 });
 
     // 4 · La doctora trae su consulta y su rol de equipo, que es lo que `POST /v1/access`
     // no puede averiguar después: con `app_practitioner` ya haría falta el `practice_id`.
     expect({
       practice: practitioner[0]?.practice_id,
       role: practitioner[0]?.practitioner_role,
-    }).toEqual({ practice: A.practice, role: 'doctora' });
+    }).toEqual({ practice: A.practice, role: 'doctor' });
   });
 
   it('la pausa cuenta hasta cinco y se limpia al entrar bien', async () => {
@@ -644,8 +644,8 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
       'select role, permissions from practitioner order by role',
     );
     expect(team).toEqual([
-      { role: 'doctora', permissions: null },
-      { role: 'recepcion', permissions: ['pacientes:leer', 'agenda:editar'] },
+      { role: 'doctor', permissions: null },
+      { role: 'doctor', permissions: ['pacientes:leer', 'agenda:editar'] },
     ]);
   });
 });
@@ -749,7 +749,7 @@ describe('la contraseña definitiva · todo en una transacción', () => {
       verdict: verdict?.verdict,
       role: verdict?.role,
       revoked: verdict?.sessions_revoked,
-    }).toEqual({ verdict: 'saved', role: 'paciente', revoked: 1 });
+    }).toEqual({ verdict: 'saved', role: 'patient', revoked: 1 });
 
     const [credential] = await read<{ is_temporary: boolean; used: string | null; set: string | null }>(
       app,
@@ -857,7 +857,7 @@ describe('el refresco · rotación de un solo uso', () => {
     expect({ verdict: rotated?.verdict, session: rotated?.session_id, role: rotated?.role }).toEqual({
       verdict: 'rotated',
       session: PATIENT.session,
-      role: 'paciente',
+      role: 'patient',
     });
 
     // El mismo otra vez: ya usado. Se revoca la sesión, que ES la familia derivada de ese
@@ -907,7 +907,7 @@ describe('el alta de cuentas · lo que cada rol puede crear', () => {
         [created!.account_id],
       )
       .then((r) => r.rows);
-    expect(row).toEqual({ role: 'paciente', region: 'latam', temporary: true });
+    expect(row).toEqual({ role: 'patient', region: 'latam', temporary: true });
 
     // Un correo que ya tiene cuenta se REUSA y no se le acuña contraseña ninguna: ya tiene
     // la suya. Es lo único que la respuesta revela de su existencia.
@@ -971,7 +971,7 @@ describe('el alta de cuentas · lo que cada rol puede crear', () => {
         .then((r) => r.rows);
       expect({ owner: built?.owner, role: built?.role, temporary: built?.temporary }).toEqual({
         owner: made!.account_id,
-        role: 'doctora',
+        role: 'doctor',
         temporary: true,
       });
 
@@ -1499,9 +1499,9 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
     expect(verdict).toEqual({
       verdict: 'saved',
       // `account.role` es el de autenticación y no sirve para encender pantallas...
-      role: 'practitioner',
+      role: 'doctor',
       // ...y este sí: es el que el borde traduce a `rol` en la respuesta.
-      practitioner_role: 'doctora',
+      practitioner_role: 'doctor',
       practice_id: A.practice,
       // No se le pasó `p_current_session`: por recuperación se revocan TODAS, incluida la
       // que llamó. Quien tuviera la contraseña vieja se queda fuera.
@@ -1532,7 +1532,7 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
     );
     expect(verdict).toEqual({
       verdict: 'saved',
-      role: 'paciente',
+      role: 'patient',
       practitioner_role: null,
       practice_id: null,
     });

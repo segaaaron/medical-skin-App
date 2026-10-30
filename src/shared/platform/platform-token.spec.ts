@@ -164,7 +164,7 @@ describe('PlatformTokens · la firma y el `kid`', () => {
     const { token } = await sesion.sign({
       sub: '11111111-1111-4111-8111-111111111111',
       sid: '33333333-3333-4333-8333-333333333333',
-      rol: 'doctora',
+      rol: 'doctor',
       alcance: 'completo',
       region: 'latam',
       practice: '22222222-2222-4222-8222-222222222222',

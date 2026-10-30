@@ -37,7 +37,7 @@ function select(one: boolean): string {
   select l.id, l.status, l.practice_name, l.practitioner_name, l.city, l.created_at,
          exists (select 1 from medical_history h
                   where h.patient_id = l.patient_id
-                    and 'paciente' in (h.allergies_source, h.medication_source,
+                    and 'patient' in (h.allergies_source, h.medication_source,
                                        h.pregnancy_or_lactation_source,
                                        h.past_conditions_source,
                                        h.previous_treatments_source)) as history_by_patient

@@ -207,7 +207,7 @@ export class Aftercare {
 
   /** Quién pregunta. Para la paciente no hace falta permiso: lo suyo es suyo. */
   private who(caller: Caller, permission: string): AftercareCaller {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       return { accountId: caller.accountId, practiceId: null, permissions: [], isPatient: true };
     }
     if (caller.practiceId === null || !caller.permissions.includes(permission)) {

@@ -29,7 +29,7 @@ const LIST = [
   'boliviana', 'bolivia', 'bolivia123', 'santacruz', 'lapaz', 'cochabamba', 'argentina',
   'mexico', 'méxico', 'colombia', 'chile', 'peru', 'perú', 'españa', 'espana', 'barcelona',
   'realmadrid', 'bocajuniors', 'river', 'america', 'américa', 'cristiano', 'messi',
-  'medskin', 'medskin123', 'doctora', 'clinica', 'clínica', 'consultorio', 'paciente',
+  'medskin', 'medskin123', 'doctor', 'clinica', 'clínica', 'consultorio', 'patient',
   'enero', 'febrero', 'marzo', 'verano', 'invierno', 'primavera', 'otoño', 'otono',
 ] as const;
 

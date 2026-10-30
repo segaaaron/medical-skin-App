@@ -27,7 +27,7 @@ export type NextStepInput = {
  */
 export function resolveNextStep(role: Role, facts: NextStepInput): NextStep {
   if (facts.passwordIsTemporary) return 'contrasena_nueva';
-  if (role === 'paciente') return 'inicio';
+  if (role === 'patient') return 'inicio';
   if (facts.licenseStatus === 'sin_enviar') return 'licencia';
   if (!facts.firstDayDone) return 'primer_dia';
   return 'inicio';

@@ -149,7 +149,7 @@ export interface AppointmentPort {
   cancel(
     caller: ScheduleCaller,
     appointmentId: string,
-    by: 'paciente' | 'consulta',
+    by: 'patient' | 'practice',
     now: Date,
   ): Promise<
     | { outcome: 'cancelled'; row: AppointmentRow; deposit: { status: string; how: string; why: string } | null; waitlisted: number }

@@ -198,7 +198,7 @@ export class Photos {
     caller: Caller,
     p: { practiceId: string | null; patientId: string | null; permission: string },
   ): Promise<{ asking: PhotoCaller; practiceId: string; patientId: string }> {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       if (p.practiceId === null) throw new ContractError('vinculo_no_existe');
       const link = await this.photos.linkedPatient(caller.accountId, p.practiceId);
       if (link === null) throw new ContractError('vinculo_no_existe');
@@ -224,7 +224,7 @@ export class Photos {
   }
 
   private reader(caller: Caller, permission: string): PhotoCaller {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       return {
         accountId: caller.accountId,
         practiceId: null,
@@ -245,7 +245,7 @@ export class Photos {
       practiceId: caller.practiceId,
       permissions: caller.permissions,
       isPatient: false,
-      isDoctor: caller.role === 'doctora',
+      isDoctor: caller.role === 'doctor',
     };
   }
 }

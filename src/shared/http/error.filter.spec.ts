@@ -82,7 +82,14 @@ function hostOf(route: string, context: Partial<RequestContext>): ArgumentsHost 
       ...context,
     },
   };
+  // `header` existe porque el filtro devuelve `X-Request-Id` en toda respuesta, también en
+  // los errores: es lo que convierte «me dio error» en una línea buscable en la bitácora.
+  const cabeceras: Record<string, string> = {};
   const res = {
+    header(nombre: string, valor: string) {
+      cabeceras[nombre] = valor;
+      return res;
+    },
     status(status: number) {
       return {
         send(body: unknown) {
@@ -95,7 +102,8 @@ function hostOf(route: string, context: Partial<RequestContext>): ArgumentsHost 
   return {
     switchToHttp: () => ({ getRequest: () => req, getResponse: () => res }),
     sent,
-  } as unknown as ArgumentsHost & { sent: typeof sent };
+    cabeceras,
+  } as unknown as ArgumentsHost & { sent: typeof sent; cabeceras: Record<string, string> };
 }
 
 /** La fila que acabó de escribirse para esta traza. El dueño es superusuario y ve la tabla. */
@@ -158,6 +166,8 @@ describe('un 500 de una ruta de consola', () => {
       host,
     );
 
+    // El cuerpo lleva `error` Y `meta`: el sobre acompaña a las dos mitades del contrato,
+    // y `meta` es lo que permite cruzar esta respuesta con su fila de `service_failure`.
     expect(host.sent).toEqual([
       {
         status: 500,
@@ -167,6 +177,12 @@ describe('un 500 de una ruta de consola', () => {
             mensaje:
               'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
             campo: null,
+          },
+          meta: {
+            peticion_id: 'peticion-2',
+            traza_id: 'traza-2',
+            servidor_en: expect.any(String) as unknown as string,
+            region: 'latam',
           },
         },
       },

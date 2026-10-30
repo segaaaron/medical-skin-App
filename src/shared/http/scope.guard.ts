@@ -26,6 +26,13 @@ import { readRequest, registeredRoute, type RequestWithContext } from './request
 import { policyFor, type RoutePolicy } from './route-policy';
 import type { Tokens, VerifiedClaims } from '../security/tokens';
 
+/**
+ * El relleno para la ruta registrada SIN política, que es un error de programación y falla
+ * cerrada en la línea siguiente. Existe solo para que el contexto —y con él el identificador
+ * de la petición— esté puesto cuando el filtro conteste ese 500.
+ */
+const NO_POLICY: RoutePolicy = { failurePhrase: FAILURE_PHRASES.fallback };
+
 @Injectable()
 export class ScopeGuard implements CanActivate {
   /**
@@ -43,6 +50,14 @@ export class ScopeGuard implements CanActivate {
     const route = registeredRoute(req);
     const policy = policyFor(req.method, route);
 
+    // EL CONTEXTO SE CUELGA LO PRIMERO, aunque esta petición vaya a ser rechazada tres
+    // líneas más abajo. Antes se colgaba solo en los caminos que pasaban, así que un
+    // `401 token_no_valido` salía con `peticion_id: "sin-peticion"` — es decir, el
+    // identificador para buscar en la bitácora faltaba justo en las respuestas que alguien
+    // querría buscar. Lo que sigue solo lo ENRIQUECE con quién llama.
+    const base = readRequest(req);
+    req.medskin = { ...base, policy: policy ?? NO_POLICY, caller: null, recovery: null, platform: null };
+
     if (policy === null) {
       // Una ruta registrada sin política es un error de programación, y falla cerrada.
       throw new ServiceFailure(
@@ -50,8 +65,6 @@ export class ScopeGuard implements CanActivate {
         new Error(`ruta sin política de alcance: ${req.method} ${route ?? '?'}`),
       );
     }
-
-    const base = readRequest(req);
 
     if (policy.anonymous === true) {
       req.medskin = { ...base, policy, caller: null, recovery: null, platform: null };
@@ -150,15 +163,15 @@ export class ScopeGuard implements CanActivate {
 
     // `practitioner` no es un valor de `rol` que viaje al cliente, así que el rol de cuenta
     // se deriva del que sí viaja: `paciente` o cualquiera de los tres de la consulta.
-    const accountRole: AccountRole = claims.rol === 'paciente' ? 'paciente' : 'practitioner';
+    const accountRole: AccountRole = claims.rol === 'patient' ? 'patient' : 'doctor';
     const practiceId = claims.practice ?? null;
 
     // Un token de doctora o de equipo SIN `practice` no se puede atender: su contexto de
     // base exige la consulta, y sin él las políticas no leen nada. No se improvisa uno.
-    if (accountRole === 'practitioner' && practiceId === null) {
+    if (accountRole === 'doctor' && practiceId === null) {
       throw new ContractError('token_no_valido');
     }
-    if (accountRole === 'paciente' && practiceId !== null) {
+    if (accountRole === 'patient' && practiceId !== null) {
       throw new ContractError('token_no_valido');
     }
 

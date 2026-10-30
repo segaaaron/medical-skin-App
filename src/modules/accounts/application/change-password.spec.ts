@@ -18,8 +18,8 @@ const AHORA = new Date('2026-10-27T14:14:00.000Z');
 const DOCTORA: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: '22222222-2222-4222-8222-222222222222',

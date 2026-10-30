@@ -77,7 +77,7 @@ export class ReadSession {
     // inconsistencia del servidor, no una sesión inválida: va a `service_failure` con su
     // causa real y la app se queda en el splash. Inventar `consulta: null` para una
     // doctora sería devolverle una respuesta que su pantalla no sabe pintar.
-    if (caller.accountRole === 'practitioner' && snapshot.practice === null) {
+    if (caller.accountRole === 'doctor' && snapshot.practice === null) {
       throw new ServiceFailure(
         FAILURE_PHRASES.readSession,
         new Error(`la sesión ${caller.sessionId} dice consulta y no hay consulta que leer`),

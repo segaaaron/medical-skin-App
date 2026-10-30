@@ -73,13 +73,13 @@ const comoDoctora = (sessionId: string) => ({
   accountId: MIA.doctora,
   sessionId,
   practiceId: MIA.practice,
-  accountRole: 'practitioner' as const,
+  accountRole: 'doctor' as const,
 });
 const comoPaciente = (sessionId: string) => ({
   accountId: MIA.paciente,
   sessionId,
   practiceId: null,
-  accountRole: 'paciente' as const,
+  accountRole: 'patient' as const,
 });
 
 async function seedPractice(t: { practice: string; doctora: string; correoDoctora: string }, name: string) {
@@ -93,12 +93,12 @@ async function seedPractice(t: { practice: string; doctora: string; correoDoctor
   ]);
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [t.doctora, t.correoDoctora],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, 'Andrea', 'Paz', 'doctor')`,
     [t.practice, t.doctora],
   );
   // Su credencial definitiva: es lo que hace que `password_is_temporary` sea una lectura y
@@ -122,19 +122,19 @@ async function seed() {
   // rol» de «los que el dueño le editó de uno en uno».
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Rosa', 'Mamani')`,
+     values ($1, $2, 'doctor', 'latam', 'Rosa', 'Mamani')`,
     [MIA.recepcion, MIA.correoRecepcion],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role, permissions)
-     values ($1, $2, 'Rosa', 'Mamani', 'recepcion', $3)`,
+     values ($1, $2, 'Rosa', 'Mamani', 'doctor', $3)`,
     [MIA.practice, MIA.recepcion, ['pacientes:leer', 'agenda:leer']],
   );
 
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Valeria', 'Antelo'),
-            ($3, $4, 'paciente', 'latam', 'Carla', 'Rojas')`,
+     values ($1, $2, 'patient', 'latam', 'Valeria', 'Antelo'),
+            ($3, $4, 'patient', 'latam', 'Carla', 'Rojas')`,
     [MIA.paciente, MIA.correoPaciente, MIA.suspendida, MIA.correoSuspendida],
   );
   await owner.query(`update account set status = 'suspendida' where id = $1`, [MIA.suspendida]);
@@ -212,7 +212,7 @@ describe('la lectura de la sesión', () => {
       accountId: MIA.recepcion,
       sessionId: MIA.sesionRecepcion,
       practiceId: MIA.practice,
-      accountRole: 'practitioner',
+      accountRole: 'doctor',
     });
 
     expect(snapshot?.permissions).toEqual(['pacientes:leer', 'agenda:leer']);
@@ -241,7 +241,7 @@ describe('la lectura de la sesión', () => {
       accountId: MIA.suspendida,
       sessionId: MIA.sesionSuspendida,
       practiceId: null,
-      accountRole: 'paciente',
+      accountRole: 'patient',
     });
 
     expect(snapshot?.accountStatus).toBe('suspendida');
@@ -309,8 +309,8 @@ describe('la rotación del refresco', () => {
     expect(rotated.practiceId).toBe(MIA.practice);
     expect(rotated.scope).toBe('completo');
     // `role` es `account.role` y NO es el `rol` del token; el del token sale del de al lado.
-    expect(rotated.accountRole).toBe('practitioner');
-    expect(rotated.practitionerRole).toBe('doctora');
+    expect(rotated.accountRole).toBe('doctor');
+    expect(rotated.practitionerRole).toBe('doctor');
     expect(rotated.permissions).toBeNull();
     expect(rotated.accountStatus).toBe('activa');
     expect(rotated.passwordIsTemporary).toBe(false);
@@ -370,7 +370,7 @@ describe('la rotación del refresco', () => {
     });
 
     expect(rotated.verdict).toBe('rotated');
-    expect(rotated.accountRole).toBe('paciente');
+    expect(rotated.accountRole).toBe('patient');
     expect(rotated.practitionerRole).toBeNull();
     expect(rotated.licenseStatus).toBeNull();
     // Sin consulta no hay primer día que terminar.

@@ -51,8 +51,8 @@ function doctor(practice: string, account: string): Caller {
   return {
     accountId: account,
     sessionId: 'dddddddd-0000-4000-8000-0000000000ff',
-    role: 'doctora',
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: practice,
@@ -63,8 +63,8 @@ function doctor(practice: string, account: string): Caller {
 const ana: Caller = {
   accountId: ANA.account,
   sessionId: 'dddddddd-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -79,12 +79,12 @@ async function seedPractice(p: { practice: string; account: string; name: string
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [p.account, `duena.${p.practice.slice(-1)}@tramo2.local`],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, role, status, first_name, last_name)
-     values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'activa', 'Andrea', 'Paz')`,
     [p.practice, p.account],
   );
   await owner.query(`update practice set owner_account_id = $2 where id = $1`, [
@@ -110,7 +110,7 @@ async function seedPatient(p: {
     `insert into medical_history (practice_id, patient_id, has_allergies, allergies,
                                   allergies_source, allergies_source_at, past_conditions,
                                   past_conditions_source, past_conditions_source_at)
-     values ($1, $2, true, '{lidocaína}', 'doctora', now(), '{herpes}', 'doctora', now())`,
+     values ($1, $2, true, '{lidocaína}', 'doctor', now(), '{herpes}', 'doctor', now())`,
     [p.practice, p.patient],
   );
   await owner.query(
@@ -141,7 +141,7 @@ beforeAll(async () => {
   await seedPractice({ ...OTHER, account: OTHER.doctor, name: 'Clínica de al lado' });
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo2.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo2.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [ANA.account],
   );
   await seedPatient({
@@ -193,7 +193,7 @@ describe('otra consulta no existe para mí', () => {
   it('recepción no abre la ficha, y sí puede buscar', async () => {
     const reception: Caller = {
       ...doctor(MINE.practice, MINE.doctor),
-      role: 'recepcion',
+      role: 'doctor',
       permissions: ['pacientes:leer'],
     };
     await expect(list.run({}, reception)).resolves.toMatchObject({ cuantas: 1 });
@@ -232,7 +232,7 @@ describe('la lista y la ficha', () => {
       vinculo: { estado: 'vinculada', ya_eligio_contrasena: false },
     });
     expect(ficha.antecedentes.alergias).toEqual({ tiene: true, cuales: ['lidocaína'] });
-    expect(ficha.antecedentes.fuentes.alergias).toMatchObject({ quien: 'doctora' });
+    expect(ficha.antecedentes.fuentes.alergias).toMatchObject({ quien: 'doctor' });
     // Un campo que nadie llenó es `null`, que es distinto de un campo en `false`.
     expect(ficha.antecedentes.fuentes.notas).toBeNull();
 
@@ -315,7 +315,7 @@ describe('editar, archivar y reactivar', () => {
 
     // Cancelada, la ficha se archiva: lo que bloquea es la cita VIVA, no cualquier fila.
     await owner.query(
-      `update appointment set status = 'cancelada', cancelled_at = now(), cancelled_by = 'consulta'
+      `update appointment set status = 'cancelada', cancelled_at = now(), cancelled_by = 'practice'
         where id = $1`,
       [made[0]!.id],
     );
@@ -392,7 +392,7 @@ describe('la ficha médica que llena la paciente', () => {
     const ficha = await file.run(ANA.patient, doctor(MINE.practice, MINE.doctor));
     expect(ficha.antecedentes.alergias).toEqual({ tiene: true, cuales: ['lidocaína'] });
     expect(ficha.antecedentes.medicacion).toEqual({ toma: true, cuales: ['ibuprofeno'] });
-    expect(ficha.antecedentes.fuentes.medicacion).toMatchObject({ quien: 'paciente' });
+    expect(ficha.antecedentes.fuentes.medicacion).toMatchObject({ quien: 'patient' });
 
     // Y nada se borró: el valor anterior de la medicación quedó en la auditoría.
     const audit = await owner.query<{ field: string; actor_source: string }>(
@@ -403,7 +403,7 @@ describe('la ficha médica que llena la paciente', () => {
       'embarazo_o_lactancia',
       'medicacion',
     ]);
-    expect(audit.rows.every((r) => r.actor_source === 'paciente')).toBe(true);
+    expect(audit.rows.every((r) => r.actor_source === 'patient')).toBe(true);
   });
 
   it('sin aceptar todavía no hay ficha médica que llenar', async () => {
@@ -437,7 +437,7 @@ describe('los antecedentes escritos por la doctora', () => {
     // Nada se borra: el valor anterior de las alergias quedó en la auditoría.
     const { rows } = await owner.query<{ field: string; previous_value: unknown }>(
       `select field, previous_value from medical_history_audit
-        where patient_id = $1 and actor_source = 'doctora' and field = 'alergias'`,
+        where patient_id = $1 and actor_source = 'doctor' and field = 'alergias'`,
       [ANA.patient],
     );
     expect(rows[0]?.previous_value).toEqual(['lidocaína']);

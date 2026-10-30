@@ -168,7 +168,7 @@ export class RefreshSession {
    * al cliente: es valor de base y no dice nada que una app pueda usar.
    */
   private roleOf(session: RotatedRefresh & { accountId: string }): Role {
-    if (session.accountRole === 'paciente') return 'paciente';
+    if (session.accountRole === 'patient') return 'patient';
     if (session.practitionerRole !== null) return session.practitionerRole;
     // Una cuenta de consulta sin fila activa no tiene rol que devolver, y no se inventa
     // uno: es la misma inconsistencia que para en `POST /v1/access`.

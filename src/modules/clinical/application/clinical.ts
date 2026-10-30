@@ -224,7 +224,7 @@ export class Consents {
     const asking = {
       accountId: caller.accountId,
       practiceId: caller.practiceId,
-      isPatient: caller.accountRole === 'paciente',
+      isPatient: caller.accountRole === 'patient',
     };
 
     const text = await this.consents.text(asking, treatmentId);
@@ -241,7 +241,7 @@ export class Consents {
   }
 
   async sign(input: unknown, caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {
-    const isPatient = caller.accountRole === 'paciente';
+    const isPatient = caller.accountRole === 'patient';
     // «La paciente O LA CONSULTA CON ELLA PRESENTE» (`sesiones.md`), y presente significa en la
     // sala: el permiso es `sesiones:registrar`, el mismo que registra el tratamiento. Era el
     // único endpoint de los tramos 2 al 8 sin ninguna comprobación de permiso, así que
@@ -286,7 +286,7 @@ function clinicalOf(caller: Caller, permission: string): ClinicalCaller {
     accountId: caller.accountId,
     practiceId: caller.practiceId,
     permissions: caller.permissions,
-    isDoctor: caller.role === 'doctora',
+    isDoctor: caller.role === 'doctor',
   };
 }
 

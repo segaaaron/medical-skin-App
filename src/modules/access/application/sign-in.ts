@@ -151,7 +151,7 @@ export class SignIn {
     const scope: Scope = credential.isTemporary ? 'contrasena_temporal' : 'completo';
     const refresh = scope === 'completo' ? this.tokens.mintRefresh() : null;
     const lifetime =
-      role === 'paciente' ? REFRESH_LIFETIME_MS.patient : REFRESH_LIFETIME_MS.practitioner;
+      role === 'patient' ? REFRESH_LIFETIME_MS.patient : REFRESH_LIFETIME_MS.practitioner;
     const refreshExpiresAt = refresh ? new Date(now.getTime() + lifetime) : null;
 
     const opened = await this.sessions.open({

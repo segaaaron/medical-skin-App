@@ -17,7 +17,7 @@ import { ARGON2_COST, Argon2Passwords, type FailureSink } from './passwords';
 const CUENTA = {
   accountId: '99999999-9999-4999-8999-999999999999',
   practiceId: '22222222-2222-4222-8222-222222222222',
-  accountRole: 'paciente' as const,
+  accountRole: 'patient' as const,
 };
 
 // Un Argon2id con la forma buena y el contenido roto: la salida es más corta de lo que

@@ -179,7 +179,7 @@ export const license = pgTable(
 // ---------------------------------------------------------------------------------------
 
 export const practitioner = pgTable(
-  'practitioner',
+  'doctor',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     practiceId: uuid('practice_id')
@@ -216,7 +216,7 @@ export const practitioner = pgTable(
     // Decisión 12 del 27 oct. `paciente` no es rol de `practitioner`: vive en `account`.
     // Y `duena` ya no es un rol: la dueña es `practice.owner_account_id` (decisión 5),
     // que es un hecho de la consulta y no un permiso dentro de ella.
-    check('practitioner_role_ck', sql`${t.role} in ('doctora', 'recepcion', 'asistente_clinico')`),
+    check('practitioner_role_ck', sql`${t.role} in ('doctor', 'doctor', 'doctor')`),
     check('practitioner_status_ck', sql`${t.status} in ('activa', 'retirada')`),
     // Una lista vacía no significa nada: o es nula (los de su rol) o tiene permisos.
     check(
@@ -266,7 +266,7 @@ export const account = pgTable(
     // Un despliegue es una región (§7.4), así que el único de la región es el único de
     // la base. citext lo hace insensible a mayúsculas sin índice funcional.
     uniqueIndex('account_email_uq').on(t.email),
-    check('account_role_ck', sql`${t.role} in ('practitioner', 'paciente')`),
+    check('account_role_ck', sql`${t.role} in ('doctor', 'patient')`),
     check('account_region_ck', sql`${t.region} in ${REGIONS}`),
     check('account_status_ck', sql`${t.status} in ('activa', 'suspendida', 'borrada')`),
   ],

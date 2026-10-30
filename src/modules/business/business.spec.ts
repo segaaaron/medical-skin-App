@@ -39,35 +39,40 @@ let lotWithCost = '';
 let lotWithoutCost = '';
 let payment = '';
 
-function staff(account: string, role: 'doctora' | 'asistente_clinico'): Caller {
+/** Los permisos completos del doctor, que es el valor por omisión del ayudante de abajo. */
+const TODOS = [
+  'cobros:registrar',
+  'margenes:leer',
+  'informes:leer',
+  'inventario:editar',
+  'plan:leer',
+  'plan:ampliar',
+] as const;
+
+/**
+ * Quien llama desde la consulta. Recibe la LISTA DE PERMISOS y no un rol, y es el cambio
+ * del 30 de octubre de 2026: con un solo rol, lo único que puede acotar a una persona
+ * dentro de una consulta es su `practitioner.permissions`. Las pruebas de denegación de
+ * abajo pasan una lista recortada, que es exactamente el mecanismo que queda.
+ */
+function staff(account: string, permissions: readonly string[] = TODOS): Caller {
   return {
     accountId: account,
     sessionId: '44444444-0000-4000-8000-0000000000ff',
-    role,
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: B.practice,
-    permissions:
-      role === 'doctora'
-        ? [
-            'cobros:registrar',
-            'margenes:leer',
-            'informes:leer',
-            'inventario:editar',
-            'plan:leer',
-            'plan:ampliar',
-            'equipo:crear',
-          ]
-        : ['inventario:editar'],
+    permissions,
   };
 }
 
 const ana: Caller = {
   accountId: B.account,
   sessionId: '44444444-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -122,12 +127,12 @@ beforeAll(async () => {
     [B.practice],
   );
   for (const [account, role] of [
-    [B.doctor, 'doctora'],
-    [B.assistant, 'asistente_clinico'],
+    [B.doctor, 'doctor'],
+    [B.assistant, 'doctor'],
   ] as const) {
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [account, `${account.slice(-3)}@tramo8.local`],
     );
     await owner.query(
@@ -138,7 +143,7 @@ beforeAll(async () => {
   }
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo8.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo8.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [B.account],
   );
   await owner.query(
@@ -222,7 +227,7 @@ describe('cobrar, y no cobrar dos veces', () => {
         medio: 'transferencia',
         referencia: 'BNB-884211',
       },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
       key('c1'),
     )) as { id: string; importe: { centavos: number }; medio: string };
     payment = charged.id;
@@ -237,7 +242,7 @@ describe('cobrar, y no cobrar dos veces', () => {
         medio: 'transferencia',
         referencia: 'BNB-884211',
       },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
       key('c1'),
     )) as { id: string };
     expect(again.id).toBe(payment);
@@ -252,7 +257,7 @@ describe('cobrar, y no cobrar dos veces', () => {
           importe: { centavos: 1000 },
           medio: 'efectivo',
         },
-        staff(B.doctor, 'doctora'),
+        staff(B.doctor),
         key('c2'),
       ),
     ).rejects.toMatchObject({ code: 'ya_cobrado' });
@@ -262,7 +267,7 @@ describe('cobrar, y no cobrar dos veces', () => {
     await expect(
       business.charge(
         { patient_id: B.patient, concepto: 'otro', importe: { centavos: 100 }, medio: 'efectivo' },
-        staff(B.assistant, 'asistente_clinico'),
+        staff(B.assistant, ['inventario:editar']),
         key('c3'),
       ),
     ).rejects.toMatchObject({ code: 'sin_permiso' });
@@ -275,7 +280,7 @@ describe('cobrar, y no cobrar dos veces', () => {
           importe: { centavos: 1920.5 },
           medio: 'efectivo',
         },
-        staff(B.doctor, 'doctora'),
+        staff(B.doctor),
         key('c4'),
       ),
     ).rejects.toMatchObject({ code: 'importe_no_valido' });
@@ -285,7 +290,7 @@ describe('cobrar, y no cobrar dos veces', () => {
     const voided = (await business.voidPayment(
       payment,
       { motivo: 'se cobró por duplicado' },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
     )) as { anulacion_id: string };
     expect(voided.anulacion_id).toBeTruthy();
 
@@ -321,11 +326,11 @@ describe('el margen, con el costo del lote', () => {
         importe: { centavos: 192000 },
         medio: 'efectivo',
       },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
       key('c5'),
     );
 
-    const margins = (await business.margins({}, staff(B.doctor, 'doctora'))) as {
+    const margins = (await business.margins({}, staff(B.doctor))) as {
       moneda: string;
       filas: {
         tratamiento: string;
@@ -375,7 +380,7 @@ describe('el margen, con el costo del lote', () => {
       [B.practice, sessions[0]!.id, lotWithoutCost],
     );
 
-    const margins = (await business.margins({}, staff(B.doctor, 'doctora'))) as {
+    const margins = (await business.margins({}, staff(B.doctor))) as {
       sin_costo_conocido: { sesiones: number; por_que: string } | null;
     };
     // EXISTE PARA NO MENTIR: asumir costo cero daría un margen del 100 %.
@@ -387,7 +392,7 @@ describe('el margen, con el costo del lote', () => {
 
   it('solo la dueña ve los márgenes', async () => {
     await expect(
-      business.margins({}, staff(B.assistant, 'asistente_clinico')),
+      business.margins({}, staff(B.assistant, ['inventario:editar'])),
     ).rejects.toMatchObject({ code: 'sin_permiso' });
     await expect(business.margins({}, ana)).rejects.toMatchObject({ code: 'sin_permiso' });
   });
@@ -398,7 +403,7 @@ describe('el inventario', () => {
     await expect(
       business.move(
         { lot_id: lotWithCost, tipo: 'salida', unidades: 5 },
-        staff(B.doctor, 'doctora'),
+        staff(B.doctor),
         key('m1'),
       ),
     ).rejects.toMatchObject({ code: 'movimiento_de_sesion' });
@@ -406,7 +411,7 @@ describe('el inventario', () => {
     await expect(
       business.move(
         { lot_id: lotWithCost, tipo: 'ajuste', unidades: 500 },
-        staff(B.doctor, 'doctora'),
+        staff(B.doctor),
         key('m2'),
       ),
     ).rejects.toMatchObject({ code: 'stock_negativo' });
@@ -415,14 +420,14 @@ describe('el inventario', () => {
     await expect(
       business.move(
         { lot_id: lotWithCost, tipo: 'merma', unidades: 2 },
-        staff(B.doctor, 'doctora'),
+        staff(B.doctor),
         key('m3'),
       ),
     ).rejects.toMatchObject({ code: 'merma_sin_motivo' });
 
     const moved = (await business.move(
       { lot_id: lotWithCost, tipo: 'merma', unidades: 2, motivo: 'vial roto al abrir' },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
       key('m4'),
     )) as { quedan: number };
     expect(moved.quedan).toBe(98);
@@ -436,7 +441,7 @@ describe('el inventario', () => {
   });
 
   it('el inventario lista productos con sus lotes y lo que queda', async () => {
-    const seen = (await business.inventory(staff(B.doctor, 'doctora'))) as {
+    const seen = (await business.inventory(staff(B.doctor))) as {
       productos: { nombre: string; unidades: number; lotes: { codigo: string }[] }[];
     };
     expect(seen.productos[0]?.nombre).toBe('Toxina 100U');
@@ -449,7 +454,7 @@ describe('el inventario', () => {
 
 describe('informes, plan y exportación', () => {
   it('un agregado de menos de cinco pacientes no se devuelve', async () => {
-    const report = (await business.report({ informe: 'ingresos' }, staff(B.doctor, 'doctora'))) as {
+    const report = (await business.report({ informe: 'ingresos' }, staff(B.doctor))) as {
       suprimido?: boolean;
       por_que?: string;
     };
@@ -462,12 +467,12 @@ describe('informes, plan y exportación', () => {
       `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
                                 status, price_cents, cancelled_at, cancelled_by)
        select $1, $2, treatment_id, '2026-10-25T15:00:00Z', '2026-10-25T15:40:00Z', 'cancelada',
-              192000, '2026-10-24T15:00:00Z', 'paciente'
+              192000, '2026-10-24T15:00:00Z', 'patient'
          from appointment where practice_id = $1 limit 1`,
       [B.practice, B.patient],
     );
 
-    const report = (await business.report({ informe: 'ausencias' }, staff(B.doctor, 'doctora'))) as {
+    const report = (await business.report({ informe: 'ausencias' }, staff(B.doctor))) as {
       filas: { paciente: string }[];
     };
     expect(report.filas[0]?.paciente).toBe('Ana Antelo');
@@ -480,7 +485,7 @@ describe('informes, plan y exportación', () => {
   });
 
   it('el plan avisa al 80 %, y ampliarlo no cobra', async () => {
-    const plan = (await business.plan(staff(B.doctor, 'doctora'))) as {
+    const plan = (await business.plan(staff(B.doctor))) as {
       limite_pacientes: number;
       pacientes: number;
       aviso: string | null;
@@ -494,7 +499,7 @@ describe('informes, plan y exportación', () => {
 
     const asked = (await business.requestPlan(
       { plan: 'clinica', nota: 'Vamos a abrir otro consultorio.' },
-      staff(B.doctor, 'doctora'),
+      staff(B.doctor),
     )) as { estado: string; que_sigue: string };
     expect(asked.estado).toBe('pedida');
     expect(asked.que_sigue).toContain('No se te cobró nada');
@@ -572,11 +577,11 @@ describe('un informe que el servidor no reconoce', () => {
     // Devolver ingresos ante `?informe=margen_por_hora` es contestar otra pregunta, y la
     // pantalla dibuja la respuesta equivocada con el título que pidió.
     await expect(
-      business.report({ informe: 'margen_por_hora' }, staff(B.doctor, 'doctora')),
+      business.report({ informe: 'margen_por_hora' }, staff(B.doctor)),
     ).rejects.toMatchObject({ code: 'informe_desconocido' });
 
     // Sin `informe` sigue siendo `ingresos`: eso es un valor por omisión, no un valor adivinado.
-    const income = (await business.report({}, staff(B.doctor, 'doctora'))) as { informe: string };
+    const income = (await business.report({}, staff(B.doctor))) as { informe: string };
     expect(income.informe).toBe('ingresos');
   });
 });

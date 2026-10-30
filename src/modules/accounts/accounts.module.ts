@@ -16,10 +16,8 @@ import { CONFIG, POOL } from '../../shared/shared.module';
 import { AccessRepository } from '../access/infrastructure/access.repository';
 import { AccountsController } from './accounts.controller';
 import { ChangeOwnPassword } from './application/change-password';
-import { CreateTeamMember } from './application/create-team-member';
 import { DeleteOwnAccount } from './application/delete-own-account';
 import { ReadOwnAccount } from './application/read-own-account';
-import { ResendTeamAccess } from './application/resend-team-access';
 import { LiftAccessPause } from './application/lift-access-pause';
 import { RegisterPatient } from './application/register-patient';
 import { ResendPlatformAccess } from './application/resend-platform-access';
@@ -31,11 +29,8 @@ import { PlatformAccessMail } from './infrastructure/platform-access-mail';
 import { PatientAccessMail } from './infrastructure/patient-access-mail';
 import { PatientAccessRepository } from './infrastructure/patient-access.repository';
 import { PatientCreationLimit, PasswordAttempts, ResendLimit } from './infrastructure/password-attempts';
-import { TeamAccessMail } from './infrastructure/team-access-mail';
-import { TeamRepository } from './infrastructure/team.repository';
 import { PatientsController } from './patients.controller';
 import { PlatformAccountsController } from './platform-accounts.controller';
-import { TeamController } from './team.controller';
 
 /**
  * `GET /v1/accounts/mine` necesita el `practitioner.role` de esta consulta y el estado que
@@ -53,7 +48,6 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
     AccountsController,
     PatientsController,
     PlatformAccountsController,
-    TeamController,
   ],
   providers: [
     {
@@ -191,40 +185,6 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         cfg: Config,
       ) => new DeleteOwnAccount(repo, passwords, repo, clock, cfg.CONSERVACION_ANOS),
       inject: [AccountsRepository, Argon2Passwords, SystemClock, CONFIG],
-    },
-    {
-      provide: TeamRepository,
-      useFactory: (pool: Pool) => new TeamRepository(pool),
-      inject: [POOL],
-    },
-    {
-      provide: TeamAccessMail,
-      useFactory: (mail: SmtpMail) => new TeamAccessMail(mail),
-      inject: [SmtpMail],
-    },
-    {
-      provide: CreateTeamMember,
-      useFactory: (
-        repo: TeamRepository,
-        passwords: Argon2Passwords,
-        clock: SystemClock,
-        mail: TeamAccessMail,
-        idempotency: PatientsRepository,
-      ) => new CreateTeamMember(repo, passwords, clock, mail, idempotency),
-      inject: [TeamRepository, Argon2Passwords, SystemClock, TeamAccessMail, PatientsRepository],
-    },
-    {
-      provide: ResendTeamAccess,
-      useFactory: (
-        repo: TeamRepository,
-        passwords: Argon2Passwords,
-        // `ResendLimit` es el MISMO contador del reenvío de pacientes, con la misma clave
-        // por cuenta de destino: las 3 por hora cuentan igual venga de donde venga.
-        limit: ResendLimit,
-        clock: SystemClock,
-        mail: TeamAccessMail,
-      ) => new ResendTeamAccess(repo, passwords, limit, clock, mail),
-      inject: [TeamRepository, Argon2Passwords, ResendLimit, SystemClock, TeamAccessMail],
     },
   ],
 })

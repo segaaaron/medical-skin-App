@@ -161,7 +161,7 @@ export class ChoosePassword {
     const refresh = this.tokens.mintRefresh();
     const refreshExpiresAt = new Date(
       now.getTime() +
-        (saved.accountRole === 'paciente'
+        (saved.accountRole === 'patient'
           ? REFRESH_LIFETIME_MS.patient
           : REFRESH_LIFETIME_MS.practitioner),
     );
@@ -234,7 +234,7 @@ export class ChoosePassword {
 
 /** `sesion.md`: paciente 30 días · doctora y equipo 12 h. */
 function lifetimeFor(role: string): number {
-  return role === 'paciente' ? REFRESH_LIFETIME_MS.patient : REFRESH_LIFETIME_MS.practitioner;
+  return role === 'patient' ? REFRESH_LIFETIME_MS.patient : REFRESH_LIFETIME_MS.practitioner;
 }
 
 /** Quién es, solo para el aviso de una credencial ilegible. Nunca para autorizar nada. */

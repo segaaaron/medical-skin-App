@@ -67,7 +67,7 @@ export class PhotosRepository implements PhotoPort {
           p.request.sessionId,
           p.request.view,
           // Lo pone el SERVIDOR y se ignora si viene: decide quién puede borrarla después.
-          caller.isPatient ? 'paciente' : 'doctora',
+          caller.isPatient ? 'patient' : 'doctor',
           p.request.declaredType,
           p.request.declaredBytes,
           p.request.takenAt,
@@ -146,7 +146,7 @@ export class PhotosRepository implements PhotoPort {
         `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                    subject_id, data)
          values (coalesce(medskin_current_practice(), $3), $1, 'paciente.fotos_abiertas',
-                 'paciente', $2, '{}')`,
+                 'patient', $2, '{}')`,
         [caller.accountId, p.patientId, rows[0]?.practice_id ?? null],
       );
 
@@ -269,7 +269,7 @@ export class PhotosRepository implements PhotoPort {
       const photo = await this.readOne(c, photoId);
       if (photo === null) return { outcome: 'no_photo' };
       // «Esa foto la tomó tu doctora en consulta: es parte de tu historia clínica.»
-      if (caller.isPatient && photo.uploadedBy !== 'paciente') return { outcome: 'not_yours' };
+      if (caller.isPatient && photo.uploadedBy !== 'patient') return { outcome: 'not_yours' };
 
       if (photo.sessionId !== null) {
         const { rows } = await c.query(

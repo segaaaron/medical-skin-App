@@ -328,7 +328,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
          from practitioner pr
          join practice p on p.id = pr.practice_id
         where p.id = medskin_current_practice()
-          and pr.role = 'doctora' and pr.status = 'activa'
+          and pr.role = 'doctor' and pr.status = 'activa'
         order by (pr.account_id = p.owner_account_id) desc nulls last, pr.created_at
         limit 1`,
     );
@@ -470,7 +470,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
       sources.add(field);
     }
     for (const field of sources) {
-      sets.push(`${field}_source = 'doctora'`, `${field}_source_at = now()`);
+      sets.push(`${field}_source = 'doctor'`, `${field}_source_at = now()`);
     }
     if (sets.length === 0) return;
 
@@ -557,7 +557,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     history: HistoryDraft,
     written: readonly HistoryField[],
   ): Promise<void> {
-    const by = (field: HistoryField): string | null => (written.includes(field) ? 'doctora' : null);
+    const by = (field: HistoryField): string | null => (written.includes(field) ? 'doctor' : null);
     const when = (n: number): string =>
       `case when $${n}::medskin_history_source is null then null else now() end`;
 

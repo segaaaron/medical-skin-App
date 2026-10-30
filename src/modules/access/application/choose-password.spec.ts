@@ -25,7 +25,7 @@ const AHORA = new Date('2026-10-27T14:14:00.000Z');
 
 const TEMPORAL: AccessCredential = {
   accountId: '11111111-1111-4111-8111-111111111111',
-  accountRole: 'paciente',
+  accountRole: 'patient',
   accountStatus: null,
   region: null,
   hash: '$argon2id$temporal',
@@ -40,8 +40,8 @@ const TEMPORAL: AccessCredential = {
 const PACIENTE: Caller = {
   accountId: TEMPORAL.accountId as string,
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'contrasena_temporal',
   region: 'latam',
   practiceId: null,
@@ -64,7 +64,7 @@ function armar(opciones: {
   actual?: AccessCredential | null;
   esLaTemporal?: boolean;
   veredicto?: SavePasswordVerdict;
-  guardadoComo?: { accountRole: 'practitioner' | 'paciente'; practiceId: string | null };
+  guardadoComo?: { accountRole: 'doctor' | 'patient'; practiceId: string | null };
 }) {
   const pasos: string[] = [];
 
@@ -79,7 +79,7 @@ function armar(opciones: {
       pasos.push(`guardar:${p.via}:${p.currentSessionId}:${p.refreshDigest}`);
       return Promise.resolve({
         verdict: opciones.veredicto ?? ('saved' as const),
-        accountRole: opciones.guardadoComo?.accountRole ?? ('paciente' as const),
+        accountRole: opciones.guardadoComo?.accountRole ?? ('patient' as const),
         practiceId: opciones.guardadoComo?.practiceId ?? null,
         permissions: null,
       });
@@ -105,7 +105,7 @@ function armar(opciones: {
         licenseStatus: opciones.guardadoComo === undefined ? null : 'sin_enviar',
         firstDayDone: true,
         practitionerRole:
-          opciones.guardadoComo?.accountRole === 'practitioner' ? ('doctora' as const) : null,
+          opciones.guardadoComo?.accountRole === 'doctor' ? ('doctor' as const) : null,
         permissions: null,
       });
     },
@@ -205,8 +205,8 @@ describe('POST /v1/access/new-password · el guardado', () => {
     const { caso } = armar({ actual: null });
     const doctora: Caller = {
       ...PACIENTE,
-      role: 'doctora',
-      accountRole: 'practitioner',
+      role: 'doctor',
+      accountRole: 'doctor',
       practiceId: '22222222-2222-4222-8222-222222222222',
     };
 
@@ -247,14 +247,14 @@ describe('POST /v1/access/new-password · el guardado', () => {
   });
 
   it('por recuperación, el rol lo devuelve la BASE y no el token', async () => {
-    const { caso } = armar({ guardadoComo: { accountRole: 'practitioner', practiceId: CONSULTA } });
+    const { caso } = armar({ guardadoComo: { accountRole: 'doctor', practiceId: CONSULTA } });
     const respuesta = await caso.runFromRecovery(
       { nueva: 'tejado-nuevo-07' },
       { via: 'recuperacion', accountId: PACIENTE.accountId, region: 'latam' },
       DISPOSITIVO,
     );
 
-    // `practitionerRole: 'doctora'` sale de la fila de `practitioner` que se lee con el
+    // `practitionerRole: 'doctor'` sale de la fila de `practitioner` que se lee con el
     // consulta puesto, y de ahí el `siguiente_paso` de una doctora.
     expect(respuesta.siguiente_paso).toBe('licencia');
     expect(respuesta.refresco_caduca_en).toBe(

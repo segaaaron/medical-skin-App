@@ -5,21 +5,51 @@
 // `contrasena_temporal`): son formato de API, que es lo que las dos apps ya consumen. Los
 // identificadores, en inglés (napkin §4).
 
-/** `account.role` en la base. Es el rol de AUTENTICACIÓN y nada más. */
-export type AccountRole = 'practitioner' | 'paciente';
-
-/** `practitioner.role` en la base: quién es dentro de la consulta. */
-export type PractitionerRole = 'doctora' | 'recepcion' | 'asistente_clinico';
+/**
+ * `account.role` en la base. Es el rol de AUTENTICACIÓN y nada más: por qué puerta entra
+ * quien llama. Dos valores y no más, decidido por el dueño el 30 de octubre de 2026.
+ */
+export type AccountRole = 'doctor' | 'patient';
 
 /**
- * El `rol` que viaja al cliente. `practitioner` NO se devuelve nunca: es valor de base y
- * no dice nada que una app pueda usar. `duena` tampoco es un valor: la dueña es la
- * `doctora` cuya cuenta está en `practice.owner_account_id`, que es una fila.
+ * `practitioner.role` en la base: quién es dentro de la consulta.
+ *
+ * UN SOLO VALOR desde el 30 de octubre de 2026. Antes había tres —`doctora`, `recepcion`,
+ * `asistente_clinico`— que salieron de un paréntesis del documento de diseño («practitioner
+ * N (doctor, asistente, recepción, solo-lectura)») y que el dueño nunca pidió: el producto
+ * es un doctor y sus pacientes. El equipo con roles está en la FASE 3 del propio diseño, y
+ * se había adelantado dos fases. Lo que ayudaría al doctor dentro de su app es el asistente
+ * virtual, que es un ALCANCE del token y no un rol (`Scope`).
  */
-export type Role = PractitionerRole | 'paciente';
+export type PractitionerRole = 'doctor';
+
+/**
+ * El `rol` que viaja al cliente: `doctor` o `patient`, y nada más. `duena` no es un valor:
+ * la dueña es el `doctor` cuya cuenta está en `practice.owner_account_id`, que es una fila
+ * y no una cadena.
+ */
+export type Role = PractitionerRole | 'patient';
 
 /** `sesion.md` · «La forma del token». `suplantacion` queda fuera del tramo. */
-export type Scope = 'contrasena_temporal' | 'recuperacion' | 'segundo_factor' | 'completo';
+export type Scope =
+  | 'contrasena_temporal'
+  | 'recuperacion'
+  | 'segundo_factor'
+  /**
+   * EL ASISTENTE VIRTUAL · la IA que ayuda al doctor DENTRO de su propia app.
+   *
+   * Es un alcance y no un rol, y esa es la decisión: el `rol` enciende pantallas en la app,
+   * así que un valor nuevo ahí obligaría a cambiarla. Un alcance no: la app sigue recibiendo
+   * `rol: "doctor"` y no se entera. Lo que cambia es qué puertas abre ese token, y eso lo
+   * decide el guardia por lista blanca de rutas, que es la capa fuerte.
+   *
+   * No tiene cuenta, ni credencial, ni fila: vive dentro de la sesión del doctor, con el
+   * mismo `sub`, el mismo `sid` y la misma consulta. Firmar la nota clínica NO está en su
+   * lista: el historial lo crea el doctor, y `session_note.signed_by_practitioner_id` tiene
+   * que seguir siendo verdad.
+   */
+  | 'virtual_assistant'
+  | 'completo';
 
 /** `acceso.md` · «`siguiente_paso`, la lista completa». El servidor manda el paso. */
 export type NextStep =

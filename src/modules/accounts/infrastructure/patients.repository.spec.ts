@@ -68,8 +68,8 @@ const app = new Pool({ connectionString: appUrl, max: 2 });
 const DOCTORA: Caller = {
   accountId: DOCTORA_CUENTA,
   sessionId: SESION,
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: CONSULTA,
@@ -185,7 +185,7 @@ async function sembrarConsulta(
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', $3, 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', $3, 'Paz')`,
     [account, email, nombre],
   );
   await owner.query(
@@ -195,7 +195,7 @@ async function sembrarConsulta(
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, $3, 'Paz', 'doctora')`,
+     values ($1, $2, $3, 'Paz', 'doctor')`,
     [practice, account, `Dra. ${nombre}`],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [
@@ -211,7 +211,7 @@ beforeAll(async () => {
   // Una cuenta que YA EXISTE en la región, de otra consulta: es el caso `ya_tiene_cuenta`.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Rocio', 'Vargas')`,
+     values ($1, $2, 'patient', 'latam', 'Rocio', 'Vargas')`,
     [YA_TIENE_CUENTA, CORREO_YA_TIENE],
   );
   await owner.query(
@@ -339,15 +339,15 @@ describe('el alta escribe las tres filas de la consulta, y nada más', () => {
     expect(rows[0]).toMatchObject({
       has_allergies: true,
       allergies: ['lidocaína'],
-      allergies_source: 'doctora',
+      allergies_source: 'doctor',
       // `false` es «se le preguntó y no toma»: ES una respuesta, así que lleva autor.
       takes_medication: false,
       medication: [],
-      medication_source: 'doctora',
+      medication_source: 'doctor',
       phototype: 3,
-      phototype_source: 'doctora',
+      phototype_source: 'doctor',
       notes: 'Pide empezar por la zona periocular.',
-      notes_source: 'doctora',
+      notes_source: 'doctor',
       // Lo que nadie contestó: nulo y SIN autor, que es «nadie preguntó todavía» y no «no
       // tiene». Es lo que deja a la paciente escribirlo desde su app sin pisar nada.
       pregnancy_or_lactation: null,
@@ -507,7 +507,7 @@ describe('lo que la base decide, y el otra consulta', () => {
         where a.email = $1::citext`,
       [CORREO_DOCTORA],
     );
-    expect(rows[0]).toMatchObject({ role: 'practitioner', hash: HASH });
+    expect(rows[0]).toMatchObject({ role: 'doctor', hash: HASH });
   });
 
   it('una referida de OTRA consulta no existe para esta, y el 404 es el mismo que el de una inventada', async () => {

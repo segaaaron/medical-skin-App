@@ -40,8 +40,8 @@ const ROTADO: RotatedRefresh = {
   accountId: CUENTA,
   practiceId: CONSULTA,
   scope: 'completo',
-  accountRole: 'practitioner',
-  practitionerRole: 'doctora',
+  accountRole: 'doctor',
+  practitionerRole: 'doctor',
   permissions: null,
   accountStatus: 'activa',
   passwordIsTemporary: false,
@@ -54,7 +54,7 @@ const ROTADO: RotatedRefresh = {
 const PACIENTE: RotatedRefresh = {
   ...ROTADO,
   practiceId: null,
-  accountRole: 'paciente',
+  accountRole: 'patient',
   practitionerRole: null,
   licenseStatus: null,
   refreshExpiresAt: TREINTA_DIAS,
@@ -203,19 +203,22 @@ describe('POST /v1/session/refresh · el 200', () => {
     expect(visto.firmas[0]).toEqual({
       sub: CUENTA,
       sid: SESION,
-      rol: 'doctora',
+      rol: 'doctor',
       alcance: 'completo',
       region: 'latam',
       practice: CONSULTA,
-      permisos: PERMISSIONS_BY_ROLE.doctora,
+      permisos: PERMISSIONS_BY_ROLE.doctor,
     });
-    // `practitioner` es valor de base y no sale nunca al cliente.
-    expect(visto.firmas[0]?.rol).not.toBe('practitioner');
+    // El `rol` del token sale de `practitioner.role` y no de `account.role`. Desde el 30 de
+    // octubre los dos valen `doctor`, así que la prueba que decía «`practitioner` no sale
+    // nunca al cliente» dejó de significar nada: el valor de base y el del cliente son el
+    // mismo, que era justo el objetivo del renombrado.
+    expect(visto.firmas[0]?.rol).toBe('doctor');
   });
 
   it('la lista explícita de permisos manda sobre la del rol', async () => {
     const { caso, visto } = armar({
-      verdict: { ...ROTADO, practitionerRole: 'recepcion', permissions: ['agenda:leer'] },
+      verdict: { ...ROTADO, practitionerRole: 'doctor', permissions: ['agenda:leer'] },
     });
 
     await caso.run({ refresco: 'rfr_viejo' });

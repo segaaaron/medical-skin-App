@@ -64,7 +64,7 @@ function contextFor(owner: {
   if (owner.accountRole === null) {
     return { role: 'app_account', accountId: owner.accountId };
   }
-  if (owner.accountRole === 'paciente') {
+  if (owner.accountRole === 'patient') {
     return { role: 'app_patient', accountId: owner.accountId };
   }
   return {
@@ -121,7 +121,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
   }
 
   async readMine(accountId: string, practiceId: string | null): Promise<AccessCredential | null> {
-    const accountRole: AccountRole = practiceId === null ? 'paciente' : 'practitioner';
+    const accountRole: AccountRole = practiceId === null ? 'patient' : 'doctor';
     const ctx = contextFor({ accountId, practiceId, accountRole });
     return withTenantContext(this.pool, ctx, async (c) => {
       const { rows } = await c.query<{
@@ -356,7 +356,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
       practitionerRole: null,
       permissions: null,
     };
-    if (accountRole === 'paciente') return sinConsulta;
+    if (accountRole === 'patient') return sinConsulta;
 
     // Las tres filas son de la consulta del contexto y las políticas las acotan a él: por
     // eso no hay `where practice_id = …` escrito a mano con un valor del cliente. La de

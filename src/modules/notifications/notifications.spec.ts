@@ -61,8 +61,8 @@ let session = '';
 const ana: Caller = {
   accountId: N.account,
   sessionId: '55555555-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -86,7 +86,7 @@ beforeAll(async () => {
   ] as const) {
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Dra', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Dra', 'Paz')`,
       [account, email],
     );
     await owner.query(
@@ -97,14 +97,14 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into practitioner (practice_id, account_id, role, status, first_name, last_name)
-       values ($1, $2, 'doctora', 'activa', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'activa', 'Andrea', 'Paz')`,
       [practice, account],
     );
   }
 
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@avisos.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@avisos.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [N.account],
   );
   await owner.query(

@@ -31,15 +31,15 @@ const CUENTA_PACIENTE = '99999999-9999-4999-8999-999999999999';
 const DOCTORA: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'doctora',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   scope: 'completo',
   region: 'latam',
   practiceId: '22222222-2222-4222-8222-222222222222',
   permissions: [PERMISSION],
 };
 
-const RECEPCION: Caller = { ...DOCTORA, role: 'recepcion', permissions: ['pacientes:leer'] };
+const RECEPCION: Caller = { ...DOCTORA, role: 'doctor', permissions: ['pacientes:leer'] };
 
 // Con un envío anterior que SÍ ocurrió: es el caso que hace falso poner nulo al compensar.
 const DIA_1 = new Date('2026-08-03T22:24:00.000Z');

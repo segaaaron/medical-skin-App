@@ -195,13 +195,13 @@ export function depositFor(
  * las encontró prometiendo dos cosas distintas, y esto es lo que las une.
  */
 export function depositOnCancel(p: {
-  by: 'paciente' | 'consulta' | 'sistema';
+  by: 'patient' | 'practice' | 'system';
   startsAt: Date;
   now: Date;
   attended: boolean | null;
 }): { status: 'devuelta' | 'credito'; how: 'entera' | 'credito_90_dias'; why: string } {
   // La consulta cancela: entera, siempre, y sin importar cuándo. No es culpa de la paciente.
-  if (p.by !== 'paciente') {
+  if (p.by !== 'patient') {
     return {
       status: 'devuelta',
       how: 'entera',

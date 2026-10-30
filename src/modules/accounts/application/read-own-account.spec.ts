@@ -21,8 +21,8 @@ import { ReadOwnAccount, type PractitionerFactsPort } from './read-own-account';
 const PACIENTE: Caller = {
   accountId: '11111111-1111-4111-8111-111111111111',
   sessionId: '33333333-3333-4333-8333-333333333333',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -31,8 +31,8 @@ const PACIENTE: Caller = {
 
 const EQUIPO: Caller = {
   ...PACIENTE,
-  role: 'recepcion',
-  accountRole: 'practitioner',
+  role: 'doctor',
+  accountRole: 'doctor',
   practiceId: '22222222-2222-4222-8222-222222222222',
 };
 
@@ -82,7 +82,7 @@ function armar(opciones: Opciones = {}) {
       return Promise.resolve({
         licenseStatus: 'verificada',
         firstDayDone: true,
-        practitionerRole: 'recepcion',
+        practitionerRole: 'doctor',
         permissions: null,
         ...opciones.hechos,
       });
@@ -109,7 +109,7 @@ describe('GET /v1/accounts/mine', () => {
 
     expect(respuesta).toEqual({
       cuenta_id: PACIENTE.accountId,
-      rol: 'paciente',
+      rol: 'patient',
       nombre: 'Carla',
       apellido: 'Rojas',
       correo: 'carla.rojas@gmail.com',
@@ -135,12 +135,12 @@ describe('GET /v1/accounts/mine', () => {
   });
 
   it('a una cuenta de equipo le devuelve el rol de ESTA consulta y doctoras vacío', async () => {
-    const { caso, pedido } = armar({ hechos: { practitionerRole: 'asistente_clinico' } });
+    const { caso, pedido } = armar({ hechos: { practitionerRole: 'doctor' } });
     const respuesta = await caso.run(EQUIPO);
 
     // `account.role` es `practitioner` y no viaja nunca; el rol que la app lee es el de la
     // fila de `practitioner`, que aquí dice otra cosa que la reclamación del token.
-    expect(respuesta.rol).toBe('asistente_clinico');
+    expect(respuesta.rol).toBe('doctor');
     expect(respuesta.doctoras).toEqual([]);
     // Y no se le PREGUNTA por sus vínculos: con `app_practitioner` esa lectura devolvería
     // las fichas de la consulta, que no son suyas.
@@ -149,9 +149,9 @@ describe('GET /v1/accounts/mine', () => {
 
   it('la licencia sin enviar manda a la doctora a su licencia', async () => {
     const { caso } = armar({
-      hechos: { practitionerRole: 'doctora', licenseStatus: 'sin_enviar' },
+      hechos: { practitionerRole: 'doctor', licenseStatus: 'sin_enviar' },
     });
-    expect((await caso.run({ ...EQUIPO, role: 'doctora' })).siguiente_paso).toBe('licencia');
+    expect((await caso.run({ ...EQUIPO, role: 'doctor' })).siguiente_paso).toBe('licencia');
   });
 
   it('una sesión restringida se sirve con el rol de base restringido y va a su contraseña', async () => {
@@ -173,7 +173,7 @@ describe('GET /v1/accounts/mine', () => {
     const respuesta = await caso.run({ ...EQUIPO, scope: 'contrasena_temporal' });
 
     expect({ rol: respuesta.rol, paso: respuesta.siguiente_paso }).toEqual({
-      rol: 'recepcion',
+      rol: 'doctor',
       paso: 'contrasena_nueva',
     });
     expect(pasos).toEqual(['perfil']);

@@ -125,7 +125,7 @@ beforeAll(async () => {
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name, failed_attempts,
                           locked_until)
-     values ($1, $2, 'paciente', 'latam', 'Rocio', 'Vargas', 5, now() + interval '15 minutes')`,
+     values ($1, $2, 'patient', 'latam', 'Rocio', 'Vargas', 5, now() + interval '15 minutes')`,
     [PAUSADA, CORREO_PAUSADA],
   );
   await owner.query(
@@ -136,7 +136,7 @@ beforeAll(async () => {
   // La que ya eligió su contraseña: el `409` del reenvío.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Ana', 'Mendez')`,
+     values ($1, $2, 'patient', 'latam', 'Ana', 'Mendez')`,
     [YA_ELIGIO, CORREO_YA_ELIGIO],
   );
   await owner.query(
@@ -147,7 +147,7 @@ beforeAll(async () => {
   // Una cuenta borrada: el mismo 404 que una inventada, en las dos rutas.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name, status, deleted_at)
-     values ($1, $2, 'paciente', 'latam', 'Borrada', 'Borrada', 'borrada', now())`,
+     values ($1, $2, 'patient', 'latam', 'Borrada', 'Borrada', 'borrada', now())`,
     [BORRADA, CORREO_BORRADA],
   );
 });

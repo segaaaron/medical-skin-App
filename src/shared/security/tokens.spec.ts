@@ -30,7 +30,7 @@ const cfg: Config = loadConfig({
 const DOCTORA: Claims = {
   sub: '11111111-1111-4111-8111-111111111111',
   sid: '33333333-3333-4333-8333-333333333333',
-  rol: 'doctora',
+  rol: 'doctor',
   alcance: 'completo',
   region: 'latam',
   practice: '22222222-2222-4222-8222-222222222222',
@@ -65,7 +65,7 @@ describe('Tokens · firmar y verificar', () => {
 
     expect(leido.sub).toBe(DOCTORA.sub);
     expect(leido.sid).toBe(DOCTORA.sid);
-    expect(leido.rol).toBe('doctora');
+    expect(leido.rol).toBe('doctor');
     expect(leido.alcance).toBe('completo');
     expect(leido.region).toBe('latam');
     expect(leido.practice).toBe(DOCTORA.practice);
@@ -78,7 +78,7 @@ describe('Tokens · firmar y verificar', () => {
   it('una paciente viaja SIN `practice`: no es de ninguna consulta', async () => {
     const { token } = await tokens.sign({
       ...DOCTORA,
-      rol: 'paciente',
+      rol: 'patient',
       practice: undefined,
       permisos: [],
     });
@@ -134,7 +134,7 @@ describe('Tokens · firmar y verificar', () => {
   it('un token sin `permisos` no se acepta: la forma es contrato', async () => {
     const sinPermisos = await new SignJWT({
       sid: DOCTORA.sid,
-      rol: 'doctora',
+      rol: 'doctor',
       alcance: 'completo',
       region: 'latam',
     })
@@ -181,7 +181,7 @@ async function caducado(alcance: string): Promise<string> {
   const hace = Math.floor(Date.now() / 1000) - 3600;
   return new SignJWT({
     sid: DOCTORA.sid,
-    rol: 'paciente',
+    rol: 'patient',
     alcance,
     region: 'latam',
     permisos: [],

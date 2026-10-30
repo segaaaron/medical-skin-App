@@ -47,7 +47,7 @@ const SENUELO: AccessCredential = {
 
 const PACIENTE: AccessCredential = {
   accountId: CUENTA,
-  accountRole: 'paciente',
+  accountRole: 'patient',
   accountStatus: 'activa',
   region: 'latam',
   hash: '$argon2id$real',
@@ -61,9 +61,9 @@ const PACIENTE: AccessCredential = {
 
 const DOCTORA: AccessCredential = {
   ...PACIENTE,
-  accountRole: 'practitioner',
+  accountRole: 'doctor',
   practiceId: CONSULTA,
-  practitionerRole: 'doctora',
+  practitionerRole: 'doctor',
   permissions: null,
 };
 
@@ -89,7 +89,7 @@ function armar(opciones: {
     saveFinalPassword: () =>
       Promise.resolve({
         verdict: 'saved' as const,
-        accountRole: 'paciente' as const,
+        accountRole: 'patient' as const,
         practiceId: null,
         permissions: null,
       }),
@@ -127,7 +127,7 @@ function armar(opciones: {
         sessionId: SESION,
         licenseStatus: 'aprobada',
         firstDayDone: true,
-        practitionerRole: 'doctora' as const,
+        practitionerRole: 'doctor' as const,
         permissions: null,
       });
     },
@@ -135,7 +135,7 @@ function armar(opciones: {
       Promise.resolve({
         licenseStatus: 'aprobada',
         firstDayDone: true,
-        practitionerRole: 'doctora' as const,
+        practitionerRole: 'doctor' as const,
         permissions: null,
       }),
     list: () => Promise.resolve([]),
@@ -406,7 +406,7 @@ describe('POST /v1/access · la respuesta', () => {
     const { caso } = armar({ credencial: PACIENTE, coincide: true });
     const respuesta = await caso.run(PETICION);
 
-    expect(respuesta.rol).toBe('paciente');
+    expect(respuesta.rol).toBe('patient');
     expect(respuesta.region).toBe('latam');
     expect(respuesta.siguiente_paso).toBe('inicio');
     expect(respuesta.refresco).toBe('rfr_x');
@@ -420,7 +420,7 @@ describe('POST /v1/access · la respuesta', () => {
     const { caso } = armar({ credencial: DOCTORA, coincide: true });
     const respuesta = await caso.run(PETICION);
 
-    expect(respuesta.rol).toBe('doctora');
+    expect(respuesta.rol).toBe('doctor');
     expect(respuesta.refresco_caduca_en).toBe(
       new Date(AHORA.getTime() + 12 * 60 * 60 * 1000).toISOString(),
     );
@@ -481,10 +481,10 @@ describe('POST /v1/access · la forma del cuerpo', () => {
     const { caso } = armar({ credencial: PACIENTE, coincide: true });
     const respuesta = await caso.run({
       ...PETICION,
-      body: { ...PETICION.body, rol: 'doctora' },
+      body: { ...PETICION.body, rol: 'doctor' },
     });
 
     // El rol lo resuelve el servidor: sigue siendo `paciente`.
-    expect(respuesta.rol).toBe('paciente');
+    expect(respuesta.rol).toBe('patient');
   });
 });

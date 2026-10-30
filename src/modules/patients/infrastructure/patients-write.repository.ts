@@ -69,7 +69,7 @@ export class PatientsWriteRepository implements PatientWritePort {
       await c.query(
         `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                    subject_id, data)
-         values (medskin_current_practice(), $1, 'paciente.ficha_editada', 'paciente', $2, $3)`,
+         values (medskin_current_practice(), $1, 'paciente.ficha_editada', 'patient', $2, $3)`,
         // Qué campos cambiaron, NUNCA sus valores: `access_audit` lo lee la consulta entera y
         // un correo o un celular ahí convertiría la bitácora en un padrón de contacto.
         [caller.accountId, patientId, JSON.stringify({ campos: fields })],
@@ -121,7 +121,7 @@ export class PatientsWriteRepository implements PatientWritePort {
       await c.query(
         `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                    subject_id, data)
-         values (medskin_current_practice(), $1, $2, 'paciente', $3, '{}')`,
+         values (medskin_current_practice(), $1, $2, 'patient', $3, '{}')`,
         [
           caller.accountId,
           archived ? 'paciente.archivada' : 'paciente.reactivada',

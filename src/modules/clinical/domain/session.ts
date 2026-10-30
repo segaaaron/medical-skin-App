@@ -293,7 +293,7 @@ export function readConsent(input: unknown): ConsentDraft {
     purpose,
     answers,
     readSeconds: integer(body.leido_en_segundos),
-    signedBy: body.firmado_por === 'tutor' ? 'tutor' : 'paciente',
+    signedBy: body.firmado_por === 'guardian' ? 'guardian' : 'patient',
   };
 }
 

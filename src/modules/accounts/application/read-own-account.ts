@@ -63,7 +63,7 @@ export class ReadOwnAccount {
     // cuenta, a su credencial y a sus vínculos, y a nada más. No se le dan los privilegios
     // de `app_practitioner` para servir una lectura (§5.6 del napkin).
     const restricted = caller.scope !== 'completo';
-    const isPatient = caller.role === 'paciente';
+    const isPatient = caller.role === 'patient';
 
     const profile = await this.accounts.readProfile({
       owner: ownerOf(caller),
@@ -116,7 +116,7 @@ export class ReadOwnAccount {
    */
   private roleOf(caller: Caller, facts: NextStepFacts | null): Role {
     if (facts === null) return caller.role;
-    const rol = resolveRole('practitioner', facts.practitionerRole);
+    const rol = resolveRole('doctor', facts.practitionerRole);
     if (rol === null) {
       throw new ServiceFailure(
         FAILURE_PHRASES.readOwnAccount,

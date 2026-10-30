@@ -1,7 +1,7 @@
 // La escritura de la ficha médica por la paciente, con `app_patient`.
 //
 // CAMPO POR CAMPO, Y EL ÁRBITRO ES LA FUENTE: se escribe si está vacío (`fuente` nula) o si lo
-// escribió ella (`fuente = 'paciente'`). Lo que escribió la doctora se devuelve en
+// escribió ella (`fuente = 'patient'`). Lo que escribió la doctora se devuelve en
 // `no_guardado`, no se pisa.
 //
 // NADA SE BORRA: cada campo que cambia deja su valor anterior en `medical_history_audit`, con
@@ -106,7 +106,7 @@ export class PatientHistoryRepository implements PatientHistoryWritePort {
         }
 
         const source = row[field.source] as string | null;
-        if (source === 'doctora') {
+        if (source === 'doctor') {
           skipped.push(field.api);
           continue;
         }
@@ -122,7 +122,7 @@ export class PatientHistoryRepository implements PatientHistoryWritePort {
 
         const sets = [
           `${field.value} = $2`,
-          `${field.source} = 'paciente'`,
+          `${field.source} = 'patient'`,
           `${field.at} = now()`,
           'updated_at = now()',
         ];
@@ -159,7 +159,7 @@ export class PatientHistoryRepository implements PatientHistoryWritePort {
       `insert into medical_history_audit (practice_id, patient_id, field, previous_value,
                                           previous_source, previous_source_at,
                                           actor_account_id, actor_source)
-       select h.practice_id, $1, $2, $3::jsonb, $4::medskin_history_source, $5, $6, 'paciente'
+       select h.practice_id, $1, $2, $3::jsonb, $4::medskin_history_source, $5, $6, 'patient'
          from medical_history h where h.patient_id = $1`,
       [
         p.patientId,

@@ -71,7 +71,7 @@ function roleOf(where: FailureContext): TenantContext {
     // petición de soporte, no de la consulta sobre la que miraba.
     return { role: 'app_platform', accountId: where.accountId };
   }
-  if (where.accountRole === 'paciente') {
+  if (where.accountRole === 'patient') {
     return { role: 'app_patient', accountId: where.accountId };
   }
   return { role: 'app_practitioner', accountId: where.accountId, practiceId: where.practiceId };

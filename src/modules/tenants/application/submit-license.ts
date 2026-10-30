@@ -51,7 +51,7 @@ export class SubmitLicense {
     // Una paciente no tiene consulta que enviar. El `codigo` es el del contrato de ESTE
     // endpoint —no tiene `rol_no_corresponde`— con su frase: «Solo la dueña de la consulta
     // puede enviar la licencia».
-    if (caller.accountRole === 'paciente' || caller.practiceId === null) throw notOwner();
+    if (caller.accountRole === 'patient' || caller.practiceId === null) throw notOwner();
 
     const form = readLicenseForm(input, caller.practiceId);
     // La respuesta se construye DENTRO de la transacción para que se guarde con ella: aquí

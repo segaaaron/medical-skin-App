@@ -82,12 +82,12 @@ async function seed() {
     ]);
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [t.account, email],
     );
     await owner.query(
       `insert into practitioner (id, practice_id, account_id, first_name, last_name, role)
-       values ($1, $2, $3, 'Andrea', 'Paz', 'doctora')`,
+       values ($1, $2, $3, 'Andrea', 'Paz', 'doctor')`,
       [t.practitioner, t.practice, t.account],
     );
     // La dueña de la consulta es una columna de `practice` desde la 0002, no un `role` de
@@ -130,8 +130,8 @@ async function seed() {
                                     allergies_source, allergies_source_at, phototype,
                                     phototype_source, phototype_source_at, notes, notes_source,
                                     notes_source_at)
-       values ($1, $2, $3, true, array['lidocaína'], 'doctora', now(), 3, 'doctora', now(),
-               'Pide empezar por la zona periocular.', 'doctora', now())`,
+       values ($1, $2, $3, true, array['lidocaína'], 'doctor', now(), 3, 'doctor', now(),
+               'Pide empezar por la zona periocular.', 'doctor', now())`,
       [t.history, t.practice, t.patient],
     );
   };
@@ -141,7 +141,7 @@ async function seed() {
 
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'paciente@prueba.local', 'paciente', 'latam', 'Valeria', 'Antelo')`,
+     values ($1, 'paciente@prueba.local', 'patient', 'latam', 'Valeria', 'Antelo')`,
     [PATIENT.account],
   );
   await owner.query(
@@ -498,15 +498,15 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
 
   it('«la doctora gana» es un predicado por columna, y la base lo sostiene', async () => {
     // Lo que escribe el endpoint de la paciente: solo si el campo está vacío o lo escribió
-    // ella. `allergies_source` es 'doctora', así que no toca ninguna fila y el endpoint
+    // ella. `allergies_source` es 'doctor', así que no toca ninguna fila y el endpoint
     // tiene con qué contestar `no_guardado: [{campo, por_que}]`.
     const blocked = await withTenantContext(app, ctxPatient, async (client) =>
       client.query(
         `update medical_history
             set has_allergies = false, allergies = '{}'::text[],
-                allergies_source = 'paciente', allergies_source_at = now()
+                allergies_source = 'patient', allergies_source_at = now()
           where patient_id = $1
-            and (allergies_source is null or allergies_source = 'paciente')`,
+            and (allergies_source is null or allergies_source = 'patient')`,
         [A.patient],
       ),
     );
@@ -516,9 +516,9 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     const written = await withTenantContext(app, ctxPatient, async (client) =>
       client.query(
         `update medical_history
-            set takes_medication = false, medication_source = 'paciente', medication_source_at = now()
+            set takes_medication = false, medication_source = 'patient', medication_source_at = now()
           where patient_id = $1
-            and (medication_source is null or medication_source = 'paciente')`,
+            and (medication_source is null or medication_source = 'patient')`,
         [A.patient],
       ),
     );
@@ -531,14 +531,14 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
         app,
         ctxPatient,
         `insert into medical_history_audit (practice_id, patient_id, field, previous_value, actor_source)
-         values ($1, $2, 'medicacion', 'null'::jsonb, 'paciente')`,
+         values ($1, $2, 'medicacion', 'null'::jsonb, 'patient')`,
         [A.practice, A.patient],
       ),
       other_tenant: await whatItSees(
         app,
         ctxPatient,
         `insert into medical_history_audit (practice_id, patient_id, field, previous_value, actor_source)
-         values ($1, $2, 'medicacion', 'null'::jsonb, 'paciente')`,
+         values ($1, $2, 'medicacion', 'null'::jsonb, 'patient')`,
         [B.practice, B.patient],
       ),
       // Y no la lee: la bitácora de la ficha es de la consulta.
@@ -688,7 +688,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
   beforeAll(async () => {
     await owner.query(
       `insert into account (email, role, region, first_name, last_name)
-       select 'bulk-' || g || '@prueba.local', 'paciente', 'latam', 'Bulk', 'Paciente'
+       select 'bulk-' || g || '@prueba.local', 'patient', 'latam', 'Bulk', 'Paciente'
          from generate_series(1, 1600) g`,
     );
     const bulkPatients = async (t: typeof A, howMany: number) =>
@@ -728,7 +728,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     await owner.query(
       `insert into medical_history (practice_id, patient_id, has_allergies, phototype, phototype_source,
                                     phototype_source_at)
-       select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctora', now()
+       select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctor', now()
          from patient p where p.email like 'ficha-%@prueba.local'`,
     );
     // Las dos bitácoras, para medir los índices de «lo último primero» del tramo 1 sobre

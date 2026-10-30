@@ -219,7 +219,7 @@ export class Business {
   /** Quien escribe o mira dinero: siempre la consulta, nunca la paciente. */
   private who(caller: Caller, permission: string, message: string): BusinessCaller {
     if (
-      caller.accountRole === 'paciente' ||
+      caller.accountRole === 'patient' ||
       caller.practiceId === null ||
       !caller.permissions.includes(permission)
     ) {
@@ -230,13 +230,13 @@ export class Business {
       practiceId: caller.practiceId,
       permissions: caller.permissions,
       isPatient: false,
-      isDoctor: caller.role === 'doctora',
+      isDoctor: caller.role === 'doctor',
     };
   }
 
   /** Lecturas que la paciente SÍ hace: sus cobros y su exportación. */
   private reader(caller: Caller, permission: string): BusinessCaller {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       return {
         accountId: caller.accountId,
         practiceId: null,

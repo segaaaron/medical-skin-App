@@ -25,7 +25,7 @@
 //    regla «la doctora gana» se queda sin suelo. Con columnas, el dominio
 //    `medskin_history_source` las valida todas de una vez, y la regla del `PUT` de la
 //    paciente —«solo si está vacío o lo escribió ella»— se escribe como lo que es: un
-//    predicado por columna (`… is null or … = 'paciente'`), parametrizado, sin capa mágica.
+//    predicado por columna (`… is null or … = 'patient'`), parametrizado, sin capa mágica.
 // 3. `null` y `false` NO son lo mismo, y por eso los dos booleanos clínicos admiten nulo:
 //    `false` es «se le preguntó y no tiene», `null` es «nadie preguntó». Una ficha que los
 //    confunde guarda un dato falso (pacientes.md · la decisión más importante de la forma).
@@ -55,7 +55,7 @@ const citext = customType<{ data: string }>({ dataType: () => 'citext' });
 // El dominio de la migración: `doctora` | `paciente`, y nada más. Un dominio y no siete
 // `CHECK` idénticos porque es el mismo tipo repetido catorce veces entre esta tabla y su
 // auditoría, y porque el día que una tercera tabla lo necesite ya está definido.
-const historySource = customType<{ data: 'doctora' | 'paciente' }>({
+const historySource = customType<{ data: 'doctor' | 'patient' }>({
   dataType: () => 'medskin_history_source',
 });
 

@@ -50,12 +50,13 @@ const P = {
 };
 let treatment = '';
 
-function staff(account: string, role: 'doctora' | 'asistente_clinico'): Caller {
+/** `P.assistant` es la segunda persona de la consulta, no un rol distinto: ya no los hay. */
+function staff(account: string): Caller {
   return {
     accountId: account,
     sessionId: '22222222-0000-4000-8000-0000000000ff',
-    role,
-    accountRole: 'practitioner',
+    role: 'doctor',
+    accountRole: 'doctor',
     scope: 'completo',
     region: 'latam',
     practiceId: P.practice,
@@ -66,8 +67,8 @@ function staff(account: string, role: 'doctora' | 'asistente_clinico'): Caller {
 const ana: Caller = {
   accountId: P.account,
   sessionId: '22222222-0000-4000-8000-0000000000fe',
-  role: 'paciente',
-  accountRole: 'paciente',
+  role: 'patient',
+  accountRole: 'patient',
   scope: 'completo',
   region: 'latam',
   practiceId: null,
@@ -119,12 +120,12 @@ beforeAll(async () => {
     [P.practice],
   );
   for (const [account, role] of [
-    [P.doctor, 'doctora'],
-    [P.assistant, 'asistente_clinico'],
+    [P.doctor, 'doctor'],
+    [P.assistant, 'doctor'],
   ] as const) {
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [account, `${account.slice(-3)}@tramo6.local`],
     );
     await owner.query(
@@ -135,7 +136,7 @@ beforeAll(async () => {
   }
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'ana@tramo6.local', 'paciente', 'latam', 'Ana', 'Antelo')`,
+     values ($1, 'ana@tramo6.local', 'patient', 'latam', 'Ana', 'Antelo')`,
     [P.account],
   );
   await owner.query(
@@ -180,7 +181,7 @@ describe('el consentimiento de imágenes es la puerta', () => {
           tipo_declarado: 'image/jpeg',
           bytes_declarados: 120_000,
         },
-        staff(P.doctor, 'doctora'),
+        staff(P.doctor),
       ),
     ).rejects.toMatchObject({ code: 'sin_consentimiento_de_imagenes' });
   });
@@ -200,7 +201,7 @@ describe('el consentimiento de imágenes es la puerta', () => {
         bytes_declarados: 120_000,
         tomada_en: '2026-08-03T15:40:00Z',
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string; subida: { url: string; metodo: string; bytes_maximos: number } };
 
     expect(signed.subida.metodo).toBe('PUT');
@@ -215,14 +216,14 @@ describe('el consentimiento de imágenes es la puerta', () => {
     await expect(
       photos.uploadUrl(
         { patient_id: P.patient, vista: 'frente', tipo_declarado: 'application/pdf', bytes_declarados: 10 },
-        staff(P.doctor, 'doctora'),
+        staff(P.doctor),
       ),
     ).rejects.toMatchObject({ code: 'tipo_no_admitido' });
 
     await expect(
       photos.uploadUrl(
         { patient_id: P.patient, vista: 'nuca', tipo_declarado: 'image/jpeg', bytes_declarados: 10 },
-        staff(P.doctor, 'doctora'),
+        staff(P.doctor),
       ),
     ).rejects.toMatchObject({ code: 'vista_desconocida' });
   });
@@ -238,13 +239,13 @@ describe('subir, confirmar y procesar', () => {
         bytes_declarados: 200_000,
         tomada_en: '2026-08-03T15:40:00Z',
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
 
     // Sube DIRECTO al almacenamiento: ni un byte pasa por la API.
     expect(await uploadTo(signed.photo_id, await aPhoto())).toBe(200);
 
-    const confirmed = (await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'))) as {
+    const confirmed = (await photos.confirm(signed.photo_id, staff(P.doctor))) as {
       estado: string;
     };
     expect(confirmed.estado).toBe('procesando');
@@ -287,12 +288,12 @@ describe('subir, confirmar y procesar', () => {
         tipo_declarado: 'image/jpeg',
         bytes_declarados: 100,
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
 
     // Declara JPEG y sube texto: lo que manda son los BYTES.
     await uploadTo(signed.photo_id, Buffer.from('esto no es una foto, es texto plano'));
-    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await photos.confirm(signed.photo_id, staff(P.doctor));
     await worker.run();
 
     const { rows } = await owner.query<{ status: string; failed_reason: string; attempts: number }>(
@@ -308,10 +309,10 @@ describe('subir, confirmar y procesar', () => {
   it('confirmar sin haber subido nada es un 409', async () => {
     const signed = (await photos.uploadUrl(
       { patient_id: P.patient, vista: 'perfil_izq', tipo_declarado: 'image/jpeg', bytes_declarados: 100 },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
 
-    await expect(photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'))).rejects.toMatchObject({
+    await expect(photos.confirm(signed.photo_id, staff(P.doctor))).rejects.toMatchObject({
       code: 'no_se_subio',
     });
   });
@@ -321,7 +322,7 @@ describe('quién ve qué', () => {
   it('la lista trae thumb y view, nunca full, y deja su línea en la auditoría', async () => {
     const seen = (await photos.list(
       { patient_id: P.patient },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { fotos: { id: string; estado: string; enlaces: Record<string, unknown> }[] };
 
     const ready = seen.fotos.find((photo) => photo.estado === 'lista')!;
@@ -342,12 +343,15 @@ describe('quién ve qué', () => {
     );
     const photoId = rows[0]!.id;
 
-    const opened = (await photos.master(photoId, staff(P.doctor, 'doctora'))) as { url: string };
+    const opened = (await photos.master(photoId, staff(P.doctor))) as { url: string };
     expect(opened.url).toContain(`${photoId}/master`);
 
-    await expect(photos.master(photoId, staff(P.assistant, 'asistente_clinico'))).rejects.toMatchObject(
-      { code: 'sin_permiso' },
-    );
+    // Antes esta línea pasaba un `asistente_clinico`, al que el ROL le negaba la maestra.
+    // Ese rol ya no existe, así que lo que la niega es la lista explícita de permisos: una
+    // segunda persona de la consulta sin `historia:leer` no abre la maestra de nadie.
+    await expect(
+      photos.master(photoId, { ...staff(P.assistant), permissions: ['sesiones:registrar'] }),
+    ).rejects.toMatchObject({ code: 'sin_permiso' });
     await expect(photos.master(photoId, ana)).rejects.toMatchObject({ code: 'sin_permiso' });
 
     // Y queda quién la abrió: es el objeto más sensible del sistema.
@@ -369,10 +373,10 @@ describe('quién ve qué', () => {
         bytes_declarados: 200_000,
         tomada_en: '2026-11-03T15:40:00Z',
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
     await uploadTo(signed.photo_id, await aPhoto());
-    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await photos.confirm(signed.photo_id, staff(P.doctor));
     await worker.run();
 
     const compared = (await photos.compare(signed.photo_id, {}, ana)) as {
@@ -390,10 +394,10 @@ describe('quién ve qué', () => {
     // Dos vistas distintas no se comparan.
     const other = (await photos.uploadUrl(
       { patient_id: P.patient, vista: 'perfil_der', tipo_declarado: 'image/jpeg', bytes_declarados: 100 },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
     await expect(
-      photos.compare(signed.photo_id, { con: other.photo_id }, staff(P.doctor, 'doctora')),
+      photos.compare(signed.photo_id, { con: other.photo_id }, staff(P.doctor)),
     ).rejects.toMatchObject({ code: 'vistas_distintas' });
   });
 });
@@ -401,7 +405,7 @@ describe('quién ve qué', () => {
 describe('borrar', () => {
   it('la paciente borra las suyas y ninguna del expediente', async () => {
     const { rows } = await owner.query<{ id: string }>(
-      `select id from photo where practice_id = $1 and uploaded_by = 'doctora' limit 1`,
+      `select id from photo where practice_id = $1 and uploaded_by = 'doctor' limit 1`,
       [P.practice],
     );
     await expect(photos.remove(rows[0]!.id, {}, ana)).rejects.toMatchObject({
@@ -412,7 +416,7 @@ describe('borrar', () => {
     const { rows: hers } = await owner.query<{ id: string }>(
       `insert into photo (practice_id, patient_id, view, uploaded_by, declared_type,
                           declared_bytes, status)
-       values ($1, $2, 'libre', 'paciente', 'image/jpeg', 1000, 'lista') returning id`,
+       values ($1, $2, 'libre', 'patient', 'image/jpeg', 1000, 'lista') returning id`,
       [P.practice, P.patient],
     );
     await expect(photos.remove(hers[0]!.id, { motivo: 'salí mal' }, ana)).resolves.toMatchObject({
@@ -438,10 +442,10 @@ describe('archivar la ficha borra las derivadas, y reactivarla las devuelve', ()
         tipo_declarado: 'image/jpeg',
         bytes_declarados: 200_000,
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
     expect(await uploadTo(signed.photo_id, await aPhoto())).toBe(200);
-    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await photos.confirm(signed.photo_id, staff(P.doctor));
     await worker.run();
     expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(true);
 
@@ -491,16 +495,16 @@ describe('borrar una foto se lleva los bytes, no solo la fila', () => {
         tipo_declarado: 'image/jpeg',
         bytes_declarados: 200_000,
       },
-      staff(P.doctor, 'doctora'),
+      staff(P.doctor),
     )) as { photo_id: string };
     expect(await uploadTo(signed.photo_id, await aPhoto())).toBe(200);
-    await photos.confirm(signed.photo_id, staff(P.doctor, 'doctora'));
+    await photos.confirm(signed.photo_id, staff(P.doctor));
     await worker.run();
 
     // La doctora la borra: hasta hoy eso marcaba la fila y dejaba los cuatro objetos en el
     // disco para siempre. Es disco que nadie contaba y es la cara de alguien que pidió que se
     // fuera.
-    await photos.remove(signed.photo_id, { motivo: 'salió movida' }, staff(P.doctor, 'doctora'));
+    await photos.remove(signed.photo_id, { motivo: 'salió movida' }, staff(P.doctor));
     expect(await worker.eraseDeleted()).toBeGreaterThan(0);
 
     expect(await objectExists(KEYS.thumb(signed.photo_id))).toBe(false);

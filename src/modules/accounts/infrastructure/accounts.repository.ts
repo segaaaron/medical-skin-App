@@ -29,7 +29,7 @@ import type {
 function contextFor(owner: AccountOwner): TenantContext {
   // `app_practitioner` exige consulta porque sus políticas se leen por consulta;
   // `app_patient` no lo fija nunca porque la paciente no pertenece a ninguno (§12.2.1).
-  if (owner.accountRole === 'paciente') {
+  if (owner.accountRole === 'patient') {
     return { role: 'app_patient', accountId: owner.accountId };
   }
   return { role: 'app_practitioner', accountId: owner.accountId, practiceId: owner.practiceId };

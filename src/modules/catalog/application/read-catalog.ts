@@ -20,7 +20,7 @@ export class ReadCatalog {
 
   async run(query: Record<string, unknown>, caller: Caller): Promise<unknown> {
     // Esta pantalla es de la paciente. Una doctora que llegue aquí recibe el 403 del contrato.
-    if (caller.accountRole !== 'paciente') throw new ContractError('rol_no_corresponde');
+    if (caller.accountRole !== 'patient') throw new ContractError('rol_no_corresponde');
 
     // «Obligatorio: una paciente puede tener N vínculos y el catálogo es de una consulta.» Se
     // comprueba contra SUS vínculos, y el parámetro solo elige cuál.

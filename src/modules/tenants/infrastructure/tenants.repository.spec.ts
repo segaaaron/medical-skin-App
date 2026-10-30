@@ -87,7 +87,7 @@ async function seedPractice(p: {
   );
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+     values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
     [p.account, `duena.${p.practice.slice(-1)}@tenants.local`],
   );
   await owner.query(
@@ -96,7 +96,7 @@ async function seedPractice(p: {
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Andrea', 'Paz', 'doctora')`,
+     values ($1, $2, 'Andrea', 'Paz', 'doctor')`,
     [p.practice, p.account],
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [
@@ -168,12 +168,12 @@ beforeAll(async () => {
 
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, 'recepcion@tenants.local', 'practitioner', 'latam', 'Lucía', 'Vargas')`,
+     values ($1, 'recepcion@tenants.local', 'doctor', 'latam', 'Lucía', 'Vargas')`,
     [D.reception],
   );
   await owner.query(
     `insert into practitioner (practice_id, account_id, first_name, last_name, role)
-     values ($1, $2, 'Lucía', 'Vargas', 'recepcion')`,
+     values ($1, $2, 'Lucía', 'Vargas', 'doctor')`,
     [D.practice, D.reception],
   );
 

@@ -96,7 +96,7 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into account (id, email, role, region, first_name, last_name)
-       values ($1, $2, 'practitioner', 'latam', 'Andrea', 'Paz')`,
+       values ($1, $2, 'doctor', 'latam', 'Andrea', 'Paz')`,
       [t.doctor, t.email],
     );
     await owner.query(
@@ -105,7 +105,7 @@ beforeAll(async () => {
     );
     await owner.query(
       `insert into practitioner (id, practice_id, account_id, first_name, last_name, role)
-       values ($1, $2, $3, 'Andrea', 'Paz', 'doctora')`,
+       values ($1, $2, $3, 'Andrea', 'Paz', 'doctor')`,
       [t.practitioner, t.practice, t.doctor],
     );
     await owner.query('update practice set owner_account_id = $1 where id = $2', [t.doctor, t.practice]);
@@ -116,7 +116,7 @@ beforeAll(async () => {
   // La paciente de B, con su cuenta y su credencial ya elegida.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
-     values ($1, $2, 'paciente', 'latam', 'Carla', 'Rojas')`,
+     values ($1, $2, 'patient', 'latam', 'Carla', 'Rojas')`,
     [B.patientAccount, B.patientEmail],
   );
   await owner.query(`insert into credential (account_id, hash, is_temporary, set_at) values ($1, $2, false, now())`, [
@@ -181,6 +181,6 @@ describe('el alta de pacientes · ninguna cuenta de practicante se convierte en 
         where a.email = $1::citext`,
       [NEW_EMAIL],
     );
-    expect(rows[0]).toEqual({ role: 'paciente', is_temporary: true });
+    expect(rows[0]).toEqual({ role: 'patient', is_temporary: true });
   });
 });

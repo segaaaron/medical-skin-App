@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { AccessModule } from './modules/access/access.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -18,6 +18,7 @@ import type { Config } from './shared/config/config';
 import { FailureLog } from './shared/failures/service-failure';
 import { ErrorFilter } from './shared/http/error.filter';
 import { ScopeGuard } from './shared/http/scope.guard';
+import { EnvelopeInterceptor } from './shared/http/envelope.interceptor';
 import { PlatformTokens } from './shared/platform/platform-token';
 import { Tokens } from './shared/security/tokens';
 import { CONFIG, SharedModule } from './shared/shared.module';
@@ -55,6 +56,13 @@ import { CONFIG, SharedModule } from './shared/shared.module';
       // serían dos lecturas de la misma llave con el riesgo de que no cuadraran.
       useFactory: (tokens: Tokens, platform: PlatformTokens) => new ScopeGuard(tokens, platform),
       inject: [Tokens, PlatformTokens],
+    },
+    {
+      // EL SOBRE, y va DESPUÉS del guardia a propósito: el `meta` lleva el `requestId` que
+      // el guardia cuelga de la petición, así que si se pusiera antes saldría vacío.
+      provide: APP_INTERCEPTOR,
+      useFactory: (cfg: Config) => new EnvelopeInterceptor(cfg.REGION),
+      inject: [CONFIG],
     },
     {
       provide: APP_FILTER,

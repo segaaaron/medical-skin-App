@@ -63,7 +63,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
     // `app_practitioner` exige consulta porque sus políticas se leen por consulta;
     // `app_patient` no lo fija nunca porque la paciente no pertenece a ninguno.
     const ctx: TenantContext =
-      owner.accountRole === 'paciente'
+      owner.accountRole === 'patient'
         ? { role: 'app_patient', accountId: owner.accountId }
         : {
             role: 'app_practitioner',
@@ -91,7 +91,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
       // `practitioner`, y un privilegio de columna se comprueba antes que cualquier
       // política, así que el `left join` que para una doctora da nulos para una paciente
       // da «permiso denegado». Dos caminos, una consulta cada uno.
-      const practice = owner.accountRole === 'paciente' ? null : await this.readPractice(c);
+      const practice = owner.accountRole === 'patient' ? null : await this.readPractice(c);
 
       return {
         accountStatus: row.account_status,

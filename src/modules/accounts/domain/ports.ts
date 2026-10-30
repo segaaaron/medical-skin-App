@@ -6,10 +6,8 @@ import type {
   DeliveryFacts,
   LinkNoticeFacts,
   PlatformDeliveryFacts,
-  TeamDeliveryFacts,
 } from './access-delivery';
 import type { HistoryDraft, HistoryField, PatientFicha } from './patient-registration';
-import type { AssignableTeamRole } from './team';
 
 /** Quién pregunta, siempre del token. Nunca un `cuenta_id` del cuerpo ni de la URL. */
 export type AccountOwner = {
@@ -215,110 +213,6 @@ export interface AccountDeletionPort {
     retentionUntil: string;
     reason: string | null;
   }): Promise<DeletionResult>;
-}
-
-// ---------------------------------------------------------------------------------------
-// POST /v1/team · `medskin_create_team_member()`.
-//
-// El `practice_id` sale del contexto y la autorización es SER LA DUEÑA, comprobada en la
-// función y no en el controlador. Un correo que ya tiene cuenta no se reusa, y el veredicto
-// es uno solo: dos serían el oráculo del padrón que §12.2.1 cierra.
-// ---------------------------------------------------------------------------------------
-
-export type TeamVerdict =
-  | 'created'
-  | 'role_not_assignable'
-  | 'not_owner'
-  | 'email_taken'
-  /** Esta misma petición ya se atendió: su respuesta se repite tal como se guardó. */
-  | 'replayed';
-
-export type TeamMemberCreation = {
-  verdict: TeamVerdict;
-  accountId: string | null;
-  practitionerId: string | null;
-  /** El nombre de la consulta del contexto, que es lo que el correo del acceso dice. */
-  practiceName: string | null;
-  /** Solo en `replayed`: la respuesta original, tal y como se guardó. */
-  replay: { status: number; response: unknown } | null;
-};
-
-export interface TeamPort {
-  create(p: {
-    owner: AccountOwner;
-    /** La clave de la petición, OBLIGATORIA: se comprueba y se reserva en la transacción. */
-    idempotency: IdempotencyRecord;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: AssignableTeamRole;
-    hash: string;
-    expiresAt: Date;
-  }): Promise<TeamMemberCreation>;
-}
-
-// ---------------------------------------------------------------------------------------
-// POST /v1/team/{member_id}/access · `medskin_resend_team_access()`.
-//
-// Puerto aparte del alta y no un tercer verbo en `TeamPort`: quien reenvía un acceso no
-// crea a nadie, y al revés. Los implementa la misma clase, que es otra cosa (la I de
-// SOLID: puertos pequeños, no clases pequeñas).
-// ---------------------------------------------------------------------------------------
-
-/** Lo que hace falta ANTES de acuñar, y nada más. Ni un dato clínico, ni el correo. */
-export type TeamMemberForDelivery = {
-  /**
-   * La cuenta del miembro, y se lee para dos cosas: el contador de «3 por hora para la
-   * misma cuenta» —la MISMA clave de Redis que el reenvío de pacientes, así que las tres
-   * cuentan igual— y el `subject_id` de la línea de bitácora.
-   */
-  accountId: string;
-  firstName: string;
-  /** El nombre de la consulta, que es lo que el correo del acceso dice. */
-  practiceName: string;
-};
-
-export type TeamResendOutcome =
-  | 'acceso_renovado'
-  | 'not_owner'
-  | 'member_not_found'
-  | 'ya_eligio_su_contrasena';
-
-export interface TeamAccessPort {
-  /**
-   * El miembro de ESTA consulta, activo y que no es quien llama. `null` cuando no hay fila,
-   * que es la misma respuesta que un `miembro_id` inventado. La política de `practitioner`
-   * sobre `practice_id` es la que acota; el `miembro_id` de la URL es criterio de búsqueda
-   * dentro de la consulta del token y no autoriza nada (OWASP A01).
-   */
-  forDelivery(owner: AccountOwner, practitionerId: string): Promise<TeamMemberForDelivery | null>;
-
-  /**
-   * `medskin_resend_team_access()`: acuña la temporal nueva y mata la anterior. Devuelve el
-   * veredicto y, solo en `acceso_renovado`, **el correo al que hay que escribir**, que es el
-   * único dato que `app_practitioner` no puede leer de `account`. En los otros tres
-   * veredictos vuelve nulo: no se filtra el correo de nadie por un 403 ni por un 404.
-   */
-  resend(p: {
-    owner: AccountOwner;
-    practitionerId: string;
-    /** El de `forDelivery`, para la bitácora. La función no lo recibe: lo resuelve ella. */
-    accountId: string;
-    hash: string;
-    expiresAt: Date;
-  }): Promise<{ outcome: TeamResendOutcome; email: string | null }>;
-}
-
-/**
- * El correo del acceso del equipo. Puerto propio y de un solo verbo —no un segundo verbo en
- * el de la paciente— porque quien da de alta al equipo no manda accesos de pacientes (la I
- * de SOLID). El MECANISMO es el mismo `MailPort` de siempre: lo que cambia es la plantilla.
- *
- * Lanza si no se pudo entregar: por aquí la temporal no viaja en la respuesta, así que un
- * `void` silencioso dejaría a alguien con cuenta y sin contraseña y a nadie enterado.
- */
-export interface TeamAccessMailPort {
-  sendTeamAccess(facts: TeamDeliveryFacts): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------------------

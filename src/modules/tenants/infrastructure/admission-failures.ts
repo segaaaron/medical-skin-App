@@ -44,7 +44,7 @@ export class AdmissionFailures implements AdmissionFailureLog {
       appVersion: null,
       platform: null,
       region: p.region,
-      context: { accountId: p.accountId, practiceId: p.practiceId, accountRole: 'practitioner' },
+      context: { accountId: p.accountId, practiceId: p.practiceId, accountRole: 'doctor' },
     });
   }
 }

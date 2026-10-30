@@ -220,7 +220,7 @@ export class Appointments {
     const result = await this.appointments.cancel(
       asking,
       appointmentId,
-      asking.isPatient ? 'paciente' : 'consulta',
+      asking.isPatient ? 'patient' : 'practice',
       this.clock.now(),
     );
     if (result.outcome === 'attended') throw new ContractError('cita_ya_atendida');
@@ -392,7 +392,7 @@ export class Appointments {
     caller: Caller,
     body: Record<string, unknown>,
   ): Promise<{ asking: ScheduleCaller; practiceId: string; patientId: string }> {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       const practiceId = asText(body.practice_id);
       if (practiceId === '') throw new ContractError('vinculo_no_existe');
       const link = await this.schedule.linkedPractice(caller.accountId, practiceId);
@@ -413,7 +413,7 @@ export class Appointments {
   }
 
   private reader(caller: Caller): ScheduleCaller {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       return { accountId: caller.accountId, practiceId: null, permissions: [], isPatient: true };
     }
     return practiceOf(caller, 'agenda:leer');
@@ -421,7 +421,7 @@ export class Appointments {
 
   /** Igual que `reader()` pero con el permiso de ESCRITURA que nombra la operación. */
   private writer(caller: Caller, permission: string): ScheduleCaller {
-    if (caller.accountRole === 'paciente') {
+    if (caller.accountRole === 'patient') {
       return { accountId: caller.accountId, practiceId: null, permissions: [], isPatient: true };
     }
     return practiceOf(caller, permission);
