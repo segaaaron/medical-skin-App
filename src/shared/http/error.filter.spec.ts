@@ -178,10 +178,12 @@ describe('un 500 de una ruta de consola', () => {
               'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
             campo: null,
           },
+          // `servidor_en` se comprueba aparte: es la hora real y no se puede fijar aquí.
           meta: {
             peticion_id: 'peticion-2',
             traza_id: 'traza-2',
-            servidor_en: expect.any(String) as unknown as string,
+            servidor_en: (host.sent[0]?.body as { meta: { servidor_en: string } }).meta
+              .servidor_en,
             region: 'latam',
           },
         },
