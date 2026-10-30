@@ -10,6 +10,17 @@
 # el que avisa se instala. En integración continua sí es bloqueante, que es donde importa.
 set -e
 
+# NADA DE AGENTES EN EL REPOSITORIO. El `.gitignore` ya los deja fuera, pero un `git add -f`
+# —o un `git add` desde otra copia sin ese `.gitignore`— se lo salta. Esto es bloqueante a
+# propósito: estos archivos se quedan en local y no hay excepción que valga.
+agentes=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(\.claude|CLAUDE\.md|AGENTS\.md|GEMINI\.md|\.mcp\.json|handoff-.*\.md|\.cursor/|\.flujo/|docs/)' || true)
+if [ -n "$agentes" ]; then
+  echo "pre-commit: esto no sube al repositorio, se queda en local:"
+  echo "$agentes" | sed 's/^/            /'
+  echo "            quítalo con: git restore --staged <ruta>"
+  exit 1
+fi
+
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: gitleaks no está instalado, no se revisaron los secretos."
   echo "            brew install gitleaks   (y la integración continua lo revisa igual)"
