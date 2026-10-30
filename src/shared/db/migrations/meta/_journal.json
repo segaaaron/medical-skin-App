@@ -484,6 +484,13 @@
       "when": 1793394346100,
       "tag": "0068_entrada_de_la_consola",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793400406391,
+      "tag": "0069_los_permisos_dicen_consulta",
+      "breakpoints": true
     }
   ]
 }
