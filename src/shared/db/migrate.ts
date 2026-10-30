@@ -5,14 +5,35 @@ import { Pool } from 'pg';
 
 import { QUEUE_SCHEMA } from '../queues/queues';
 
+/**
+ * EL CERROJO DE LAS MIGRACIONES. Esto corre en el arranque de CADA contenedor —el `CMD` migra y
+ * después escucha— así que con más de una réplica hay dos procesos aplicando lo mismo a la vez.
+ *
+ * El migrador de Drizzle no toma ninguno: comprobado en el paquete instalado, ni un
+ * `pg_advisory_lock` en lo que escribe `__drizzle_migrations`. Sin cerrojo, dos arranques
+ * simultáneos leen la misma lista de pendientes y los dos intentan aplicarlas: con suerte una
+ * falla con «already exists» y el despliegue se cae; sin suerte, dos `INSERT` en el registro y un
+ * esquema a medias.
+ *
+ * `pg_advisory_lock` y no un `LOCK TABLE`: vive fuera de las transacciones del migrador, así que
+ * cubre la pasada entera —Drizzle y BullMQ— y se suelta solo si el proceso muere.
+ */
+const CERROJO_MIGRACIONES = 728_193_044;
+
 // Migra con el DUEÑO del esquema. La conexión de la API no es dueña de las tablas
 // para que RLS sí se le aplique: si migrara ella, el aislamiento sería una ilusión.
 async function aplicar() {
   const url = process.env.DATABASE_URL_OWNER;
   if (!url) throw new Error('Falta DATABASE_URL_OWNER: las migraciones las aplica el dueño del esquema.');
 
-  const pool = new Pool({ connectionString: url, max: 1 });
+  // `max: 2`: una conexión sostiene el cerrojo mientras la otra migra.
+  const pool = new Pool({ connectionString: url, max: 2 });
+  const guardia = await pool.connect();
   try {
+    // Espera, no falla: el segundo contenedor se queda aquí hasta que el primero termine, y
+    // entonces no encuentra nada pendiente y arranca.
+    await guardia.query('select pg_advisory_lock($1)', [CERROJO_MIGRACIONES]);
+
     await migrate(drizzle(pool), { migrationsFolder: 'src/shared/db/migrations' });
     process.stdout.write('migraciones aplicadas\n');
 
@@ -52,6 +73,10 @@ async function aplicar() {
     );
     process.stdout.write(`colas: esquema ${QUEUE_SCHEMA} al día, permisos de ${appRole} dados\n`);
   } finally {
+    await guardia
+      .query('select pg_advisory_unlock($1)', [CERROJO_MIGRACIONES])
+      .catch(() => undefined);
+    guardia.release();
     await pool.end();
   }
 }
