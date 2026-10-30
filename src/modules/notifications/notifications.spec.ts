@@ -606,6 +606,10 @@ describe('los dos programadores que miran la agenda', () => {
     expect(rows.map((r) => r.channel)).toEqual(['correo', 'push']);
     // Trae el tratamiento para que la app abra sus huecos: es el aviso que genera la re-reserva.
     expect(rows[0]?.data.tratamiento_id).toBe(repetido);
+    // Y LA FECHA ES UNA FECHA. Aquí viajaba `"Sat Nov 2"`: `node-postgres` convierte un `date` en
+    // un `Date` a medianoche local y el `String(...).slice(0, 10)` que había se quedaba con el día
+    // de la semana. La app espera una fecha, y es lo que entra en la clave de deduplicación.
+    expect(rows[0]?.data.desde).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     // Y con una cita viva de ese tratamiento por delante, deja de salir: ya volvió.
     await owner.query(`delete from notification_outbox where practice_id = $1`, [N.practice]);
@@ -617,5 +621,66 @@ describe('los dos programadores que miran la agenda', () => {
       [N.practice, N.patient, repetido],
     );
     expect(await new Notifications(outbox, [], null, clock).callBack()).toBe(0);
+  });
+
+  it('la exclusión de «toca volver» aguanta otro DateStyle y una fila con basura dentro', async () => {
+    // DOS DEFECTOS EN UNA PRUEBA, y los dos son mudos.
+    //
+    // Uno: lo que impide que una paciente que no vuelve gaste un hueco del `LIMIT 200` cada día
+    // es que la consulta EXCLUYE a quien ya tiene su aviso. La prueba de arriba no lo distingue:
+    // su `callBack()` devuelve 0 tanto si la exclusión funciona como si lo único que para el
+    // aviso es la deduplicación. Aquí se mira la consulta, que es donde está el `LIMIT`.
+    //
+    // Dos: el cruce compara una fecha. Comparada como texto con `date::text` dependía de
+    // `DateStyle` —con `German` sale `29.10.2026` y nunca casa, así que la exclusión se apaga sin
+    // un error—; casteada a `date` no depende, pero **un texto que no es fecha LANZA** y esto corre
+    // dentro de un trabajo. Va con el formato escrito: ni una cosa ni la otra (0066).
+    await owner.query(
+      `delete from appointment where practice_id = $1 and starts_at > now()`,
+      [N.practice],
+    );
+    await owner.query(`delete from notification_outbox where practice_id = $1`, [N.practice]);
+
+    const pendientes = async (): Promise<number> => {
+      const { rows } = await owner.query<{ n: string }>(
+        `select count(*)::text as n from medskin_patients_to_return(50)`,
+      );
+      return Number(rows[0]!.n);
+    };
+
+    // La sesión firmada de hace 30 días sigue ahí, así que la consulta la ve.
+    expect(await pendientes()).toBeGreaterThan(0);
+
+    // UNA FILA CON BASURA EN `desde` no excluye a nadie —correcto— y sobre todo NO LANZA: con el
+    // casteo a `date`, esto era «invalid input syntax for type date» en cada disparo del trabajo.
+    const { rows: quien } = await owner.query<{
+      practice_id: string;
+      account_id: string;
+      treatment_id: string;
+    }>(`select practice_id, account_id, treatment_id from medskin_patients_to_return(50) limit 1`);
+    await owner.query(
+      `insert into notification_outbox (practice_id, account_id, kind, channel, subject_key,
+                                        data, dedupe_key)
+       values ($1, $2, 'toca_volver', 'push', 'toca_volver',
+               jsonb_build_object('tratamiento_id', $3::text, 'desde', 'ayer'), 'basura')`,
+      [quien[0]!.practice_id, quien[0]!.account_id, quien[0]!.treatment_id],
+    );
+    expect(await pendientes()).toBeGreaterThan(0);
+
+    // Y EL AVISO DE VERDAD SÍ LA EXCLUYE, escrito por el camino de producción.
+    expect(await new Notifications(outbox, [], null, clock).callBack()).toBe(2);
+    expect(await pendientes()).toBe(0);
+
+    // Y SIGUE EXCLUIDA CON OTRO `DateStyle`, que es el clúster que no es este. Va con
+    // `SET LOCAL` dentro de una transacción que se deshace: un `set` suelto se queda pegado a la
+    // conexión del pool y se lo lleva la prueba siguiente, y una suite que depende del orden es
+    // peor que una que falla.
+    await owner.query('begin');
+    try {
+      await owner.query(`set local datestyle = 'German'`);
+      expect(await pendientes()).toBe(0);
+    } finally {
+      await owner.query('rollback');
+    }
   });
 });

@@ -183,13 +183,26 @@ export class NotificationsRepository implements OutboxPort {
         email: string;
         treatment_id: string;
         due_on: string;
-      }>('select * from medskin_patients_to_return($1)', [limit]);
+      }>(
+        // LA FECHA SE PIDE YA COMO TEXTO, y no es cosmética: `node-postgres` convierte una
+        // columna `date` en un `Date` de JavaScript a medianoche LOCAL, así que el
+        // `String(...).slice(0, 10)` que había aquí daba **`"Sat Nov 2"`**. Y eso es lo que
+        // viajaba en el `data` del aviso —la app espera una fecha—, lo que entraba en la clave de
+        // deduplicación, y lo que la consulta comparaba para excluir a quien ya fue avisada: o
+        // sea que el arreglo del `LIMIT 200` de la 0063 **no excluía a nadie**. Lo cazó la prueba
+        // que mira la consulta en vez de fiarse de que `callBack()` devuelva 0, que es lo mismo
+        // tanto si la exclusión funciona como si lo único que para el aviso es la deduplicación.
+        `select practice_id, account_id, email, treatment_id,
+                to_char(due_on, 'YYYY-MM-DD') as due_on
+           from medskin_patients_to_return($1)`,
+        [limit],
+      );
       return rows.map((row) => ({
         practiceId: row.practice_id,
         accountId: row.account_id,
         email: row.email,
         treatmentId: row.treatment_id,
-        dueOn: String(row.due_on).slice(0, 10),
+        dueOn: row.due_on,
       }));
     });
   }

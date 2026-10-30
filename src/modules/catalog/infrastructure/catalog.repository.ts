@@ -389,6 +389,8 @@ export class CatalogRepository implements CatalogPort {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       const { rows } = await c.query<Record<string, unknown>>(
         `select p.*, (select currency from practice) as currency,
+                to_char(p.starts_on, 'YYYY-MM-DD') as starts_on_text,
+                to_char(p.ends_on, 'YYYY-MM-DD') as ends_on_text,
                 coalesce((select array_agg(pt.treatment_id::text)
                             from promotion_treatment pt where pt.promotion_id = p.id), '{}') as treatments
            from promotion p
@@ -562,6 +564,8 @@ export class CatalogRepository implements CatalogPort {
   private async readPromotion(c: PoolClient, id: string): Promise<PromotionRow | null> {
     const { rows } = await c.query<Record<string, unknown>>(
       `select p.*, (select currency from practice) as currency,
+              to_char(p.starts_on, 'YYYY-MM-DD') as starts_on_text,
+              to_char(p.ends_on, 'YYYY-MM-DD') as ends_on_text,
               coalesce((select array_agg(pt.treatment_id::text)
                           from promotion_treatment pt where pt.promotion_id = p.id), '{}') as treatments
          from promotion p where p.id = $1`,
@@ -618,8 +622,14 @@ function mapPromotion(row: Record<string, unknown>): PromotionRow {
     name: row.name as string,
     discountType: row.discount_type as string,
     discountValue: row.discount_value as number,
-    startsOn: String(row.starts_on).slice(0, 10),
-    endsOn: String(row.ends_on).slice(0, 10),
+    // LA FECHA LA FORMATEA LA BASE, con el formato escrito. `p.*` trae `starts_on` como un
+    // `Date` de JavaScript —`node-postgres` convierte `date` (oid 1082) a medianoche LOCAL—, así
+    // que el `String(...).slice(0, 10)` que había aquí servía **`"Fri Oct 30"`** a la app en
+    // `vigencia: { desde, hasta }`. Y `toISOString()` tampoco vale: medianoche local en una zona
+    // con desplazamiento positivo cae el día ANTERIOR en UTC, o sea que la vigencia se movería un
+    // día según dónde corra el proceso.
+    startsOn: row.starts_on_text as string,
+    endsOn: row.ends_on_text as string,
     quota: (row.quota as number | null) ?? null,
     redeemed: row.redeemed as number,
     code: (row.code as string | null) ?? null,

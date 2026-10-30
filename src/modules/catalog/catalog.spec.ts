@@ -309,7 +309,7 @@ describe('la regla clínica manda sobre la comercial', () => {
       doctor(MINE.practice, MINE.doctor),
     );
     // Una promoción vigente que cubre TODO el catálogo visible.
-    await catalog.createPromotion(
+    const creada = (await catalog.createPromotion(
       {
         nombre: 'Vuelve en primavera',
         descuento: { tipo: 'porcentaje', valor: 20 },
@@ -317,7 +317,13 @@ describe('la regla clínica manda sobre la comercial', () => {
       },
       doctor(MINE.practice, MINE.doctor),
       key('p1'),
-    );
+    )) as { vigencia: { desde: string; hasta: string } };
+
+    // LA VIGENCIA QUE VUELVE ES LA QUE ENTRÓ. Aquí salía `{ desde: "Thu Oct 01", hasta: "Mon Nov
+    // 30" }`: el `select p.*` trae `starts_on` como un `Date` de JavaScript —`node-postgres`
+    // convierte `date` a medianoche local— y el `String(...).slice(0, 10)` del mapeador se
+    // quedaba con el día de la semana. La consola la pinta en un calendario.
+    expect(creada.vigencia).toEqual({ desde: '2026-10-01', hasta: '2026-11-30' });
 
     const seen = (await patientCatalog.run({ practice_id: MINE.practice }, ana)) as {
       consulta: string;

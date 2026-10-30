@@ -264,7 +264,8 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       if (p.promotionId !== null || p.promotionCode !== null) {
         const { rows } = await c.query<Record<string, unknown>>(
           `select pr.id, pr.name, pr.discount_type, pr.discount_value, pr.quota, pr.redeemed,
-                  pr.starts_on::text as starts_on, pr.ends_on::text as ends_on,
+                  to_char(pr.starts_on, 'YYYY-MM-DD') as starts_on,
+                  to_char(pr.ends_on, 'YYYY-MM-DD') as ends_on,
                   coalesce((select array_agg(pt.treatment_id::text) from promotion_treatment pt
                              where pt.promotion_id = pr.id), '{}') as treatments
              from promotion pr

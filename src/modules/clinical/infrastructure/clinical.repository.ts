@@ -76,7 +76,7 @@ export class ClinicalRepository implements ClinicalPort {
       // Los lotes, antes de escribir nada: vencido BLOQUEA, y sin stock también.
       for (const application of draft.applications) {
         const { rows } = await c.query<{ expires_on: string; units_left: number }>(
-          `select expires_on::text as expires_on, units_left from product_lot
+          `select to_char(expires_on, 'YYYY-MM-DD') as expires_on, units_left from product_lot
             where id = $1 for update`,
           [application.lotId],
         );
