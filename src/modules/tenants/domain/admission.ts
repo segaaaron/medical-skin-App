@@ -5,6 +5,7 @@
 // consulta sale de la RUTA. Lo que entra aquí son datos de una consulta que todavía no
 // existe (OWASP A01).
 
+import { readPhone } from '../../accounts/domain/patient-registration';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Region } from '../../../shared/contract/session';
 import type { Decision, NewOwner, NewPractice } from './platform-ports';
@@ -139,8 +140,12 @@ function readOwner(input: unknown, readEmail: (value: unknown) => string): Admis
     );
   }
 
+  // El mismo lector que el alta de pacientes (`readPhone`), no otro: dos validaciones de
+  // teléfono en el mismo producto divergen el día que una se corrija.
+  const phone = readPhone(body.telefono);
+
   try {
-    return { firstName, lastName, email: readEmail(body.correo) };
+    return { firstName, lastName, email: readEmail(body.correo), phone };
   } catch (failure) {
     const isEmailProblem =
       failure instanceof ContractError &&

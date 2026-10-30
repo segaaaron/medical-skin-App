@@ -27,7 +27,7 @@ const FICHA: TenantFile = {
   activePatients: 148,
   region: 'latam',
   createdOn: '2026-03-14',
-  license: { status: 'verificada', decidedAt: new Date('2026-03-15T14:02:00Z') },
+  license: { practiceCountry: 'BO', specialty: 'dermatologia', licenseNumber: 'MP-48921', status: 'verificada', decidedAt: new Date('2026-03-15T14:02:00Z') },
   appVersions: { ios: '2.4.1', android: '2.4.0' },
   owner: {
     accountId: '22222222-2222-4222-8222-222222222222',
@@ -61,7 +61,13 @@ describe('GET /v1/platform/tenants/{id}', () => {
       // De la configuración del despliegue, no de la base (decisión 6).
       region_etiqueta: 'Bolivia · bo-1',
       alta_en: '2026-03-14',
-      licencia: { estado: 'verificada', verificada_en: '2026-03-15T14:02:00.000Z' },
+      licencia: {
+        estado: 'verificada',
+        verificada_en: '2026-03-15T14:02:00.000Z',
+        pais_ejercicio: 'BO',
+        especialidad: 'dermatologia',
+        matricula: 'MP-48921',
+      },
       versiones_app: { ios: '2.4.1', android: '2.4.0' },
       doctora: {
         cuenta_id: FICHA.owner?.accountId,
@@ -84,10 +90,24 @@ describe('GET /v1/platform/tenants/{id}', () => {
         ...FICHA,
         // Un rechazo TIENE `decided_at`, y aun así `verificada_en` va nula: un campo que se
         // llama así diciendo cuándo se rechazó sería falso.
-        license: { status: estado, decidedAt: new Date('2026-03-15T14:02:00Z') },
+        license: {
+          status: estado,
+          decidedAt: new Date('2026-03-15T14:02:00Z'),
+          practiceCountry: 'BO',
+          specialty: 'dermatologia',
+          licenseNumber: 'MP-48921',
+        },
       });
       const respuesta = await caso.run(PRACTICE, ACTOR);
-      expect(respuesta.licencia).toEqual({ estado, verificada_en: null });
+      // Los tres datos viajan aunque la licencia esté rechazada: quien decidió tiene que
+      // poder volver a ver qué fue lo que rechazó.
+      expect(respuesta.licencia).toEqual({
+        estado,
+        verificada_en: null,
+        pais_ejercicio: 'BO',
+        especialidad: 'dermatologia',
+        matricula: 'MP-48921',
+      });
     }
   });
 

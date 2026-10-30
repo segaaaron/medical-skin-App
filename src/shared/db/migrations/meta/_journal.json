@@ -498,6 +498,13 @@
       "when": 1793401481031,
       "tag": "0070_los_roles_en_ingles",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793404137271,
+      "tag": "0071_el_telefono_de_la_doctora",
+      "breakpoints": true
     }
   ]
 }

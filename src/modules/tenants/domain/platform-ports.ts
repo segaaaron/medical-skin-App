@@ -62,6 +62,14 @@ export type NewOwner = {
   firstName: string;
   lastName: string;
   email: string;
+  /**
+   * OPCIONAL, E.164. Es el único dato de contacto que no depende del correo: si el correo de
+   * bienvenida no sale —el caso que `service_failure` y «reenviar acceso» existen para
+   * cubrir— hoy no hay forma de avisarle a la doctora de que su cuenta existe.
+   *
+   * No sirve para entrar, igual que el de la paciente: se entra con correo y contraseña.
+   */
+  phone: string | null;
   /** Argon2id. La función de la base rechaza cualquier cosa que no empiece por `$argon2id$`. */
   hash: string;
   expiresAt: Date;
@@ -132,7 +140,18 @@ export type TenantFile = {
   activePatients: number;
   region: string;
   createdOn: string;
-  license: { status: string; decidedAt: Date | null };
+  /**
+   * Los tres datos de la licencia viajan con el estado desde el 30 de octubre de 2026: sin
+   * ellos, en cuanto alguien decidía, la matrícula y la especialidad DESAPARECÍAN de la
+   * consola y no había dónde volver a verlas. Quien aprobó no podía comprobar qué aprobó.
+   */
+  license: {
+    status: string;
+    decidedAt: Date | null;
+    practiceCountry: string | null;
+    specialty: string | null;
+    licenseNumber: string | null;
+  };
   appVersions: { ios: string | null; android: string | null };
   /** Nulo solo si la consulta no tiene dueña, que el alta hace imposible. */
   owner: {

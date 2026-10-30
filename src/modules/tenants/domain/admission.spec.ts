@@ -46,6 +46,9 @@ describe('el alta de una consulta · el cuerpo del contrato', () => {
       firstName: 'Andrea',
       lastName: 'Paz',
       email: 'andrea.paz@clinicapaz.bo',
+      // Opcional y nulo cuando el formulario no lo manda: es el único dato de contacto que
+      // no depende del correo, pero el alta tiene que poder hacerse sin él.
+      phone: null,
     });
   });
 

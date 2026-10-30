@@ -23,7 +23,19 @@ export type TenantFileResponse = {
   region: string;
   region_etiqueta: string;
   alta_en: string;
-  licencia: { estado: string; verificada_en: string | null };
+  /**
+   * Los tres datos viajan junto al estado: antes, en cuanto alguien decidía, la matrícula y
+   * la especialidad desaparecían de la consola y quien aprobó no podía comprobar qué aprobó.
+   * Son nulos mientras nadie los haya puesto — ni la consola al dar de alta, ni ella al
+   * enviar su licencia.
+   */
+  licencia: {
+    estado: string;
+    verificada_en: string | null;
+    pais_ejercicio: string | null;
+    especialidad: string | null;
+    matricula: string | null;
+  };
   versiones_app: { ios: string | null; android: string | null };
   doctora: {
     cuenta_id: string;
@@ -91,6 +103,9 @@ function view(
         file.license.status === 'verificada'
           ? (file.license.decidedAt?.toISOString() ?? null)
           : null,
+      pais_ejercicio: file.license.practiceCountry,
+      especialidad: file.license.specialty,
+      matricula: file.license.licenseNumber,
     },
     // «La versión de la sesión viva vista más recientemente, no la de la dueña» (decisión
     // 40): la pregunta de la pantalla es «qué versión están corriendo», y una sesión

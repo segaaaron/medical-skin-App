@@ -61,6 +61,9 @@ type FileRow = {
   owner_account_id: string | null;
   license_status: string | null;
   decided_at: Date | null;
+  practice_country: string | null;
+  specialty: string | null;
+  license_number: string | null;
 };
 
 type OwnerRow = {
@@ -151,7 +154,7 @@ export class PlatformRepository
         // con `text` la comparación se vuelve sensible a mayúsculas en silencio.
         const { rows: admitted } = await c.query<{ verdict: string; account_id: string | null }>(
           `select verdict, account_id
-             from medskin_create_practice_owner($1, $2::citext, $3, $4, $5, $6)`,
+             from medskin_create_practice_owner($1, $2::citext, $3, $4, $5, $6, $7)`,
           [
             practice.id,
             p.owner.email,
@@ -159,6 +162,7 @@ export class PlatformRepository
             p.owner.lastName,
             p.owner.hash,
             p.owner.expiresAt,
+            p.owner.phone,
           ],
         );
         const row = admitted[0];
@@ -229,7 +233,8 @@ export class PlatformRepository
         `select p.id, p.name, p.plan, p.patient_limit, p.region,
                 (p.created_at at time zone $2)::date::text as created_on,
                 p.owner_account_id,
-                l.status as license_status, l.decided_at
+                l.status as license_status, l.decided_at,
+                l.practice_country, l.specialty, l.license_number
            from practice p
            left join license l on l.practice_id = p.id
           where p.id = $1`,
@@ -260,6 +265,9 @@ export class PlatformRepository
           // consulta, y para las de antes el relleno de esa migración la puso.
           status: row.license_status ?? 'sin_enviar',
           decidedAt: row.decided_at,
+          practiceCountry: row.practice_country,
+          specialty: row.specialty,
+          licenseNumber: row.license_number,
         },
         appVersions: {
           ios: numbers?.app_version_ios ?? null,
