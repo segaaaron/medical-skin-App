@@ -21,7 +21,7 @@ import { resolveRole } from '../../access/domain/role';
 import type { AccountOwner, LinkedPractice, OwnProfilePort } from '../domain/ports';
 
 /**
- * Lo único que hace falta del acceso: el estado del inquilino que decide `siguiente_paso` y
+ * Lo único que hace falta del acceso: el estado de la consulta que decide `siguiente_paso` y
  * el `practitioner.role` de quien pregunta, que se leen en la MISMA consulta. Es el puerto
  * que ya existe (`SessionPort.nextStepFacts`) y no una segunda consulta que diga lo mismo:
  * si fueran dos, un día la licencia o la lista del primer día cambiarían en una sola.

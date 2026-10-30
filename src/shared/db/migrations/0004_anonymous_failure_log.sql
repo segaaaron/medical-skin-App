@@ -29,8 +29,8 @@
 -- traza, la operación a la que iba, y dos etiquetas de despliegue —`platform` y `region`—
 -- validadas contra lista cerrada para que no sean texto libre del cliente.
 --
--- NO lleva: inquilino (no se sabe), cuenta (no hay), sujeto, resumen de la entrada, ni la
--- IP, que no es columna de esta tabla y no se añade. `service_failure` sigue sin inquilino
+-- NO lleva: consulta (no se sabe), cuenta (no hay), sujeto, resumen de la entrada, ni la
+-- IP, que no es columna de esta tabla y no se añade. `service_failure` sigue sin consulta
 -- y sin clave foránea (§12.2.8), así que esto no le añade un `account_id` a nada.
 --
 -- EL ÚNICO HUECO QUE QUEDABA, Y SU TAPÓN: `error_message`, `stack` y `cause_chain` son
@@ -116,8 +116,8 @@ ALTER FUNCTION medskin_record_anonymous_failure(text, text, text, text, jsonb, t
 REVOKE ALL ON FUNCTION medskin_record_anonymous_failure(text, text, text, text, jsonb, text,
                                                         text, text, text) FROM PUBLIC;--> statement-breakpoint
 -- Solo el rol sin sesión. Los otros tres ya tienen su `GRANT INSERT` de la 0000 y escriben
--- la fila COMPLETA, con su inquilino y su actor, que es lo que su panel necesita: esta
--- función es la del caso en que no hay ni inquilino ni actor que escribir.
+-- la fila COMPLETA, con su consulta y su actor, que es lo que su panel necesita: esta
+-- función es la del caso en que no hay ni consulta ni actor que escribir.
 GRANT EXECUTE ON FUNCTION medskin_record_anonymous_failure(text, text, text, text, jsonb,
                                                            text, text, text, text)
   TO app_anonymous;--> statement-breakpoint

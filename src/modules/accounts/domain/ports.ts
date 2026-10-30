@@ -63,7 +63,7 @@ export type PatientForDelivery = {
   /**
    * `patient_link.access_sent_at` ANTES de acuñar, y no es un dato del mensaje: es lo que
    * hace falta para poder DESHACER la marca si el envío falla. Se lee aquí porque esta
-   * lectura ya pasa por la política del inquilino y acuñar la sobreescribe: después ya no
+   * lectura ya pasa por la política de la consulta y acuñar la sobreescribe: después ya no
    * hay de dónde sacarla. Nulo cuando nunca se le mandó, que es el caso de la primera vez.
    */
   accessSentAt: Date | null;
@@ -289,7 +289,7 @@ export interface TeamAccessPort {
    * El miembro de ESTA consulta, activo y que no es quien llama. `null` cuando no hay fila,
    * que es la misma respuesta que un `miembro_id` inventado. La política de `practitioner`
    * sobre `practice_id` es la que acota; el `miembro_id` de la URL es criterio de búsqueda
-   * dentro del inquilino del token y no autoriza nada (OWASP A01).
+   * dentro de la consulta del token y no autoriza nada (OWASP A01).
    */
   forDelivery(owner: AccountOwner, practitionerId: string): Promise<TeamMemberForDelivery | null>;
 
@@ -332,10 +332,10 @@ export interface TeamAccessMailPort {
 // La autorización no es un `if`: son las políticas de `patient`, `patient_link` y
 // `medical_history` sobre `practice_id`, más una función `SECURITY DEFINER` que NO recibe
 // `account_id` —con uno, una doctora podría acuñar una temporal sobre la cuenta de
-// cualquiera— y que saca el inquilino y la región del contexto.
+// cualquiera— y que saca la consulta y la región del contexto.
 // ---------------------------------------------------------------------------------------
 
-/** Quién la refirió, su licencia, su plan y el duplicado: todo del inquilino del contexto. */
+/** Quién la refirió, su licencia, su plan y el duplicado: todo de la consulta del contexto. */
 export type PatientRegistrationVerdict =
   | 'created'
   | 'license_unverified'
@@ -466,7 +466,7 @@ export interface PatientLinkNoticeMailPort {
 // etiqueta y la región (`plataforma-acceso.md`). De ahí un actor propio y no un `Caller` con
 // nulos: un tipo que miente sobre lo que trae acaba leído como si trajera algo.
 //
-// El `cuenta_id` viene de la RUTA, y aquí no hay inquilino que lo acote: lo que lo acota es
+// El `cuenta_id` viene de la RUTA, y aquí no hay consulta que lo acote: lo que lo acota es
 // que las dos operaciones devuelven el MISMO 404 para una cuenta que no existe, una borrada y
 // una de otra región, y que las dos dejan su línea en `access_audit` con quién las ejecutó.
 // ---------------------------------------------------------------------------------------

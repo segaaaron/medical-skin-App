@@ -11,7 +11,7 @@
 -- su `patient_link`. Con el correo de una practicante —el de la propia doctora, o el de una
 -- doctora de otra consulta— eso ataba ESA cuenta como paciente de esta consulta.
 --
--- No es una fuga entre inquilinos: lo que esa persona vería por `patient_link` es el nombre
+-- No es una fuga entre consultas: lo que esa persona vería por `patient_link` es el nombre
 -- de la consulta, el de la doctora y la ciudad, y nada clínico. **Es una identidad enlazada
 -- sin su consentimiento**, que es otra clase de problema y no es menor: la pantalla de
 -- «Mis doctoras» de alguien se llena con una consulta que no eligió, y su cuenta de trabajo
@@ -84,7 +84,7 @@ DECLARE
   v_role text;
 BEGIN
   IF v_practice IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_patient_account: sin contexto de inquilino'
+    RAISE EXCEPTION 'medskin_create_patient_account: sin contexto de consulta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_email IS NULL OR btrim(p_email::text) = ''
@@ -106,7 +106,7 @@ BEGIN
 
   SELECT p.region INTO v_region FROM practice p WHERE p.id = v_practice;
   IF v_region IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_patient_account: el inquilino del contexto no existe'
+    RAISE EXCEPTION 'medskin_create_patient_account: la consulta del contexto no existe'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 

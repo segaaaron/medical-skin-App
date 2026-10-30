@@ -6,7 +6,7 @@
 -- comportarse como si lo fuera.»
 --
 -- El teléfono vive en `practice`, y `app_patient` no lee esa tabla —darle política abriría
--- todos los inquilinos para poder leer uno—. Misma forma que la moneda (0027) y la zona
+-- todos las consultas para poder leer uno—. Misma forma que la moneda (0027) y la zona
 -- horaria (0033): una función que devuelve UNA CADENA y solo de una consulta que la tiene
 -- vinculada.
 -- =======================================================================================

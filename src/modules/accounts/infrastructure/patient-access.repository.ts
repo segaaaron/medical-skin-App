@@ -3,7 +3,7 @@
 // La autorización es la POLÍTICA de `patient_link` sobre `practice_id`, más la función
 // `SECURITY DEFINER` que empieza buscando ese vínculo con el `practice_id` del contexto. El
 // `cuenta_id` que llega por la URL no autoriza nada: se usa como criterio de búsqueda
-// DENTRO del inquilino del token, y si no hay fila, no hay respuesta (OWASP A01).
+// DENTRO de la consulta del token, y si no hay fila, no hay respuesta (OWASP A01).
 
 import type { Pool, PoolClient } from 'pg';
 
@@ -18,9 +18,9 @@ import type {
 
 /**
  * Siempre `app_practitioner`: este endpoint es de la doctora y de su equipo, y sus
- * políticas se leen por inquilino. Una paciente no llega aquí —no tiene el permiso y la
+ * políticas se leen por consulta. Una paciente no llega aquí —no tiene el permiso y la
  * ruta exige alcance completo con `pacientes:acceso:enviar`—, y si llegara, su contexto no
- * fijaría `practice_id` y la función fallaría cerrada por falta de inquilino.
+ * fijaría `practice_id` y la función fallaría cerrada por falta de consulta.
  */
 function contextFor(owner: AccountOwner): TenantContext {
   return { role: 'app_practitioner', accountId: owner.accountId, practiceId: owner.practiceId };

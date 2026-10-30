@@ -49,7 +49,7 @@ export class AccountsController {
   }
 
   // El `cuenta_id` de la URL NO autoriza: entra como criterio de búsqueda dentro del
-  // inquilino del token, y si no hay vínculo en esa consulta, el 404 es el mismo que el de
+  // consulta del token, y si no hay vínculo en esa consulta, el 404 es el mismo que el de
   // una cuenta inventada.
   @Post(':account_id/access')
   @HttpCode(200)

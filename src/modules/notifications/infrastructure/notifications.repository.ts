@@ -1,6 +1,6 @@
 // La bandeja de salida contra la base. TODO por funciones y con `app_anonymous`, igual que el
 // trabajador de fotos y el barrido de idempotencia: un trabajo no tiene petición, así que no
-// tiene inquilino que fijar, y `medskin_access` es NOLOGIN y el rol de la aplicación no puede
+// tiene consulta que fijar, y `medskin_access` es NOLOGIN y el rol de la aplicación no puede
 // convertirse en él —lo cual es la garantía, no una molestia—. Lo que el trabajo tiene es
 // `EXECUTE` sobre las funciones de la 0045, y nada más.
 

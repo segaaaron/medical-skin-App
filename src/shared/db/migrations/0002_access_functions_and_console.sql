@@ -239,7 +239,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE medskin_owner IN SCHEMA public
 --
 -- `practice_id`, `practitioner_role` y `permissions` viajan porque `POST /v1/acceso` tiene
 -- que resolver a qué consulta pertenece quien entra ANTES de que exista contexto de
--- inquilino, y con `app_practitioner` eso es imposible: su política exige el `practice_id`
+-- consulta, y con `app_practitioner` eso es imposible: su política exige el `practice_id`
 -- que todavía no se conoce. Es la consulta que `practitioner_account_idx` existe para
 -- servir. `permissions` viaja crudo, nulo incluido: resolver la lista del rol es de la
 -- aplicación (decisión 11), y una lista resuelta en la base sería la misma tabla dos veces.
@@ -679,7 +679,7 @@ GRANT EXECUTE ON FUNCTION medskin_recovery_miss(citext) TO app_anonymous;--> sta
 -- Validar y rotar el refresco. `POST /v1/sesion/refresco` no lleva `Authorization`, así
 -- que corre con `app_anonymous`: no hay contexto que fijar y el `practice_id` del token
 -- nuevo SALE DE LA FILA DE LA SESIÓN, nunca del cuerpo. Si lo aceptara del cliente sería
--- un cambio de inquilino gratuito (sesion.md).
+-- un cambio de consulta gratuito (sesion.md).
 --
 -- `p_hash` y `p_new_hash` son resúmenes deterministas (SHA-256) de la cadena opaca, no
 -- Argon2id: `session_refresh_uq` es un índice único sobre la columna, y un hash con sal
@@ -804,7 +804,7 @@ DECLARE
   v_status text;
 BEGIN
   IF v_practice IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_patient_account: sin contexto de inquilino'
+    RAISE EXCEPTION 'medskin_create_patient_account: sin contexto de consulta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_email IS NULL OR btrim(p_email::text) = ''
@@ -826,7 +826,7 @@ BEGIN
 
   SELECT p.region INTO v_region FROM practice p WHERE p.id = v_practice;
   IF v_region IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_patient_account: el inquilino del contexto no existe'
+    RAISE EXCEPTION 'medskin_create_patient_account: la consulta del contexto no existe'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
@@ -855,7 +855,7 @@ GRANT EXECUTE ON FUNCTION medskin_create_patient_account(citext, text, text, tex
   TO app_practitioner;--> statement-breakpoint
 
 -- ---------------------------------------------------------------------------------------
--- La consulta y su dueña, desde la plataforma (`POST /v1/plataforma/inquilinos`).
+-- La consulta y su dueña, desde la plataforma (`POST /v1/plataforma/consultas`).
 -- «Una consulta sin dueña no existe, así que el alta es un solo acto»: la fila de
 -- `practice` la escribe `app_platform` bajo su propia política, y esta función cierra el
 -- acto con la cuenta, su temporal, su `practitioner` y `practice.owner_account_id`.
@@ -865,7 +865,7 @@ GRANT EXECUTE ON FUNCTION medskin_create_patient_account(citext, text, text, tex
 -- `credential` (soporte no toca contraseñas, lo promete la pantalla).
 --
 -- El `409 correo_ya_tiene_cuenta` SÍ revela que el correo existe, y está bien: aquí quien
--- llama es MedSkin sobre su propio padrón (inquilinos.md).
+-- llama es MedSkin sobre su propio padrón (consultas.md).
 -- ---------------------------------------------------------------------------------------
 CREATE FUNCTION medskin_create_practice_owner(p_practice_id uuid, p_email citext,
                                               p_first_name text, p_last_name text,
@@ -964,7 +964,7 @@ DECLARE
   v_now timestamptz := now();
 BEGIN
   IF v_practice IS NULL OR v_account IS NULL THEN
-    RAISE EXCEPTION 'medskin_license_to_review: sin contexto de inquilino o de cuenta'
+    RAISE EXCEPTION 'medskin_license_to_review: sin contexto de consulta o de cuenta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_response_estimated_at IS NULL OR p_response_estimated_at <= v_now THEN

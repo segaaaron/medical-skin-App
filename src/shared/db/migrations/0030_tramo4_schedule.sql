@@ -159,7 +159,7 @@ ALTER TABLE "waitlist_entry" ADD CONSTRAINT "waitlist_treatment_fk" FOREIGN KEY 
 -- =======================================================================================
 -- ÍNDICES
 --
--- EL DE LA AGENDA ES EL QUE PAGA ESTE TRAMO: `(practice_id, starts_at)` con el inquilino
+-- EL DE LA AGENDA ES EL QUE PAGA ESTE TRAMO: `(practice_id, starts_at)` con la consulta
 -- delante (regla 5) es lo que convierte «calcular los huecos de una semana» en leer un rango.
 -- `DESC NULLS FIRST` no va aquí a propósito: la agenda se lee hacia ADELANTE, de hoy en
 -- adelante, así que el orden natural ascendente es el que sirve.
@@ -183,7 +183,7 @@ CREATE INDEX "waitlist_patient_idx" ON "waitlist_entry" USING btree ("practice_i
 --
 -- `app_practitioner`: por `practice_id` del contexto.
 -- `app_patient`: por SU ficha —`EXISTS` sobre `patient_link` con su cuenta y `vinculada`—, que
--- es autoverificable y no necesita contexto de inquilino. Puede LEER su cita y su lista de
+-- es autoverificable y no necesita contexto de consulta. Puede LEER su cita y su lista de
 -- espera, y ESCRIBIR solo lo que el contrato le deja: crear su cita, cancelarla, decir que
 -- pagó, y apuntarse o salirse de la lista de espera.
 -- `app_platform`: NINGUNA política. Soporte no ve la agenda de nadie.

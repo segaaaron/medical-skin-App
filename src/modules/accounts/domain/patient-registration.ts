@@ -67,7 +67,7 @@ export type PatientFicha = {
   hasWhatsapp: boolean;
   remindersVia: RemindersVia;
   howArrived: string;
-  /** Una ficha de ESTA consulta, y lo comprueba la política del inquilino. */
+  /** Una ficha de ESTA consulta, y lo comprueba la política de la consulta. */
   referredBy: string | null;
 };
 

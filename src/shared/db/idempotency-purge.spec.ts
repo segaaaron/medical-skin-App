@@ -140,7 +140,7 @@ afterAll(async () => {
 });
 
 describe('el barrido de `idempotency_key` · la retención de 24 h (0024)', () => {
-  it('se lleva lo caducado de los dos inquilinos y de las cuentas sin consulta, y no toca lo vivo', async () => {
+  it('se lleva lo caducado de los dos consultas y de las cuentas sin consulta, y no toca lo vivo', async () => {
     await seedKeys();
     expect(await remaining()).toHaveLength(5);
 
@@ -176,7 +176,7 @@ describe('el barrido de `idempotency_key` · la retención de 24 h (0024)', () =
       platform: await borra(ctxPlatform),
     }).toEqual({ practitionerA: 1, patient: 1, platform: 1 });
 
-    // Tres roles, tres intentos, y todavía queda una caducada: la del inquilino B, que
+    // Tres roles, tres intentos, y todavía queda una caducada: la de la consulta B, que
     // ninguno de ellos puede ver ni enumerar. Eso es lo que la función resuelve.
     expect(await remaining()).toEqual([KEYS.expiredB, KEYS.aliveA].sort());
     expect(await purge()).toBe(1);
@@ -190,7 +190,7 @@ describe('el barrido de `idempotency_key` · la retención de 24 h (0024)', () =
       );
     }
     // Y el que sí puede no necesita contexto ninguno para hacerlo: cuando el trabajador
-    // corre no hay ni inquilino ni cuenta que fijar.
+    // corre no hay ni consulta ni cuenta que fijar.
     expect(await purge(ctxAnonymous)).toBe(0);
   });
 });

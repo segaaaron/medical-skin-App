@@ -8,8 +8,8 @@
 --
 -- Así que el trabajador pide el trabajo por FUNCIONES, igual que el barrido de idempotencia
 -- (0024): la función corre como su dueño, devuelve lo justo, y lo que el trabajador tiene es
--- `EXECUTE` y nada más. No hay contexto de inquilino porque no hay petición, y por eso estas
--- tres funciones son las únicas del sistema que cruzan inquilinos a propósito: procesar una
+-- `EXECUTE` y nada más. No hay contexto de consulta porque no hay petición, y por eso estas
+-- tres funciones son las únicas del sistema que cruzan consultas a propósito: procesar una
 -- foto no es leerla, y lo que devuelven son identificadores y estado, nunca un byte ni un
 -- nombre.
 -- =======================================================================================

@@ -284,13 +284,13 @@ describe('PlatformTokens · las reclamaciones', () => {
     // un token con permisos que este backend no entiende es un token de otra versión del
     // sistema».
     const error = await rechazo(
-      await acunar({ permisos: ['plataforma:inquilinos:leer', 'plataforma:todo'] }),
+      await acunar({ permisos: ['plataforma:consultas:leer', 'plataforma:todo'] }),
     );
     expect(error.code).toBe('token_de_plataforma_no_valido');
   });
 
   it('`permisos` que no es una lista, o con algo que no es cadena: 401', async () => {
-    expect((await rechazo(await acunar({ permisos: 'plataforma:inquilinos:leer' }))).code).toBe(
+    expect((await rechazo(await acunar({ permisos: 'plataforma:consultas:leer' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
     expect((await rechazo(await acunar({ permisos: [7] }))).code).toBe(
@@ -334,8 +334,8 @@ async function denegar(
 }
 
 const CONSOLA: Readonly<Record<string, PlatformPermission>> = {
-  'POST /v1/platform/tenants': 'plataforma:inquilinos:crear',
-  'GET /v1/platform/tenants/:id': 'plataforma:inquilinos:leer',
+  'POST /v1/platform/tenants': 'plataforma:consultas:crear',
+  'GET /v1/platform/tenants/:id': 'plataforma:consultas:leer',
   'POST /v1/platform/tenants/:id/license/decision': 'plataforma:licencias:decidir',
   'POST /v1/platform/accounts/:account_id/access/resend': 'plataforma:acceso:reenviar',
   'DELETE /v1/platform/accounts/:account_id/lock': 'plataforma:pausa:levantar',
@@ -418,7 +418,7 @@ describe('PlatformTokens · lo que firma', () => {
     const { token, expiresAt } = await plataforma.sign({
       subject: SUB,
       label: ETIQUETA,
-      permissions: ['plataforma:inquilinos:crear', 'plataforma:inquilinos:leer'],
+      permissions: ['plataforma:consultas:crear', 'plataforma:consultas:leer'],
     });
 
     const quien = await plataforma.verify(token);
@@ -427,8 +427,8 @@ describe('PlatformTokens · lo que firma', () => {
     expect(quien.label).toBe(ETIQUETA);
     expect(quien.region).toBe('latam');
     expect(quien.permissions).toEqual([
-      'plataforma:inquilinos:crear',
-      'plataforma:inquilinos:leer',
+      'plataforma:consultas:crear',
+      'plataforma:consultas:leer',
     ]);
 
     // Los quince minutos del contrato, con un margen por el segundo que tarda la prueba.

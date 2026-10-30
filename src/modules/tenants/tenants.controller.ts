@@ -53,7 +53,7 @@ export class TenantsController {
  * petición que no pasó por el guardia es una ruta sin política (OWASP A01).
  *
  * `caller` nulo es quien llega con un token de recuperación o de plataforma: ninguno de los
- * dos tiene sesión de la que sacar inquilino, y no se les fabrica una.
+ * dos tiene sesión de la que sacar consulta, y no se les fabrica una.
  */
 function callerOf(req: RequestWithContext): Caller {
   const ctx = req.medskin;

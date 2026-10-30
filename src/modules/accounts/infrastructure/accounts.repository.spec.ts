@@ -9,7 +9,7 @@
 //     `app_account` (la sesión restringida) y `app_practitioner`— sin un solo `where`: la
 //     fila que vuelve es la de quien pregunta porque lo dicen `account_own` y
 //     `credential_own`, y el `hash` no se nombra porque no hay `GRANT` que lo permita;
-//   · `doctoras` cruzando inquilinos, que es la única lectura del sistema que lo hace, y
+//   · `doctoras` cruzando consultas, que es la única lectura del sistema que lo hace, y
 //     cruzando SOLO las fichas de quien pregunta;
 //   · el `desde` en la zona del despliegue: con el UTC de la conexión, un vínculo creado a
 //     las 22:00 en La Paz se mostraría al día siguiente;

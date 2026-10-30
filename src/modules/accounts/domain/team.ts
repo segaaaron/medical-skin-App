@@ -1,7 +1,7 @@
 // `POST /v1/team` · el rol que la dueña SÍ puede dar. Dominio: sin NestJS y sin `pg`.
 //
 // El rol viaja en el cuerpo y es la única excepción del tramo, «porque no es el rol de
-// autenticación sino el permiso dentro de un inquilino que ya está resuelto»: `account.role`
+// autenticación sino el permiso dentro de una consulta que ya está resuelto»: `account.role`
 // sigue siendo `practitioner` y lo pone el servidor (`cuentas.md`).
 //
 // Son DOS valores y no los tres del `CHECK` de `practitioner`: `doctora` no se asigna desde

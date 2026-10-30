@@ -154,7 +154,7 @@ export class ScopeGuard implements CanActivate {
     const practiceId = claims.practice ?? null;
 
     // Un token de doctora o de equipo SIN `practice` no se puede atender: su contexto de
-    // base exige el inquilino, y sin él las políticas no leen nada. No se improvisa uno.
+    // base exige la consulta, y sin él las políticas no leen nada. No se improvisa uno.
     if (accountRole === 'practitioner' && practiceId === null) {
       throw new ContractError('token_no_valido');
     }

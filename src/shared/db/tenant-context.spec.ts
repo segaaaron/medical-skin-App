@@ -37,7 +37,7 @@ describe('withTenantContext · la guarda de app_platform', () => {
   });
 
   it('sin practiceId la consola pasa la comprobación y lo que falla ya es la conexión', async () => {
-    // El otro lado de la guarda: lo que se rechaza es el inquilino, no el rol. Aquí el
+    // El otro lado de la guarda: lo que se rechaza es la consulta, no el rol. Aquí el
     // contexto es válido y el único error posible es el del puerto vacío, que es
     // exactamente lo que prueba que la guarda no se disparó.
     await expect(

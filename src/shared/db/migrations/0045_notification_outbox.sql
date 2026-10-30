@@ -67,7 +67,7 @@ ALTER TABLE "notification_outbox" ADD CONSTRAINT "notification_account_fk" FOREI
 
 -- La idempotencia de los ocho trabajos, en un índice.
 CREATE UNIQUE INDEX "notification_dedupe_uq" ON "notification_outbox" USING btree ("practice_id", "dedupe_key");--> statement-breakpoint
--- La consulta del trabajador: lo pendiente que ya toca, por inquilino primero (lección 0011).
+-- La consulta del trabajador: lo pendiente que ya toca, por consulta primero (lección 0011).
 CREATE INDEX "notification_due_idx" ON "notification_outbox" USING btree ("practice_id", "send_after")
 	WHERE "status" = 'pendiente';--> statement-breakpoint
 -- Y la de la pantalla «qué se le mandó a esta cuenta».
@@ -77,8 +77,8 @@ ALTER TABLE "notification_outbox" ENABLE ROW LEVEL SECURITY;--> statement-breakp
 ALTER TABLE "notification_outbox" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
 -- La consulta ve LO SUYO, y de lectura: quien escribe es la función de abajo, para que la
--- puerta de la paciente —que no tiene inquilino— pueda encolar el aviso de una incidencia sin
--- recibir `INSERT` sobre una tabla de otro inquilino.
+-- puerta de la paciente —que no tiene consulta— pueda encolar el aviso de una incidencia sin
+-- recibir `INSERT` sobre una tabla de otra consulta.
 CREATE POLICY notification_practitioner ON "notification_outbox" FOR SELECT TO app_practitioner
 	USING ("practice_id" = medskin_current_practice());--> statement-breakpoint
 -- Y cada cuenta ve los avisos que le mandaron: es su historial, y lo pide la pantalla de
@@ -100,9 +100,9 @@ CREATE POLICY alert_preference_access ON "alert_preference" FOR SELECT TO medski
 -- ---------------------------------------------------------------------------------------
 -- ENCOLAR · lo llaman los casos de uso, desde la puerta de la consulta y la de la paciente
 -- ---------------------------------------------------------------------------------------
--- Las mismas tres guardas que `medskin_promotion_redeem` (0043): el inquilino es el del
+-- Las mismas tres guardas que `medskin_promotion_redeem` (0043): la consulta es el del
 -- contexto —la consulta— o uno al que ESTA cuenta está vinculada —la paciente—, así que nadie
--- encola un aviso en el inquilino de al lado.
+-- encola un aviso en la consulta de al lado.
 --
 -- `ON CONFLICT DO NOTHING` y devuelve nulo: encolar dos veces el mismo aviso no es un error,
 -- es el trabajo repetible haciendo su trabajo.
@@ -127,7 +127,7 @@ ALTER FUNCTION medskin_notify(uuid, uuid, text, text, text, jsonb, text, timesta
 REVOKE ALL ON FUNCTION medskin_notify(uuid, uuid, text, text, text, jsonb, text, timestamptz) FROM PUBLIC;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION medskin_notify(uuid, uuid, text, text, text, jsonb, text, timestamptz) TO app_practitioner, app_patient, app_account;--> statement-breakpoint
 
--- El programador global —recordatorios, «toca volver»— no tiene contexto de inquilino, igual
+-- El programador global —recordatorios, «toca volver»— no tiene contexto de consulta, igual
 -- que el trabajador de fotos. Esta es su puerta para encolar: sin guardas de contexto, pero
 -- solo para `app_anonymous`, que es el rol de los trabajos y cuyo único privilegio son
 -- funciones como esta (napkin §1.6).
@@ -313,8 +313,8 @@ GRANT EXECUTE ON FUNCTION medskin_devices_stale(integer, integer) TO app_anonymo
 -- ---------------------------------------------------------------------------------------
 -- LOS DOS PROGRAMADORES QUE MIRAN LA AGENDA · recordatorio de cita y «toca volver»
 -- ---------------------------------------------------------------------------------------
--- Cruzan inquilinos a propósito, como las tres de la 0038: un programador global no tiene
--- petición ni inquilino, y lo que devuelven son IDENTIFICADORES y un correo, nunca el nombre
+-- Cruzan consultas a propósito, como las tres de la 0038: un programador global no tiene
+-- petición ni consulta, y lo que devuelven son IDENTIFICADORES y un correo, nunca el nombre
 -- de un tratamiento.
 --
 -- La ventana: citas que empiezan dentro de `p_hours` ± `p_window_minutes`. Se llama cada cinco

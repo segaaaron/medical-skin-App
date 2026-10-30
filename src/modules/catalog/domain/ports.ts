@@ -10,7 +10,7 @@ import type {
   TreatmentDraft,
 } from './treatment';
 
-/** Quién escribe el catálogo. Sale del token; el inquilino nunca de la URL. */
+/** Quién escribe el catálogo. Sale del token; la consulta nunca de la URL. */
 export type CatalogWriter = {
   accountId: string;
   practiceId: string;

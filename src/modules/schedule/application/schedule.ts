@@ -28,7 +28,7 @@ export class Schedule {
     // clínico no podía ver a qué hora abre la consulta en la que trabaja.
     const asking = practiceOf(caller, 'horarios:leer');
     const config = await this.schedule.config(asking, asking.practiceId!);
-    if (config === null) throw new ContractError('inquilino_no_existe');
+    if (config === null) throw new ContractError('consulta_no_existe');
 
     return {
       zona_horaria: config.timeZone,

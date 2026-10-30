@@ -68,7 +68,7 @@ export class ListPatients {
 }
 
 /**
- * Quién pregunta, con su inquilino. Una paciente no tiene consulta que listar y recibe el
+ * Quién pregunta, con su consulta. Una paciente no tiene consulta que listar y recibe el
  * mismo `403` que una practicante sin el permiso: no se distingue, porque distinguir diría que
  * esta consulta existe.
  */

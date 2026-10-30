@@ -1,4 +1,4 @@
-// Solo HTTP · los TRES endpoints de consola de `inquilinos.md`.
+// Solo HTTP · los TRES endpoints de consola de `consultas.md`.
 //
 // LAS RUTAS SON EXACTAMENTE LAS CLAVES DE `route-policy.ts` —`POST /v1/platform/tenants`,
 // `GET /v1/platform/tenants/:id`, `POST /v1/platform/tenants/:id/license/decision`—
@@ -7,7 +7,7 @@
 // unidad ve.
 //
 // QUIEN LLAMA SALE DE LA PETICIÓN Y DE NINGÚN OTRO SITIO, y es un `PlatformCaller`, no un
-// `Caller`: no tiene cuenta, ni sesión, ni inquilino. **Y el permiso NO se vuelve a
+// `Caller`: no tiene cuenta, ni sesión, ni consulta. **Y el permiso NO se vuelve a
 // comprobar**: si este controlador corre, el permiso de esta ruta ya estaba en el token
 // firmado y lo verificó el guardia. Comprobarlo dos veces son dos autorizaciones que se
 // pueden desacordar.
@@ -55,12 +55,12 @@ export class PlatformTenantsController {
   }
 
   // El `id` de la RUTA no autoriza nada: entra como criterio de búsqueda bajo la política de
-  // `app_platform` y sin fila la respuesta es `404 inquilino_no_existe`, la misma que daría un
+  // `app_platform` y sin fila la respuesta es `404 consulta_no_existe`, la misma que daría un
   // identificador inventado.
   @Get(':id')
   @HttpCode(200)
   async file(@Req() req: RequestWithContext, @Param('id') id: string) {
-    if (!UUID.test(id)) throw new ContractError('inquilino_no_existe');
+    if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
     return this.readTenant.run(id, actorOf(req));
   }
 
@@ -93,7 +93,7 @@ function actorOf(req: RequestWithContext): PlatformActor {
 
 /**
  * La traza de la petición. La necesita UN camino y solo uno: el fallo del correo del alta, que
- * NO se lanza —el inquilino queda creado— y por eso no pasa por el filtro global, que es quien
+ * NO se lanza —la consulta queda creado— y por eso no pasa por el filtro global, que es quien
  * normalmente la pone.
  */
 function traceOf(req: RequestWithContext): { traceId: string; requestId: string } {

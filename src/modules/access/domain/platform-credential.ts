@@ -2,7 +2,7 @@
 //
 // Puerto propio y no un campo más en `CredentialPort`, por la misma razón por la que la
 // tabla es propia: lo que devuelve `medskin_platform_credential` no tiene cuenta, ni rol de
-// autenticación, ni inquilino, ni contraseña temporal. Meterlo en `AccessCredential` sería
+// autenticación, ni consulta, ni contraseña temporal. Meterlo en `AccessCredential` sería
 // un tipo con ocho campos nulos cuyo significado depende de por dónde se entró, y el día que
 // alguien lea el campo equivocado no habría tipo que lo impidiera.
 

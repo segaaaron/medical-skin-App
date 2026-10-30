@@ -1,5 +1,5 @@
 // Los vínculos de la paciente, con `app_patient` y SOLO `medskin.account_id` en el contexto:
-// no hay inquilino que fijar porque esta es la lectura que los cruza a propósito.
+// no hay consulta que fijar porque esta es la lectura que los cruza a propósito.
 //
 // `app_patient` tiene `GRANT UPDATE (status, updated_at)` sobre `patient_link` y su política es
 // `account_id = medskin_current_account()`: el `vinculo_id` de la URL no autoriza nada, es

@@ -8,7 +8,7 @@
 // por `withTenantContext()`.
 //
 // Archivo aparte y no dentro del otro por una razón práctica: aquel prueba el aislamiento
-// por inquilino de las diez tablas de la 0000 y su siembra está hecha para eso. Este prueba
+// por consulta de las diez tablas de la 0000 y su siembra está hecha para eso. Este prueba
 // la frontera de las funciones, que es por firma y no por fila, y necesita su propia
 // siembra —códigos de recuperación vivos, refrescos rotables, una licencia a medio llenar—.
 
@@ -79,7 +79,7 @@ const ctxTeamA: TenantContext = { role: 'app_practitioner', practiceId: A.practi
 const ctxPractitionerB: TenantContext = { role: 'app_practitioner', practiceId: B.practice, accountId: B.account };
 const ctxPatient: TenantContext = { role: 'app_patient', accountId: PATIENT.account };
 const ctxPlatform: TenantContext = { role: 'app_platform', accountId: PLATFORM.account };
-// El rol sin sesión: ni inquilino ni cuenta. No hay nada que fijar porque todavía no se
+// El rol sin sesión: ni consulta ni cuenta. No hay nada que fijar porque todavía no se
 // sabe quién llama, y eso es el punto.
 const ctxAnonymous: TenantContext = { role: 'app_anonymous' };
 
@@ -348,7 +348,7 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       credential_as_platform: await canRun(ctxPlatform, 'select * from medskin_access_credential($1)', [
         PATIENT.email,
       ]),
-      // Y la del alta de inquilino no la puede llamar la doctora.
+      // Y la del alta de consulta no la puede llamar la doctora.
       owner_as_practitioner: await canRun(
         ctxPractitionerA,
         `select * from medskin_create_practice_owner($1, $2, $3, $4, $5, now() + '72 hours'::interval)`,
@@ -700,7 +700,7 @@ describe('license.status · lo mueve la función, no un grant', () => {
     // La de B está a medias: no se envía una licencia sin matrícula ni credencial.
     expect((await toReview(ctxPractitionerB))[0]?.verdict).toBe('incomplete');
 
-    // La bitácora quedó, con quién, qué, sobre qué y de qué inquilino.
+    // La bitácora quedó, con quién, qué, sobre qué y de qué consulta.
     const audit = await read<{
       action: string;
       actor: string;
@@ -723,7 +723,7 @@ describe('license.status · lo mueve la función, no un grant', () => {
       },
     ]);
 
-    // Y la licencia de B no se movió: la función toma el inquilino del contexto, no de un
+    // Y la licencia de B no se movió: la función toma la consulta del contexto, no de un
     // argumento, así que no hay nada que apuntar a otra consulta.
     const [licenseB] = await read(app, ctxPractitionerB, 'select status from license');
     expect(licenseB).toEqual({ status: 'sin_enviar' });
@@ -1112,7 +1112,7 @@ describe('el registro de fallos del rol sin sesión (0004 y 0005)', () => {
     expect(Number(row?.id)).toBeGreaterThan(0);
 
     // Se lee por la consola, que es quien mira el panel de fallos (§10.4). La doctora no:
-    // su política es por inquilino y esta fila no tiene inquilino.
+    // su política es por consulta y esta fila no tiene consulta.
     const [written] = await read<Record<string, string | null>>(
       app,
       ctxPlatform,
@@ -1209,7 +1209,7 @@ describe('el registro de fallos del rol sin sesión (0004 y 0005)', () => {
       plataformaInventada: await fails(ctxAnonymous, [...ok.slice(0, 4), 'windows-phone', null]),
       regionInventada: await fails(ctxAnonymous, [...ok.slice(0, 4), null, 'bo']),
       // Y los otros tres roles no la necesitan: escriben la fila completa, con su
-      // inquilino y su actor, bajo su propia política.
+      // consulta y su actor, bajo su propia política.
       comoDoctora: await fails(ctxPractitionerA, ok),
       comoPaciente: await fails(ctxPatient, ok),
       comoPlataforma: await fails(ctxPlatform, ok),
@@ -1432,7 +1432,7 @@ describe('el reenvío del acceso de la doctora (0006)', () => {
     expect(state?.password_chosen).toBe('true');
   });
 
-  it('las dos funciones exigen contexto de inquilino y no las ejecuta nadie más', async () => {
+  it('las dos funciones exigen contexto de consulta y no las ejecuta nadie más', async () => {
     const canRun = async (ctx: TenantContext, sql: string, params: unknown[] = []) => {
       try {
         await read(app, ctx, sql, params);
@@ -1549,10 +1549,10 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
     ).rejects.toMatchObject({ code: '42501' });
   });
 
-  it('y la bitácora de la MISMA transacción entra con el inquilino que devolvió la función', async () => {
+  it('y la bitácora de la MISMA transacción entra con la consulta que devolvió la función', async () => {
     // Es la segunda consulta que el repositorio hace en esa transacción, y la que faltaba
     // por probar: `practice_id` es el de la doctora —lo acaba de devolver la función— y
-    // `medskin.practice_id` está VACÍO, porque este rol no fija inquilino. La política de
+    // `medskin.practice_id` está VACÍO, porque este rol no fija consulta. La política de
     // inserción de `access_audit` es `with check (true)` a propósito; si no lo fuera, o si
     // faltara el `GRANT INSERT`, `POST /v1/access/new-password` sería un 500 con la
     // contraseña ya guardada, que es justo lo que el contrato promete que no pasa.

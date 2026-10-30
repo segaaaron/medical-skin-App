@@ -53,7 +53,7 @@ export type PatientToReturn = {
 };
 
 export interface OutboxPort {
-  /** Encola desde un TRABAJO: sin contexto de inquilino. Devuelve `false` si ya estaba. */
+  /** Encola desde un TRABAJO: sin contexto de consulta. Devuelve `false` si ya estaba. */
   enqueueAsJob(draft: EnqueueDraft): Promise<boolean>;
   due(limit: number, maxAttempts: number): Promise<readonly Notification[]>;
   devicesOf(accountId: string): Promise<readonly DeviceRow[]>;

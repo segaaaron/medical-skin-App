@@ -1,6 +1,6 @@
 // El fallo del correo del alta, registrado SIN convertirlo en un 500.
 //
-// `inquilinos.md`: «Si el envío falla, el inquilino **queda creado** y el fallo va a
+// `consultas.md`: «Si el envío falla, la consulta **queda creado** y el fallo va a
 // `service_failure`: la consola tiene "Reenviar la contraseña temporal" para eso». Así que
 // este es el único camino del módulo que escribe una fila de fallo sin que el filtro global
 // lo haga: el filtro solo ve lo que se lanza, y aquí no se lanza nada.

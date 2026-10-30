@@ -7,7 +7,7 @@
 // `account_id` y no por `practice_id`. Cruza solo las fichas de quien pregunta, y por eso la
 // política de esa tabla tiene dos caras —por `practice_id` para la doctora, por `account_id`
 // para la paciente—. `consulta`, `doctora` y `ciudad` salen de las COPIAS que guarda
-// `patient_link`: darle política a `app_patient` sobre `practice` abriría todos los inquilinos
+// `patient_link`: darle política a `app_patient` sobre `practice` abriría todos las consultas
 // para poder leer uno.
 
 import { ContractError } from '../../../shared/contract/error-catalog';

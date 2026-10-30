@@ -1,10 +1,10 @@
--- Tramo 1 · `inquilinos.md`, los cinco endpoints. Lo que les faltaba a la base, y no es
+-- Tramo 1 · `consultas.md`, los cinco endpoints. Lo que les faltaba a la base, y no es
 -- mucho: con la 0000-0014 delante, TRES de los cinco ya eran servibles sin tocar nada.
 --
 -- Escrita a mano: nada de esto lo expresa drizzle-kit. NO TRAE NI UNA TABLA NI UNA COLUMNA
--- NUEVA, así que no hay `FORCE ROW LEVEL SECURITY` que añadir ni índice con el inquilino
+-- NUEVA, así que no hay `FORCE ROW LEVEL SECURITY` que añadir ni índice con la consulta
 -- delante que crear: las tres tablas del recurso —`practice`, `license`, `practitioner`—
--- vienen de la 0000 con sus políticas forzadas, y sus índices ya empiezan por el inquilino
+-- vienen de la 0000 con sus políticas forzadas, y sus índices ya empiezan por la consulta
 -- (`license_practice_uq (practice_id)`, `patient_practice_status_idx (practice_id, status,
 -- created_at DESC)`, `session_practice_idx (practice_id, last_seen_at DESC)`).
 --
@@ -13,23 +13,23 @@
 -- =======================================================================================
 -- LO QUE SE COMPROBÓ CONTRA EL CATÁLOGO, ENDPOINT POR ENDPOINT (28 oct 2026, PG 17.11)
 --
---   POST /v1/plataforma/inquilinos        · `app_platform` tiene `arwd` sobre `practice` y
+--   POST /v1/plataforma/consultas        · `app_platform` tiene `arwd` sobre `practice` y
 --     su política (`current_user = 'app_platform'`) cubre el `INSERT`. La dueña la crea
 --     `medskin_create_practice_owner(...)`, que ya existe y ya está concedida. FALTABA la
 --     fila de `license`: ver abajo, y es lo único.
---   GET  /v1/inquilinos/mio               · servible tal cual. `practice` por `id`
+--   GET  /v1/consultas/mio               · servible tal cual. `practice` por `id`
 --     (política sobre `id`), `license` por `practice_id` (`license_practice_uq`), el
 --     recuento de fichas por `patient_practice_status_idx`, y `first_day_*` ya son
 --     columnas de `practice` desde la 0000. No se tocó nada.
---   POST /v1/inquilinos/mio/licencia      · servible tal cual. La doctora hace `UPDATE` de
+--   POST /v1/consultas/mio/licencia      · servible tal cual. La doctora hace `UPDATE` de
 --     las cuatro columnas del formulario (grants por columna de la 0002, política que solo
 --     deja mientras el estado es `sin_enviar` o `rechazada`) y después llama a
 --     `medskin_license_to_review(...)`, que valida la transición, exige ser la dueña y
 --     deja su fila en `access_audit`. No se tocó nada.
---   GET  /v1/plataforma/inquilinos/{id}   · casi servible. Faltaban DOS datos que el
+--   GET  /v1/plataforma/consultas/{id}   · casi servible. Faltaban DOS datos que el
 --     contrato promete y que la consola no alcanza: `plan.pacientes` y `versiones_app`.
 --     Los resuelve `medskin_platform_practice_stats(...)`, abajo.
---   POST /v1/plataforma/inquilinos/{id}/licencia/decision · servible tal cual, y esto se
+--   POST /v1/plataforma/consultas/{id}/licencia/decision · servible tal cual, y esto se
 --     midió antes de escribir una función que habría sobrado: ver el bloque siguiente.
 --
 -- =======================================================================================
@@ -78,7 +78,7 @@
 -- Se arregla donde está el acto, no en el controlador: `medskin_create_practice_owner`
 -- ya crea la cuenta, la credencial temporal, la fila de `practitioner` y el vínculo
 -- `practice.owner_account_id` en una transacción. La licencia en `sin_enviar` es la quinta
--- pieza del MISMO acto («Una consulta sin dueña no existe», `inquilinos.md`), y así
+-- pieza del MISMO acto («Una consulta sin dueña no existe», `consultas.md`), y así
 -- `backend-senior` no tiene que acordarse de nada.
 --
 -- NO se hizo con un disparador en `practice`, que era la otra opción obvia: insertaría la
@@ -188,7 +188,7 @@ GRANT EXECUTE ON FUNCTION medskin_create_practice_owner(uuid, citext, text, text
 -- =======================================================================================
 -- 2 · LOS DOS DATOS DE LA FICHA DE LA CONSOLA QUE `app_platform` NO ALCANZA
 --
--- `GET /v1/plataforma/inquilinos/{id}` promete `plan.pacientes` y `versiones_app`, y
+-- `GET /v1/plataforma/consultas/{id}` promete `plan.pacientes` y `versiones_app`, y
 -- medido el 28 oct con el rol de verdad:
 --
 --   · `SELECT count(*) FROM patient WHERE practice_id = $1` -> **permission denied for
@@ -208,11 +208,11 @@ GRANT EXECUTE ON FUNCTION medskin_create_practice_owner(uuid, citext, text, text
 -- Los dos se resuelven con UNA función que devuelve TRES números y ni una fila. Es la
 -- diferencia que define `Consola.dc.html`: «cuántas fotos en cola, no qué foto». Lo que
 -- sale de aquí no se puede volver a preguntar de otra forma —no hay `WHERE` que pasarle
--- más que el inquilino— y no hay por dónde sacarle un nombre, un correo ni una fecha de
+-- más que la consulta— y no hay por dónde sacarle un nombre, un correo ni una fecha de
 -- nacimiento.
 --
 -- `STABLE` y no `VOLATILE`: solo lee (§1.8, decisión 16, al revés). `STRICT`: con el
--- inquilino nulo devuelve cero filas en vez de inventar un cero, que es la validación de
+-- consulta nulo devuelve cero filas en vez de inventar un cero, que es la validación de
 -- argumento más corta que existe. De `medskin_access` y no de `medskin_owner`, que es
 -- superusuario (§1.9): un `SECURITY DEFINER` del dueño se saltaría RLS en TODAS las tablas
 -- y no solo en la que necesita. `search_path` fijado.
@@ -235,7 +235,7 @@ SET search_path = pg_catalog, public
 AS $$
   -- Las fichas archivadas NO cuentan contra el límite del plan: archivar libera un cupo,
   -- o archivar no sirve de nada para una consulta que llegó a su tope. Es la MISMA regla
-  -- que tiene que usar `GET /v1/inquilinos/mio`, que cuenta por su cuenta con el mismo
+  -- que tiene que usar `GET /v1/consultas/mio`, que cuenta por su cuenta con el mismo
   -- índice. Levantada como pregunta de producto: ningún contrato lo dice.
   SELECT
     (SELECT count(*) FROM patient p
@@ -269,6 +269,6 @@ GRANT EXECUTE ON FUNCTION medskin_platform_practice_stats(uuid) TO app_platform;
 -- solo índice.
 --
 -- Tampoco se creó índice para el borrado de la credencial a los 90 días de la decisión
--- (`inquilinos.md`, reglas de negocio). Ese barrido es un trabajo de cola que todavía no
+-- (`consultas.md`, reglas de negocio). Ese barrido es un trabajo de cola que todavía no
 -- existe, no tiene puerto de archivos hasta el tramo 6, y un índice sobre `decided_at`
 -- para cero filas y ningún lector es un índice que nadie midió.

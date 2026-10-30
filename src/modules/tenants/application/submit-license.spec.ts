@@ -113,7 +113,7 @@ describe('POST /v1/tenants/mine/license', () => {
       },
     });
 
-    // El inquilino sale del token y la respuesta estimada la calcula el servidor: 24 h
+    // El consulta sale del token y la respuesta estimada la calcula el servidor: 24 h
     // hábiles desde el martes.
     expect(pedido).toEqual([
       {
@@ -148,7 +148,7 @@ describe('POST /v1/tenants/mine/license', () => {
     expect(pedido).toHaveLength(1);
   });
 
-  it('una paciente no llega a abrir contexto de inquilino: su token no tiene ninguno', async () => {
+  it('una paciente no llega a abrir contexto de consulta: su token no tiene ninguno', async () => {
     const { caso, pedido } = armar();
 
     await expect(caso.run(CUERPO, PACIENTE, CLAVE)).rejects.toMatchObject({

@@ -21,7 +21,7 @@
 --     después: Index Scan por service_failure_practice_idx ·  4 bloques · 0,05 ms
 --
 -- Los dos recorridos eran completos: sin orden utilizable, el motor ni siquiera entraba por
--- el índice del inquilino. Así que esto no era «una ordenación de más», era la regla 5 de
+-- el índice de la consulta. Así que esto no era «una ordenación de más», era la regla 5 de
 -- §7.3 incumplida de hecho en las dos bitácoras.
 --
 -- `session_account_active_idx` NO mejora hoy y se arregla igual: la igualdad por cuenta

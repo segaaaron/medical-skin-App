@@ -6,9 +6,9 @@
 // LA DECISIÓN QUE DA FORMA A ESTE ARCHIVO, y es del contrato: **la exportación se arma bajo las
 // MISMAS POLÍTICAS que las lecturas normales**, con el `account_id` de quien la pidió. No hay
 // una consulta privilegiada que junte los datos: cada `select` de aquí abajo corre con
-// `app_patient` —o con `app_practitioner` y su inquilino— y lo que no le toca, no lo ve. Si
+// `app_patient` —o con `app_practitioner` y su consulta— y lo que no le toca, no lo ve. Si
 // esto se hubiera escrito con `SECURITY DEFINER`, la exportación sería el único camino del
-// sistema que cruza inquilinos, y sería el que más datos mueve.
+// sistema que cruza consultas, y sería el que más datos mueve.
 //
 // QUÉ LLEVA Y QUÉ NO: lo que el contrato enumera —cuenta, vínculos, antecedentes, citas,
 // sesiones con lo aplicado, consentimientos con su versión, cuidados, mensajes, cobros y las
@@ -145,7 +145,7 @@ export class ExportWorker {
     const now = new Date();
     try {
       // EL CONTEXTO DE QUIEN LA PIDIÓ, y es el centro de este archivo. `practice_id` nulo en la
-      // fila significa «la pidió una paciente»: entra con `app_patient` y sin inquilino.
+      // fila significa «la pidió una paciente»: entra con `app_patient` y sin consulta.
       const context: TenantContext =
         practiceId === null
           ? { role: 'app_patient', accountId }
@@ -367,7 +367,7 @@ export class ExportWorker {
     };
   }
 
-  /** Y lo de la consulta, cuando la pide la dueña: su propio inquilino, con RLS puesta igual. */
+  /** Y lo de la consulta, cuando la pide la dueña: su propio consulta, con RLS puesta igual. */
   private async practiceData(c: PoolClient): Promise<Record<string, unknown>> {
     return {
       generado_en: new Date().toISOString(),

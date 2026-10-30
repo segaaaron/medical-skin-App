@@ -183,7 +183,7 @@ export class Catalog {
 }
 
 /**
- * Quién escribe, con su inquilino y su permiso. Una paciente no tiene catálogo que editar y
+ * Quién escribe, con su consulta y su permiso. Una paciente no tiene catálogo que editar y
  * recibe el mismo `403` que una recepcionista: no se distingue.
  */
 function writerOf(caller: Caller, permission: string): CatalogWriter {

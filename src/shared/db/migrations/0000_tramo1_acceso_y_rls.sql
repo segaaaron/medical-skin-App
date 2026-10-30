@@ -252,8 +252,8 @@ CREATE INDEX "sesion_practice_idx" ON "sesion" USING btree ("practice_id","ultim
 -- 2. `SET LOCAL ROLE` es seguro en modo transacción por la MISMA razón que la regla 2 de
 --    §7.3: `LOCAL` se deshace en el `COMMIT`, igual que `set_config(..., true)`. Un
 --    `SET ROLE` de sesión se filtraría al siguiente cliente que reutiliza la conexión,
---    exactamente como se filtra un `SET` de sesión del contexto de inquilino. Por eso el
---    ayudante de `contexto-inquilino.ts` emite las tres cosas —el rol y los dos
+--    exactamente como se filtra un `SET` de sesión del contexto de consulta. Por eso el
+--    ayudante de `contexto-consulta.ts` emite las tres cosas —el rol y los dos
 --    contextos— con alcance de transacción, en la misma transacción y en la misma
 --    llamada: ninguna se puede olvidar sin olvidar las otras dos.
 --
@@ -358,7 +358,7 @@ ALTER TABLE "acceso_auditoria"    FORCE  ROW LEVEL SECURITY;--> statement-breakp
 
 -- =======================================================================================
 -- practice · contexto `medskin.practice_id`, y la política va sobre `id`, no sobre
--- `practice_id`: esta tabla ES el inquilino.
+-- `practice_id`: esta tabla ES la consulta.
 -- =======================================================================================
 CREATE POLICY practice_doctora_lee ON "practice" FOR SELECT TO app_doctora
   USING (id = medskin_practice_actual());--> statement-breakpoint
@@ -388,7 +388,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "practice" TO app_plataforma;--> stateme
 -- =======================================================================================
 -- licencia · política sobre `practice_id`. La doctora NO escribe `estado`: su UPDATE
 -- cubre los campos del formulario y solo cuando el caso está `sin_enviar` o `rechazada`
--- (inquilinos.md · decision). El salto a `en_revision` y la decisión son de la plataforma
+-- (consultas.md · decision). El salto a `en_revision` y la decisión son de la plataforma
 -- o de una función SECURITY DEFINER; por grant, desde aquí no se puede.
 -- =======================================================================================
 CREATE POLICY licencia_doctora_lee ON "licencia" FOR SELECT TO app_doctora
@@ -471,7 +471,7 @@ GRANT DELETE ON "credencial" TO app_doctora, app_paciente;--> statement-breakpoi
 
 -- =======================================================================================
 -- sesion · política sobre `cuenta_id`. Una doctora NO ve las sesiones de sus pacientes:
--- `sesion` no lleva inquilino que la habilite y no hay política que se lo dé. Saber
+-- `sesion` no lleva consulta que la habilite y no hay política que se lo dé. Saber
 -- cuándo y desde dónde entra su paciente no es parte de atenderla (acceso.md).
 -- La plataforma tampoco: no hay política para `app_plataforma`.
 -- =======================================================================================
@@ -493,11 +493,11 @@ CREATE POLICY codigo_recuperacion_propio ON "codigo_recuperacion" FOR ALL TO app
   WITH CHECK (cuenta_id = medskin_cuenta_actual());--> statement-breakpoint
 
 -- =======================================================================================
--- clave_idempotencia · «el inquilino de quien llama» (§3.3): `practice_id` para la
+-- clave_idempotencia · «la consulta de quien llama» (§3.3): `practice_id` para la
 -- doctora, `cuenta_id` para la paciente y para la consola. La clave la pone el cliente y
 -- la clave primaria la encierra por cuenta, así que dentro de una consulta el filtro por
--- inquilino es suficiente y es el que usa el índice que empieza por `practice_id`.
--- La consola la necesita porque `POST /v1/plataforma/inquilinos` es idempotente; su
+-- consulta es suficiente y es el que usa el índice que empieza por `practice_id`.
+-- La consola la necesita porque `POST /v1/plataforma/consultas` es idempotente; su
 -- política es la misma regla por fila, no un permiso más ancho.
 -- =======================================================================================
 CREATE POLICY clave_idempotencia_doctora ON "clave_idempotencia" FOR ALL TO app_doctora

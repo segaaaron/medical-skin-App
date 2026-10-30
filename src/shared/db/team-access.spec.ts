@@ -184,7 +184,7 @@ describe('el reenvío de acceso del equipo · medskin_resend_team_access (0019)'
   });
 
   it('el miembro de otra consulta es «member_not_found», igual que un id inventado', async () => {
-    // El aislamiento de esta función: el inquilino A no alcanza la credencial del B ni
+    // El aislamiento de esta función: la consulta A no alcanza la credencial del B ni
     // nombrando su `practitioner_id`, y no puede distinguir que existe.
     expect(await Promise.all([resend(ctxOwnerA, B.desk.practitioner), resend(ctxOwnerA, NOBODY)])).toEqual([
       [{ outcome: 'member_not_found', email: null, expires_at: null }],
@@ -211,7 +211,7 @@ describe('el reenvío de acceso del equipo · medskin_resend_team_access (0019)'
   });
 
   it('quien no es la dueña no reenvía nada, ni de un miembro que sí existe', async () => {
-    // La segunda doctora de la MISMA consulta: tiene contexto de inquilino válido y el
+    // La segunda doctora de la MISMA consulta: tiene contexto de consulta válido y el
     // `EXECUTE` de su rol. Lo que no tiene es la fila de `practice.owner_account_id`.
     expect(await resend(ctxSecondA, A.desk.practitioner)).toEqual([
       { outcome: 'not_owner', email: null, expires_at: null },

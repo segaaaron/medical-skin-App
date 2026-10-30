@@ -40,7 +40,7 @@ const SENUELO: PlatformCredential = {
 const SOPORTE: PlatformCredential = {
   platformAccountId: CUENTA,
   label: 'Andrea del equipo de soporte',
-  permissions: ['plataforma:inquilinos:crear', 'plataforma:inquilinos:leer'],
+  permissions: ['plataforma:consultas:crear', 'plataforma:consultas:leer'],
   status: 'activa',
   hash: '$argon2id$real',
   lockedUntil: null,
@@ -188,8 +188,8 @@ describe('POST /v1/platform/access · lo que pasa', () => {
     // Fuera del token a propósito: es lo que la consola usa para no dibujar un botón que va
     // a responder 403.
     expect(salida.permisos).toEqual([
-      'plataforma:inquilinos:crear',
-      'plataforma:inquilinos:leer',
+      'plataforma:consultas:crear',
+      'plataforma:consultas:leer',
     ]);
     expect(pasos).toContain('clear');
   });

@@ -89,7 +89,7 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   // acceso y los dos de recuperación: cuando llega no hay token que verificar —acaba de
   // caducar— y la autorización es el refresco, que valida la base con `app_anonymous`
   // contra una función `SECURITY DEFINER` `VOLATILE`. El `practice_id` del token nuevo se
-  // copia de la FILA de la sesión: si lo aceptara del cuerpo, sería un cambio de inquilino
+  // copia de la FILA de la sesión: si lo aceptara del cuerpo, sería un cambio de consulta
   // gratuito.
   'POST /v1/session/refresh': {
     anonymous: true,
@@ -103,7 +103,7 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     failurePhrase: FAILURE_PHRASES.createPatient,
   },
 
-  // `inquilinos.md` · los dos de la doctora. Solo `completo`: el contrato da
+  // `consultas.md` · los dos de la doctora. Solo `completo`: el contrato da
   // `403 contrasena_temporal_pendiente` para estas pantallas, que es exactamente lo que el
   // guardia devuelve cuando el alcance restringido no está en la lista.
   // `pacientes.md` · la lista y la busqueda. Recepcion SI entra: necesita encontrar a la
@@ -454,11 +454,11 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
   },
 
   'POST /v1/platform/tenants': {
-    platformPermission: 'plataforma:inquilinos:crear',
+    platformPermission: 'plataforma:consultas:crear',
     failurePhrase: FAILURE_PHRASES.createTenant,
   },
   'GET /v1/platform/tenants/:id': {
-    platformPermission: 'plataforma:inquilinos:leer',
+    platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.readTenant,
   },
   'POST /v1/platform/tenants/:id/license/decision': {

@@ -122,9 +122,9 @@ export class ErrorFilter implements ExceptionFilter {
  * porque esa columna no tiene clave foránea, igual que `license.reviewed_by`: fijarlo **no
  * crea ninguna fila en `account`**.
  *
- * `practiceId` va nulo incluso cuando la ruta nombra un inquilino, y es deliberado: el fallo
+ * `practiceId` va nulo incluso cuando la ruta nombra una consulta, y es deliberado: el fallo
  * es de una petición de soporte, no de la consulta sobre la que miraba. Atribuirlo a esa
- * consulta la haría aparecer en el panel de fallos de un inquilino que no hizo nada.
+ * consulta la haría aparecer en el panel de fallos de una consulta que no hizo nada.
  */
 function contextOf(caller: Caller | null, platform: PlatformCaller | null): FailureContext | null {
   if (caller !== null) {

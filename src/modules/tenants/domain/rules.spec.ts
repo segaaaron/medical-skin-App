@@ -1,4 +1,4 @@
-// Las reglas de `inquilinos.md` que no son una consulta. Sin base y sin dobles: son
+// Las reglas de `consultas.md` que no son una consulta. Sin base y sin dobles: son
 // funciones del dominio.
 
 import { describe, expect, it } from 'vitest';
@@ -133,7 +133,7 @@ describe('el formulario de la licencia · el orden de los errores es el de la pa
   });
 
   it('las cuatro de la primera entrega entran, y ni una quinta', () => {
-    // La lista la decidió `producto` el 28 de octubre y vive en `inquilinos.md`, que es de
+    // La lista la decidió `producto` el 28 de octubre y vive en `consultas.md`, que es de
     // donde la app saca su desplegable: si se edita allí y no aquí, esta prueba lo dice.
     expect(SPECIALTIES).toEqual([
       'medicina_estetica',
@@ -177,7 +177,7 @@ describe('el formulario de la licencia · el orden de los errores es el de la pa
   });
 });
 
-describe('la clave de la credencial · es del inquilino del token y de ningún otro', () => {
+describe('la clave de la credencial · es de la consulta del token y de ningún otro', () => {
   const OTRA = '33333333-3333-4333-8333-333333333333';
 
   it('acepta las tres extensiones del contrato bajo el prefijo de su consulta', () => {

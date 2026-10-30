@@ -3,7 +3,7 @@
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { SlotRules, Window } from './slots';
 
-/** Quién llama a la agenda. Para una paciente, `practiceId` es nulo: no es de ningún inquilino. */
+/** Quién llama a la agenda. Para una paciente, `practiceId` es nulo: no es de ninguna consulta. */
 export type ScheduleCaller = {
   accountId: string;
   practiceId: string | null;
@@ -21,7 +21,7 @@ export type ScheduleConfig = SlotRules & {
 
 export type AppointmentRow = {
   id: string;
-  /** El inquilino de la cita. La paciente no lo tiene en el contexto: sale de aquí. */
+  /** El consulta de la cita. La paciente no lo tiene en el contexto: sale de aquí. */
   practiceId: string;
   patientId: string;
   treatmentId: string;
@@ -93,7 +93,7 @@ export interface SchedulePort {
     },
   ): Promise<{ outcome: 'saved' | 'holiday_with_appointments'; conflicts: readonly string[] }>;
   busy(caller: ScheduleCaller, practiceId: string, from: Date, to: Date): Promise<readonly Window[]>;
-  /** El inquilino de la paciente sale de SU vínculo, nunca del parámetro. */
+  /** El consulta de la paciente sale de SU vínculo, nunca del parámetro. */
   linkedPractice(accountId: string, practiceId: string): Promise<{ patientId: string } | 'invitada' | null>;
   /** La duración del tratamiento, que es lo que decide qué es un hueco. */
   treatmentDuration(caller: ScheduleCaller, treatmentId: string): Promise<number | null>;

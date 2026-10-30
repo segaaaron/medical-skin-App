@@ -1,4 +1,4 @@
-// El repositorio de `inquilinos.md` CONTRA LA BASE REAL, porque es lo único que puede
+// El repositorio de `consultas.md` CONTRA LA BASE REAL, porque es lo único que puede
 // probar lo que decide de verdad qué lee este rol: los `GRANT` por columna y las políticas.
 // Con dobles eso es invisible —una columna de más no falla al compilar— y en la pantalla
 // real muere con «permiso denegado».
@@ -222,7 +222,7 @@ describe('GET /v1/tenants/mine · contra las políticas y los grants de verdad',
     ).rejects.toThrow(/permission denied for (table|column)/i);
   });
 
-  it('el inquilino A no ve ni una fila del B: una consulta, una licencia, sus fichas', async () => {
+  it('la consulta A no ve ni una fila del B: una consulta, una licencia, sus fichas', async () => {
     const practices = await read<{ id: string }>(
       ctx(A.practice, A.owner),
       'select id from practice',
@@ -236,7 +236,7 @@ describe('GET /v1/tenants/mine · contra las políticas y los grants de verdad',
     expect(licenses).toEqual([{ practice_id: A.practice }]);
 
     // Y la lectura del vecino desde su propio contexto devuelve lo suyo, no lo de A: la
-    // misma consulta, dos inquilinos, dos respuestas.
+    // misma consulta, dos consultas, dos respuestas.
     const vecina = await repository.read({ accountId: B.owner, practiceId: B.practice });
     expect(vecina?.name).toBe('Clínica Vecina');
     expect(vecina?.activePatients).toBe(30);
@@ -386,7 +386,7 @@ describe('POST /v1/tenants/mine/license · contra la función de verdad', () => 
 
   it('los envíos de otra consulta no cuentan contra los cinco: el recuento va por política', async () => {
     // Los cinco de C siguen en la bitácora. D manda el suyo y entra: si el recuento no
-    // estuviera acotado por el inquilino, este sería el sexto.
+    // estuviera acotado por la consulta, este sería el sexto.
     await owner.query(`update license set status = 'sin_enviar' where practice_id = $1`, [
       D.practice,
     ]);

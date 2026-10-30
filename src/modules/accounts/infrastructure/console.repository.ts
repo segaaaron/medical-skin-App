@@ -4,8 +4,8 @@
 // EL CONTEXTO ES `app_platform` CON `medskin.account_id` = EL `sub` DEL TOKEN, y fijarlo **no
 // crea ninguna fila en `account`**: la persona de plataforma no vive en esta región. Ese uuid
 // es lo que la política de `idempotency_key` compara y lo que viaja a la bitácora.
-// `practice_id` NO se fija: la consola cruza inquilinos a propósito y sus políticas son
-// `current_user = 'app_platform'`, no por inquilino.
+// `practice_id` NO se fija: la consola cruza consultas a propósito y sus políticas son
+// `current_user = 'app_platform'`, no por consulta.
 //
 // LO QUE ESTE ROL NO ALCANZA, Y NO SE ABRE PARA ESTAS DOS RUTAS:
 //   · `credential` — ni política ni grant. «No cambia su contraseña» es un permiso que no
@@ -109,7 +109,7 @@ export class ConsoleRepository implements PlatformAccessPort {
    * región— y es deliberado.
    *
    * `practice_id` va NULO: esta acción no es de ninguna consulta, y `app_platform` no fija
-   * inquilino. En `data` van etiquetas cerradas: NI EL CORREO, NI LA CONTRASEÑA, ni un dato
+   * consulta. En `data` van etiquetas cerradas: NI EL CORREO, NI LA CONTRASEÑA, ni un dato
    * clínico (§10.3, regla 1). El correo además no podría entrar sin convertir la bitácora
    * —que soporte lee entera— en un padrón consultable.
    */

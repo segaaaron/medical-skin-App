@@ -158,8 +158,8 @@ export class Appointments {
     const current = await this.appointments.one(asking, appointmentId);
     if (current === null) throw new ContractError('cita_no_existe');
 
-    // El inquilino sale de la FILA de la cita: para la paciente no hay contexto de
-    // inquilino, y su política ya garantizó que esa cita es suya.
+    // El consulta sale de la FILA de la cita: para la paciente no hay contexto de
+    // consulta, y su política ya garantizó que esa cita es suya.
     const practiceId = asking.practiceId ?? current.practiceId;
     const config = await this.schedule.config(asking, practiceId);
     if (config === null) throw new ContractError('cita_no_existe');

@@ -107,7 +107,7 @@ ALTER TABLE "plan_request" ADD CONSTRAINT "plan_request_practice_fk" FOREIGN KEY
 ALTER TABLE "data_export" ADD CONSTRAINT "data_export_account_fk" FOREIGN KEY ("account_id") REFERENCES "public"."account"("id") ON DELETE cascade;--> statement-breakpoint
 ALTER TABLE "data_export" ADD CONSTRAINT "data_export_practice_fk" FOREIGN KEY ("practice_id") REFERENCES "public"."practice"("id") ON DELETE set null;--> statement-breakpoint
 
--- El informe de ingresos y el margen leen por mes: el inquilino delante y la fecha después.
+-- El informe de ingresos y el margen leen por mes: la consulta delante y la fecha después.
 CREATE INDEX "payment_practice_idx" ON "payment" USING btree ("practice_id", "charged_at" DESC NULLS FIRST);--> statement-breakpoint
 CREATE INDEX "payment_patient_idx" ON "payment" USING btree ("practice_id", "patient_id");--> statement-breakpoint
 -- «Esa sesión ya está cobrada»: uno por sesión y concepto, entre los NO anulados.

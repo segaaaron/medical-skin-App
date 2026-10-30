@@ -7,7 +7,7 @@
 -- respuesta promete el aviso. Lo cazó la prueba del aviso de la lista de espera.
 --
 -- Y la política de `medskin_access`, por la misma razón que en `photo` (0037): `FORCE ROW LEVEL
--- SECURITY` se aplica también a quien tiene el `GRANT`, y el trabajo no tiene inquilino que
+-- SECURITY` se aplica también a quien tiene el `GRANT`, y el trabajo no tiene consulta que
 -- fijar.
 --
 -- Las 0046 y 0047 ya están aplicadas y no se tocan (§3.4, regla 7 · napkin §1.5).

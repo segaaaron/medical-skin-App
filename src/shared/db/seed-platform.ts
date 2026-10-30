@@ -15,7 +15,7 @@
 // aquí. Es la misma propiedad que hace que la consola no pueda leer sus propias cuentas.
 //
 //   pnpm platform:seed andrea@medskin.app "Andrea del equipo de soporte" \
-//     plataforma:inquilinos:crear,plataforma:inquilinos:leer
+//     plataforma:consultas:crear,plataforma:consultas:leer
 //   Contraseña: ********
 
 import { createInterface } from 'node:readline';

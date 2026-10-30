@@ -90,7 +90,7 @@ describe('GET /v1/session · el 200', () => {
       'alcance',
       'region',
       'siguiente_paso',
-      'inquilino',
+      'consulta',
       'permisos',
       'segundo_factor',
       'token_caduca_en',
@@ -100,7 +100,7 @@ describe('GET /v1/session · el 200', () => {
     expect(vista.cuenta_id).toBe(CUENTA);
     expect(vista.rol).toBe('doctora');
     expect(vista.alcance).toBe('completo');
-    expect(vista.inquilino).toEqual({ id: CONSULTA, nombre: 'Clínica Paz' });
+    expect(vista.consulta).toEqual({ id: CONSULTA, nombre: 'Clínica Paz' });
     expect(vista.token_caduca_en).toBe(CADUCA.toISOString());
     expect(vista.refresco_caduca_en).toBe(REFRESCO_CADUCA.toISOString());
     // El `sid` y la cuenta salen del TOKEN, nunca del cuerpo ni de la URL.
@@ -143,7 +143,7 @@ describe('GET /v1/session · el 200', () => {
     expect(vista.permisos).toEqual(['pacientes:leer', 'agenda:leer']);
   });
 
-  it('una paciente no tiene inquilino ni permisos, y su paso es `inicio`', async () => {
+  it('una paciente no tiene consulta ni permisos, y su paso es `inicio`', async () => {
     const { port, vistos } = puerto({
       ...CONSULTA_VIVA,
       practice: null,
@@ -152,10 +152,10 @@ describe('GET /v1/session · el 200', () => {
 
     const vista = await new ReadSession(port).run(PACIENTE, CADUCA);
 
-    expect(vista.inquilino).toBeNull();
+    expect(vista.consulta).toBeNull();
     expect(vista.permisos).toEqual([]);
     expect(vista.siguiente_paso).toBe('inicio');
-    // Y su contexto no fija inquilino: no pertenece a ninguno.
+    // Y su contexto no fija consulta: no pertenece a ninguno.
     expect(vistos[0]?.practiceId).toBeNull();
   });
 
@@ -211,7 +211,7 @@ describe('GET /v1/session · los errores', () => {
     expect(error.status).toBe(401);
   });
 
-  it('un token con inquilino y sin consulta que leer es 500 con su frase y su causa real', async () => {
+  it('un token con consulta y sin consulta que leer es 500 con su frase y su causa real', async () => {
     const { port } = puerto({ ...CONSULTA_VIVA, practice: null });
 
     const error = await errorDe(() => new ReadSession(port).run(DOCTORA, CADUCA));

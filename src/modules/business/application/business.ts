@@ -162,7 +162,7 @@ export class Business {
   async plan(caller: Caller): Promise<unknown> {
     const asking = this.who(caller, 'plan:leer', 'Solo la dueña de la consulta ve su plan.');
     const plan = await this.business.plan(asking);
-    if (plan === null) throw new ContractError('inquilino_no_existe');
+    if (plan === null) throw new ContractError('consulta_no_existe');
 
     const limitBytes = plan.patientLimit * this.bytesPerPatient;
     return {

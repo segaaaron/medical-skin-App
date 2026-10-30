@@ -202,7 +202,7 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
       action: 'cuenta.acceso_pedido',
       actor_label: 'Marcela · soporte',
       subject_id: PAUSADA,
-      // Esta acción no es de ninguna consulta, y `app_platform` no fija inquilino.
+      // Esta acción no es de ninguna consulta, y `app_platform` no fija consulta.
       practice_id: null,
       data: { via: 'correo', origen: 'consola' },
     });

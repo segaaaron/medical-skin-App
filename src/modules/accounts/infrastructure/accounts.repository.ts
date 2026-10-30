@@ -27,7 +27,7 @@ import type {
 } from '../domain/ports';
 
 function contextFor(owner: AccountOwner): TenantContext {
-  // `app_practitioner` exige inquilino porque sus políticas se leen por inquilino;
+  // `app_practitioner` exige consulta porque sus políticas se leen por consulta;
   // `app_patient` no lo fija nunca porque la paciente no pertenece a ninguno (§12.2.1).
   if (owner.accountRole === 'paciente') {
     return { role: 'app_patient', accountId: owner.accountId };
@@ -160,7 +160,7 @@ export class AccountsRepository
    *
    * El nombre de la consulta y el de la doctora son COPIAS guardadas en `patient_link` desde
    * la 0006: `app_patient` no tiene política en `practice` ni en `practitioner`, y dárselas
-   * para servir dos nombres abriría todos los inquilinos.
+   * para servir dos nombres abriría todos las consultas.
    */
   private async linksOf(c: PoolClient): Promise<readonly LinkedPractice[]> {
     const { rows } = await c.query<{

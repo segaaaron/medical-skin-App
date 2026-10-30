@@ -1,4 +1,4 @@
-// El repositorio de `inquilinos.md` · los dos endpoints de la doctora.
+// El repositorio de `consultas.md` · los dos endpoints de la doctora.
 //
 // La ÚNICA puerta a la base es `withTenantContext()`: abre la transacción, adopta
 // `app_practitioner` con `SET LOCAL ROLE` y fija los dos contextos con `set_config(…, true)`.
@@ -9,7 +9,7 @@
 //   1. `practice` se lee SIN `where id = …`: su política es sobre `id`
 //      (`id = medskin_current_practice()`), que además es la clave primaria. Filtrar otra
 //      vez daría a entender que la base no lo hace.
-//   2. El recuento del plan va `where status = 'activa'` y sin nombrar el inquilino: lo pone
+//   2. El recuento del plan va `where status = 'activa'` y sin nombrar la consulta: lo pone
 //      la política de `patient`, y así entra por `patient_practice_status_idx` —medido por
 //      `datos-senior` con el rol de verdad: `Index Only Scan`, `Heap Fetches: 0`, 0,076 ms
 //      con 400 fichas propias y 4.000 de la consulta de al lado (§1.12 del napkin: un plan
@@ -41,7 +41,7 @@ import type {
   OwnPracticePort,
 } from '../domain/ports';
 
-/** «Más de 5 envíos en 24 h» (`inquilinos.md` · 429 `demasiados_envios`). */
+/** «Más de 5 envíos en 24 h» (`consultas.md` · 429 `demasiados_envios`). */
 export const SUBMISSIONS_PER_DAY = 5;
 
 /** La acción con la que `medskin_license_to_review()` firma cada envío en la bitácora. */
@@ -82,7 +82,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
   constructor(private readonly pool: Pool) {}
 
   async read(owner: PracticeOwner): Promise<PracticeSnapshot | null> {
-    // El inquilino va ESCRITO en las dos lecturas aunque las políticas ya lo pongan, por la
+    // El consulta va ESCRITO en las dos lecturas aunque las políticas ya lo pongan, por la
     // regla del repositorio: una consulta cuyo alcance depende solo de RLS deja de estar
     // acotada el día que algo corra con BYPASSRLS, y un `limit 1` sin `order by` elegiría
     // entonces una fila cualquiera en silencio. El comentario va FUERA de la plantilla:
@@ -119,7 +119,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
    * recuento, porque si se separan la pantalla dice «148 de 300» y la lista muestra otra
    * cosa.
    */
-  // Con el inquilino escrito, además, la consulta entra por
+  // Con la consulta escrito, además, la consulta entra por
   // patient_practice_status_idx (practice_id, status, …) sin depender del predicado de la
   // política para acotar.
   private async countActivePatients(c: PoolClient): Promise<number> {
@@ -165,7 +165,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       // «espera a que la revisemos» es verdad. Se cuenta sobre `access_audit` y no sobre
       // Redis (decisión 39): el dato ya existe con su índice y un contador aparte para un
       // acto que ocurre cinco veces al año es un segundo estado que puede desacordarse con
-      // la bitácora. Sin nombrar el inquilino: lo pone la política, y así la consulta entra
+      // la bitácora. Sin nombrar la consulta: lo pone la política, y así la consulta entra
       // por `access_audit_practice_idx (practice_id, occurred_at DESC)`.
       const { rows: counted } = await c.query<{ sent: string }>(
         `select count(*) as sent

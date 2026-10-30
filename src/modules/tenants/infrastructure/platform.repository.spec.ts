@@ -411,7 +411,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
     respond: (created: CreatedTenant) => created,
   });
 
-  it('el alta de inquilino deja UNA consulta, y la perdedora repite la respuesta', async () => {
+  it('el alta de consulta deja UNA consulta, y la perdedora repite la respuesta', async () => {
     // Antes del arreglo: las dos pasaban la lectura vacía, las dos insertaban `practice`, y
     // la perdedora recibía `email_taken` —un 409 por una petición que salió bien, y sin la
     // contraseña de la dueña, que solo existe en la respuesta de la ganadora—.

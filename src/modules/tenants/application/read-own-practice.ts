@@ -58,7 +58,7 @@ export class ReadOwnPractice {
 
   async run(caller: Caller): Promise<PracticeResponse> {
     // «403 rol_no_corresponde · Llama una paciente». Se decide por el rol del token y antes
-    // de tocar la base: una paciente no pertenece a ningún inquilino, así que no hay
+    // de tocar la base: una paciente no pertenece a ninguna consulta, así que no hay
     // contexto que abrir ni consulta que leer (OWASP A01, denegar por defecto).
     if (caller.accountRole === 'paciente' || caller.practiceId === null) {
       throw new ContractError('rol_no_corresponde');
@@ -69,13 +69,13 @@ export class ReadOwnPractice {
       practiceId: caller.practiceId,
     });
 
-    // Un token que dice inquilino y una consulta que no se puede leer es una inconsistencia
+    // Un token que dice consulta y una consulta que no se puede leer es una inconsistencia
     // del servidor, no una sesión inválida: va a `service_failure` con su causa real y la
     // app se queda con lo último guardado. No se inventa una consulta vacía.
     if (practice === null) {
       throw new ServiceFailure(
         FAILURE_PHRASES.readOwnPractice,
-        new Error(`el inquilino ${caller.practiceId} no tiene consulta ni licencia que servir`),
+        new Error(`la consulta ${caller.practiceId} no tiene consulta ni licencia que servir`),
       );
     }
 

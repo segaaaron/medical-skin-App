@@ -8,11 +8,11 @@
 //
 // Las dos entradas se parecen en la regla de la contraseña y no en nada más:
 //
-//   · por TEMPORAL quien llama tiene sesión restringida, rol e inquilino, y la sesión se
+//   · por TEMPORAL quien llama tiene sesión restringida, rol e consulta, y la sesión se
 //     ASCIENDE en la misma transacción que guarda la contraseña;
-//   · por RECUPERACIÓN no hay sesión, no hay rol y no hay inquilino, porque el token de
+//   · por RECUPERACIÓN no hay sesión, no hay rol y no hay consulta, porque el token de
 //     recuperación no los lleva (`recuperacion.md`: «el token no lleva rol»). El rol y el
-//     inquilino los devuelve la base al guardar, y la sesión se ABRE después, que es el
+//     consulta los devuelve la base al guardar, y la sesión se ABRE después, que es el
 //     mismo acto que una entrada por `POST /v1/access`.
 
 import { z } from 'zod';
@@ -58,7 +58,7 @@ export class ChoosePassword {
     private readonly clock: ClockPort,
   ) {}
 
-  /** La entrada por la contraseña temporal: hay sesión restringida, rol e inquilino. */
+  /** La entrada por la contraseña temporal: hay sesión restringida, rol e consulta. */
   async run(input: unknown, caller: Caller): Promise<ChoosePasswordResponse> {
     const candidate = checkNewPassword(this.readBody(input));
 

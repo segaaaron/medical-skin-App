@@ -45,7 +45,7 @@ export type Claims = {
   rol: Role;
   alcance: Scope;
   region: Region;
-  /** Solo doctora y equipo. Una paciente no es de ningún inquilino. */
+  /** Solo doctora y equipo. Una paciente no es de ninguna consulta. */
   practice?: string;
   permisos: readonly string[];
 };

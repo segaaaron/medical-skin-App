@@ -10,7 +10,7 @@
 --     `(practice_id del contexto, account_id)`, y un miembro del equipo NO tiene vínculo de
 --     paciente: para él esa función solo sabe devolver `paciente_no_existe`. Y marca
 --     `patient_link.access_sent_at`, que para el equipo no existe.
---   · `medskin_platform_resend_access` no comprueba inquilino ninguno —acuña sobre
+--   · `medskin_platform_resend_access` no comprueba consulta ninguno —acuña sobre
 --     cualquier cuenta de la región, que es correcto para la consola y solo para ella—.
 --     Concederle el `EXECUTE` a `app_practitioner` le abriría a cada doctora la credencial
 --     de cualquier cuenta del despliegue: el padrón entero, y con escritura.
@@ -87,7 +87,7 @@ DECLARE
   v_chosen boolean;
 BEGIN
   IF v_practice IS NULL OR v_caller IS NULL THEN
-    RAISE EXCEPTION 'medskin_resend_team_access: sin contexto de inquilino o de cuenta'
+    RAISE EXCEPTION 'medskin_resend_team_access: sin contexto de consulta o de cuenta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_practitioner_id IS NULL THEN

@@ -5,7 +5,7 @@
 //   · el cuerpo vacío no llega a tocar la base;
 //   · los cuatro veredictos se traducen a sus cuatro 401, con sus frases distintas;
 //   · el token nuevo se acuña con el `rol` de la consulta —nunca `practitioner`—, el
-//     inquilino de la FILA y los permisos resueltos;
+//     consulta de la FILA y los permisos resueltos;
 //   · la paciente recibe 30 días y la doctora 12 h;
 //   · el límite se cuenta DENTRO de la transacción, y `graced` se mide y no se devuelve.
 
@@ -195,7 +195,7 @@ describe('POST /v1/session/refresh · el 200', () => {
     expect(visto.rotaciones[0]?.newDigest).toBe('resumen_nuevo');
   });
 
-  it('acuña el token con el rol de la consulta, el inquilino de la fila y los permisos resueltos', async () => {
+  it('acuña el token con el rol de la consulta, la consulta de la fila y los permisos resueltos', async () => {
     const { caso, visto } = armar({});
 
     await caso.run({ refresco: 'rfr_viejo' });
@@ -242,7 +242,7 @@ describe('POST /v1/session/refresh · el 200', () => {
     const respuesta = await caso.run({ refresco: 'rfr_viejo' });
 
     expect(respuesta.refresco_caduca_en).toBe(TREINTA_DIAS.toISOString());
-    // Y su token no lleva inquilino: una paciente no es de ninguno.
+    // Y su token no lleva consulta: una paciente no es de ninguno.
     expect(visto.firmas[0]?.practice).toBeUndefined();
     expect(visto.firmas[0]?.permisos).toEqual([]);
   });

@@ -14,7 +14,7 @@
 --
 -- `btree_gist` hace falta para meter `practice_id` —un `uuid`, que es tipo de btree— dentro de
 -- un índice gist junto al rango. Y con `practice_id` delante (regla 5), el índice sirve además
--- para la lectura de la agenda de un inquilino.
+-- para la lectura de la agenda de una consulta.
 -- =======================================================================================
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 --> statement-breakpoint

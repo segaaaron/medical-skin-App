@@ -1,4 +1,4 @@
-// Las reglas de `inquilinos.md` que no son una consulta: qué puede la consulta con su
+// Las reglas de `consultas.md` que no son una consulta: qué puede la consulta con su
 // licencia, si la lista del primer día se dibuja, cómo se lee el formulario de la licencia y
 // cuándo se promete la respuesta. Sin NestJS, sin Fastify y sin `pg`.
 
@@ -76,7 +76,7 @@ export function hasRoomForPatients(activePatients: number, patientLimit: number)
  *
  * Es lista cerrada a propósito —denegar por defecto es lo que hace cumplible «Elige una
  * especialidad de la lista»—: este campo lo lee a mano quien revisa, y un valor libre
- * convierte un desplegable en un comentario. La misma lista está en `inquilinos.md`, que es
+ * convierte un desplegable en un comentario. La misma lista está en `consultas.md`, que es
  * de donde la app saca su desplegable: se edita allí y se copia aquí.
  */
 export const SPECIALTIES: readonly string[] = [
@@ -139,7 +139,7 @@ export type ReadLicenseForm = {
  * `practiceId` entra para acotar la clave del objeto AL INQUILINO DEL TOKEN: la clave la
  * escribe el cliente, y una clave `lic/<otra consulta>/…` haría que quien revisa abriera por
  * enlace firmado el documento de identidad de otra doctora (OWASP A01). No se comprueba
- * contra la URL que mandó nadie: se compara con el inquilino del token.
+ * contra la URL que mandó nadie: se compara con la consulta del token.
  */
 export function readLicenseForm(input: unknown, practiceId: string): ReadLicenseForm {
   const body: LicenseFormInput = typeof input === 'object' && input !== null ? input : {};
@@ -174,7 +174,7 @@ export function readLicenseForm(input: unknown, practiceId: string): ReadLicense
 
 /**
  * Lo que se puede comprobar de la clave SIN el almacén: que es del prefijo de este
- * inquilino, que no sale de él con un `..` y que su extensión es de las tres del contrato.
+ * consulta, que no sale de él con un `..` y que su extensión es de las tres del contrato.
  *
  * **Que el objeto exista, su tipo real y sus 10 MB NO se comprueban aquí** y es un límite de
  * alcance dicho en la entrega: la subida por URL firmada es del tramo 6 (§7.1) y en este

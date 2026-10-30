@@ -191,7 +191,7 @@ export class Photos {
   }
 
   /**
-   * Quién pregunta y sobre qué ficha. Para la paciente, el inquilino y la ficha salen LOS DOS
+   * Quién pregunta y sobre qué ficha. Para la paciente, la consulta y la ficha salen LOS DOS
    * de su `patient_link`: ningún identificador del cuerpo elige en qué ficha se escribe.
    */
   private async who(

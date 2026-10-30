@@ -425,7 +425,7 @@ export class AftercareRepository implements AftercarePort {
     });
   }
 
-  /** El vínculo de la paciente: su inquilino y su ficha salen de ahí, nunca del cuerpo. */
+  /** El vínculo de la paciente: su consulta y su ficha salen de ahí, nunca del cuerpo. */
   async linkedPatient(
     accountId: string,
     practiceId: string,

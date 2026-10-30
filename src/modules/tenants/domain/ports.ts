@@ -1,4 +1,4 @@
-// Los puertos de `inquilinos.md` · los dos endpoints de la doctora. Viven en el dominio y
+// Los puertos de `consultas.md` · los dos endpoints de la doctora. Viven en el dominio y
 // este archivo no importa NestJS, ni Fastify, ni Drizzle, ni `pg`: los casos de uso se
 // prueban sin levantar nada.
 //
@@ -62,7 +62,7 @@ export type FirstDaySnapshot = {
 
 export interface OwnPracticePort {
   /**
-   * Nulo cuando el inquilino del token no tiene fila que servir: lo decide la política de
+   * Nulo cuando la consulta del token no tiene fila que servir: lo decide la política de
    * `practice` sobre `id`, no un `where` nuestro.
    */
   read(owner: PracticeOwner): Promise<PracticeSnapshot | null>;

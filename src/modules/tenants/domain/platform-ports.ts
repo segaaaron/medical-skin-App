@@ -1,4 +1,4 @@
-// Los puertos de los TRES endpoints de consola de `inquilinos.md`. Viven en el dominio y
+// Los puertos de los TRES endpoints de consola de `consultas.md`. Viven en el dominio y
 // este archivo no importa NestJS, ni Fastify, ni Drizzle, ni `pg`.
 //
 // Son puertos aparte de los de la doctora y no métodos más en los suyos: cambian por
@@ -137,7 +137,7 @@ export type TenantFile = {
 };
 
 export interface TenantFilePort {
-  /** Nulo cuando no hay consulta con ese `id`: `404 inquilino_no_existe`. */
+  /** Nulo cuando no hay consulta con ese `id`: `404 consulta_no_existe`. */
   read(p: { actor: PlatformActor; practiceId: string }): Promise<TenantFile | null>;
 }
 

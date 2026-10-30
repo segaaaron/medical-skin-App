@@ -9,7 +9,7 @@
 -- leer los datos: eso lo hace **bajo las políticas de quien la pidió** —con su `account_id` y
 -- su rol—, que es la frase del contrato que impide que este endpoint sea la puerta de atrás
 -- del aislamiento. Si los datos se juntaran con `SECURITY DEFINER`, una exportación sería el
--- único camino del sistema que cruza inquilinos, y sería el camino que más datos mueve.
+-- único camino del sistema que cruza consultas, y sería el camino que más datos mueve.
 -- =======================================================================================
 GRANT SELECT, UPDATE ON "data_export" TO medskin_access;--> statement-breakpoint
 CREATE POLICY data_export_access ON "data_export" FOR ALL TO medskin_access

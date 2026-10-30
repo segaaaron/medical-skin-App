@@ -40,7 +40,7 @@ export class TeamController {
    * decisión que en el reenvío de pacientes.
    *
    * El `miembro_id` de la URL NO autoriza: entra como criterio de búsqueda dentro del
-   * inquilino del token, y si no hay fila en esta consulta el 404 es el mismo que el de un
+   * consulta del token, y si no hay fila en esta consulta el 404 es el mismo que el de un
    * identificador inventado.
    */
   @Post(':member_id/access')

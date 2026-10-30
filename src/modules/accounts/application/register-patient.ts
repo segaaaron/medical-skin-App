@@ -190,7 +190,7 @@ export class RegisterPatient {
 
   /**
    * Los tres `409` y el `404` de la base, en el orden en que los devuelve. Cada uno sale
-   * del inquilino del contexto: ni la licencia, ni el plan, ni el duplicado, ni quien la
+   * de la consulta del contexto: ni la licencia, ni el plan, ni el duplicado, ni quien la
    * refirió se preguntan con un identificador que venga del cliente.
    */
   private checkVerdict(created: PatientRegistration): void {
@@ -406,7 +406,7 @@ export class RegisterPatient {
 
   /**
    * La consulta del token. Un token con `pacientes:crear` sale de una fila de
-   * `practitioner`, que siempre tiene consulta; sin ella no hay inquilino que fijar y la
+   * `practitioner`, que siempre tiene consulta; sin ella no hay consulta que fijar y la
    * base fallaría cerrada, así que se dice aquí con su causa en vez de dejar que reviente
    * dentro de una transacción.
    */

@@ -26,7 +26,7 @@ const ownerUrl =
 const appUrl = process.env.DATABASE_URL ?? 'postgresql://medskin:dev_local_only@localhost:5433/medskin';
 
 // La consulta de la prueba: su dueña, su recepción con lista explícita de permisos, y su
-// paciente, que no es de ningún inquilino.
+// paciente, que no es de ninguna consulta.
 const MIA = {
   practice: 'eeeeeeee-0000-4000-8000-000000000001',
   doctora: 'eeeeeeee-0000-4000-8000-000000000002',
@@ -248,7 +248,7 @@ describe('la lectura de la sesión', () => {
   });
 });
 
-describe('qué ve otro inquilino · nada', () => {
+describe('qué ve otra consulta · nada', () => {
   it('la sesión de la doctora de otra consulta no devuelve fila', async () => {
     expect(await repo.read(comoDoctora(AJENA.sesion))).toBeNull();
   });

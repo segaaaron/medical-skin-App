@@ -1,7 +1,7 @@
 -- Tramo 2 · el índice de la búsqueda, corregido CONTRA LA MEDICIÓN.
 --
 -- La 0006 creó `patient_search_idx` como un GIN compuesto, `gin (practice_id, search_text
--- gin_trgm_ops)`, para cumplir al pie de la letra la regla 5 de §7.3 —el inquilino delante
+-- gin_trgm_ops)`, para cumplir al pie de la letra la regla 5 de §7.3 —la consulta delante
 -- de todo índice compuesto— y para eso instaló `btree_gin`. El plan dice que estaba mal, y
 -- el plan manda.
 --
@@ -17,8 +17,8 @@
 --                                              0,038 ms. 150 veces más rápido.
 --
 -- POR QUÉ, Y ES LA PARTE QUE HAY QUE ENTENDER: meter el `practice_id` en un GIN no hace lo
--- que hace en un btree. En un btree el inquilino delante ACOTA el recorrido; en un GIN cada
--- clave es una lista de punteros, y la del inquilino es la lista de SUS 8 000 filas, que
+-- que hace en un btree. En un btree la consulta delante ACOTA el recorrido; en un GIN cada
+-- clave es una lista de punteros, y la de la consulta es la lista de SUS 8 000 filas, que
 -- hay que intersecar con las listas de los trigramas. Lo que en el btree es un atajo, aquí
 -- es un conjunto enorme que el motor tiene que cruzar, y por eso el planificador calcula —
 -- bien— que no le conviene. La lista de un trigrama de un nombre ya es selectiva por sí
@@ -26,7 +26,7 @@
 -- pocas filas que el índice devuelve.
 --
 -- Así que la regla 5 se cumple donde se puede cumplir —los tres índices btree de `patient`
--- y `patient_link` empiezan por el inquilino— y aquí se cumple su PROPÓSITO, que es que
+-- y `patient_link` empiezan por la consulta— y aquí se cumple su PROPÓSITO, que es que
 -- ninguna búsqueda recorra la tabla entera: 1 bloque leído, no 942. Queda escrito como
 -- excepción medida, no como olvido.
 --

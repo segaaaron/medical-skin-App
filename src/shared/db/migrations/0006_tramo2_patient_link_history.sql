@@ -19,12 +19,12 @@
 --
 -- 1. `patient_link` tiene DOS CARAS DE POLÍTICA y las dos hacen falta: `practice_id` para
 --    la doctora, `account_id` para la paciente. Es la única lectura del sistema que cruza
---    inquilinos, y cruza solo las fichas de quien pregunta. De ahí los dos índices: uno que
---    empieza por el inquilino para la doctora y uno por cuenta sola para la paciente, que
---    no tiene inquilino que poner delante.
+--    consultas, y cruza solo las fichas de quien pregunta. De ahí los dos índices: uno que
+--    empieza por la consulta para la doctora y uno por cuenta sola para la paciente, que
+--    no tiene consulta que poner delante.
 -- 2. `app_patient` NO tiene política en `patient`, y por eso `patient_link` copia tres
 --    cadenas (consulta, doctora, ciudad). Es la pregunta 7: darle política sobre `practice`
---    o `practitioner` abriría TODOS los inquilinos para poder leer uno.
+--    o `practitioner` abriría TODOS las consultas para poder leer uno.
 -- 3. `app_platform` no tiene ni una política ni un grant en ninguna de las cuatro. Soporte
 --    no lee contenido de pacientes ni queriendo (_convenciones.md, `Consola.dc.html`).
 -- 4. La regla «la doctora gana» NO es un disparador. La base da las columnas de
@@ -172,7 +172,7 @@ CREATE INDEX "patient_link_practice_account_idx" ON "patient_link" USING btree (
 CREATE INDEX "patient_link_account_idx" ON "patient_link" USING btree ("account_id");--> statement-breakpoint
 
 -- =======================================================================================
--- 1 · EL ÍNDICE DE LA BÚSQUEDA · inquilino delante, trigramas detrás
+-- 1 · EL ÍNDICE DE LA BÚSQUEDA · consulta delante, trigramas detrás
 --
 -- `GET /v1/pacientes` busca por nombre, apellido, correo y celular desde 2 caracteres y con
 -- tolerancia a errores de tipeo. `search_text` es una columna GENERADA por el motor con las
@@ -216,12 +216,12 @@ GRANT SELECT, INSERT, UPDATE ON "patient" TO app_practitioner;--> statement-brea
 -- =======================================================================================
 -- 4 · patient_link · LAS DOS CARAS
 --
--- La doctora, por inquilino: ve el vínculo de SU ficha, con el correo del acceso y su
+-- La doctora, por consulta: ve el vínculo de SU ficha, con el correo del acceso y su
 -- estado. Es lo que `GET /v1/pacientes/{id}` devuelve en `vinculo`, y sale de aquí y nunca
 -- de `account`.
 --
 -- La paciente, por cuenta: ve SUS vínculos, los de todas sus doctoras, que es la única
--- lectura del sistema que cruza inquilinos. Y solo seis columnas: las tres copias, el
+-- lectura del sistema que cruza consultas. Y solo seis columnas: las tres copias, el
 -- estado, la fecha y los dos identificadores que necesita para escribir su ficha médica
 -- —`practice_id` y `patient_id` salen de ESTA fila, nunca del cuerpo de la petición—. No ve
 -- `email` (el suyo ya lo tiene en `account`) ni `access_sent_at`, que es cuándo se lo mandó
@@ -245,9 +245,9 @@ GRANT SELECT (id, practice_id, patient_id, status, practice_name, practitioner_n
 GRANT UPDATE (status, updated_at) ON "patient_link" TO app_patient;--> statement-breakpoint
 
 -- =======================================================================================
--- 5 · medical_history · la doctora por inquilino; la paciente, por su vínculo ACEPTADO
+-- 5 · medical_history · la doctora por consulta; la paciente, por su vínculo ACEPTADO
 --
--- La política de la paciente no puede ser por inquilino porque ella no tiene uno: es un
+-- La política de la paciente no puede ser por consulta porque ella no tiene uno: es un
 -- `EXISTS` sobre `patient_link`, que resuelve por `patient_link_patient_uq` —una fila, no
 -- un recorrido— y que además pasa por la política de `patient_link`, así que no puede
 -- apuntar a un vínculo que no sea suyo.
@@ -307,7 +307,7 @@ GRANT UPDATE (has_allergies, allergies, allergies_source, allergies_source_at,
 -- hay política de UPDATE ni de DELETE para ningún rol, y tampoco hay GRANT.
 --
 -- La paciente escribe aquí cuando sobrescribe un valor SUYO, y su `WITH CHECK` no es
--- `true`: la fila tiene que apuntar a la ficha y al inquilino de un vínculo suyo y aceptado.
+-- `true`: la fila tiene que apuntar a la ficha y a la consulta de un vínculo suyo y aceptado.
 -- Con `true` podría ensuciar la bitácora clínica de cualquier consulta.
 -- No lee: no hay `GRANT SELECT` para ella. La bitácora de la ficha es de la consulta.
 -- =======================================================================================
@@ -375,7 +375,7 @@ DECLARE
   v_found boolean := false;
 BEGIN
   IF v_practice IS NULL THEN
-    RAISE EXCEPTION 'medskin_patient_access_state: sin contexto de inquilino'
+    RAISE EXCEPTION 'medskin_patient_access_state: sin contexto de consulta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_account_id IS NULL THEN
@@ -441,7 +441,7 @@ DECLARE
   v_chosen boolean;
 BEGIN
   IF v_practice IS NULL THEN
-    RAISE EXCEPTION 'medskin_resend_patient_access: sin contexto de inquilino'
+    RAISE EXCEPTION 'medskin_resend_patient_access: sin contexto de consulta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_account_id IS NULL THEN

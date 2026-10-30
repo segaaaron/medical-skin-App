@@ -4,8 +4,8 @@
 //   1. **borra lo caducado y no toca lo vivo.** Lo que decide qué es cada cosa es la función
 //      de la base, no este código;
 //   2. **corre con `app_anonymous` y sin contexto**, que es el único rol que alcanza la
-//      función y el único que no fija inquilino. Ningún rol de la aplicación puede barrer la
-//      tabla: las tres políticas confinan a cada uno a su inquilino o a su cuenta;
+//      función y el único que no fija consulta. Ningún rol de la aplicación puede barrer la
+//      tabla: las tres políticas confinan a cada uno a su consulta o a su cuenta;
 //   3. **es idempotente por construcción**: la segunda corrida no encuentra nada y devuelve
 //      cero, así que el trabajo no necesita clave;
 //   4. **un fallo deja su fila** en `service_failure`, por el camino sin sesión. Un barrido
@@ -114,7 +114,7 @@ describe('el barrido de `idempotency_key`', () => {
     expect(await claves()).toEqual([]);
   });
 
-  it('corre sin contexto de inquilino, que es lo único que la función admite', async () => {
+  it('corre sin contexto de consulta, que es lo único que la función admite', async () => {
     // `app_anonymous` no fija ni cuenta ni consulta —el ayudante lo RECHAZA—, así que esta
     // prueba pasa justo porque el barrido no pretende ser de nadie. Y borra una fila que
     // pertenece a una consulta cuyo contexto nadie fijó, que es lo que ningún rol de la

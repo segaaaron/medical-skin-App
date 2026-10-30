@@ -132,7 +132,7 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         passwords: Argon2Passwords,
         limit: PatientCreationLimit,
         // El cierre de la clave de idempotencia: lo implementa el MISMO repositorio, que es
-        // quien tiene el contexto de inquilino, y es un puerto aparte porque cerrar una
+        // quien tiene el contexto de consulta, y es un puerto aparte porque cerrar una
         // clave no es parte del alta (la I de SOLID).
         idempotency: PatientsRepository,
         clock: SystemClock,

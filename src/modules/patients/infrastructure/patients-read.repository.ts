@@ -7,7 +7,7 @@
 // Las dos formas del `ORDER BY` van con `DESC NULLS FIRST` LITERAL, que es lo que
 // `patient_practice_status_idx` indexa desde la 0011: con `DESC` a secas Postgres entiende
 // `NULLS LAST`, son dos ordenaciones distintas, y el índice deja de servir —ordenaba las fichas
-// del inquilino enteras para devolver 50.
+// de la consulta enteras para devolver 50.
 
 import type { Pool, PoolClient } from 'pg';
 
@@ -56,7 +56,7 @@ export class PatientsReadRepository implements PatientReadPort {
       // la cadena ENTERA contra el texto entero, así que «valeri» contra «valeria antelo
       // valeria.21@… +5917…» queda muy por debajo del umbral y no devuelve nada.
       // Los dos los soporta `gin_trgm_ops`, y ninguno es LEAKPROOF: con RLS puesta lo que
-      // recorre el índice es el inquilino y esto filtra encima.
+      // recorre el índice es la consulta y esto filtra encima.
       const { rows } = await c.query<ListRow>(
         `select p.id, p.first_name, p.last_name, to_char(p.birth_date, 'YYYY-MM-DD') as birth_date, p.phone,
                 l.status as link_status,

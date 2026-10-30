@@ -7,7 +7,7 @@
 // política es un 500 que ninguna prueba de unidad ve.
 //
 // QUIEN LLAMA SALE DE LA PETICIÓN Y DE NINGÚN OTRO SITIO, y es un `PlatformCaller`: no tiene
-// cuenta, ni sesión, ni inquilino. **El permiso NO se vuelve a comprobar**: si este
+// cuenta, ni sesión, ni consulta. **El permiso NO se vuelve a comprobar**: si este
 // controlador corre, el permiso de esta ruta ya estaba en el token firmado y lo verificó el
 // guardia. Comprobarlo dos veces son dos autorizaciones que se pueden desacordar.
 //

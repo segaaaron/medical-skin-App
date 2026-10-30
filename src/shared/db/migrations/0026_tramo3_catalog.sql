@@ -1,7 +1,7 @@
 -- =======================================================================================
 -- TRAMO 3 · EL CATÁLOGO DE LA CONSULTA · `tratamientos.md`
 --
--- Nueve tablas, todas de inquilino, todas con `FORCE ROW LEVEL SECURITY` y política sobre
+-- Nueve tablas, todas de consulta, todas con `FORCE ROW LEVEL SECURITY` y política sobre
 -- `practice_id`, y `practice_id` primera columna de todo índice compuesto (§7.3, regla 5).
 --
 -- LAS DOS DECISIONES DEL CONTRATO, HECHAS ESQUEMA:
@@ -243,7 +243,7 @@ CREATE INDEX "promotion_treatment_idx" ON "promotion_treatment" USING btree ("pr
 -- RLS · FORZADA EN LAS NUEVE, Y LAS DOS CARAS DE CADA UNA
 --
 -- `app_practitioner`: por `practice_id` del contexto, que es el de su sesión.
--- `app_patient`: NO por inquilino —no tiene contexto de consulta— sino por «existe un vínculo
+-- `app_patient`: NO por consulta —no tiene contexto de consulta— sino por «existe un vínculo
 -- mío y aceptado con esa consulta». Es autoverificable: el parámetro del catálogo solo elige
 -- cuál de sus vínculos, y uno que no sea suyo no devuelve ninguna fila.
 -- `app_platform`: NINGUNA política. Soporte no lee el catálogo ni los precios de nadie.

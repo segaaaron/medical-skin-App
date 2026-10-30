@@ -30,7 +30,7 @@ CREATE TABLE "rate_counter" (
 CREATE INDEX "rate_counter_expires_idx" ON "rate_counter" USING btree ("expires_at");--> statement-breakpoint
 
 -- La regla de la casa: las 54 tablas van con RLS forzada y esta no es una excepción. No tiene
--- inquilino —un intento de acceso ocurre ANTES de saber de quién es— así que nadie la lee
+-- consulta —un intento de acceso ocurre ANTES de saber de quién es— así que nadie la lee
 -- directamente: se entra por las funciones de abajo, y la única política es la de su dueña.
 ALTER TABLE "rate_counter" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "rate_counter" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

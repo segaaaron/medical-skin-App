@@ -7,8 +7,8 @@
 -- una espera innecesaria; en un rechazo es peor, porque hay algo que corregir y nadie se lo
 -- dijo.
 --
--- La consola entra con `app_platform`, que no tiene inquilino de contexto porque legítimamente
--- actúa sobre todos: no puede usar `medskin_notify` —cuyas guardas son «el inquilino del
+-- La consola entra con `app_platform`, que no tiene consulta de contexto porque legítimamente
+-- actúa sobre todos: no puede usar `medskin_notify` —cuyas guardas son «la consulta del
 -- contexto o uno al que esta cuenta está vinculada»—. Esta función es la suya, con la guarda
 -- que sí le corresponde: resuelve la cuenta DUEÑA de esa consulta y encola ahí, y en ningún
 -- otro sitio. Y los dos canales, porque es «seguridad de la cuenta» en el sentido del

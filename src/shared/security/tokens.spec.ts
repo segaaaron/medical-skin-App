@@ -75,7 +75,7 @@ describe('Tokens · firmar y verificar', () => {
     expect(expiresAt.getTime()).toBe(leido.exp * 1000);
   });
 
-  it('una paciente viaja SIN `practice`: no es de ningún inquilino', async () => {
+  it('una paciente viaja SIN `practice`: no es de ninguna consulta', async () => {
     const { token } = await tokens.sign({
       ...DOCTORA,
       rol: 'paciente',

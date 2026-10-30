@@ -18,7 +18,7 @@
 // convierte una pausa de quince minutos en perpetua— y lo caducado se lee como ausente.
 //
 // Se entra por funciones y no por la tabla: un intento de acceso ocurre antes de saber de quién
-// es, así que no hay inquilino que poner en el contexto y la tabla no se lee directamente.
+// es, así que no hay consulta que poner en el contexto y la tabla no se lee directamente.
 
 import { createHmac } from 'node:crypto';
 

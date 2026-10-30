@@ -4,7 +4,7 @@
 // nunca contenido de pacientes.** No hay un solo campo de paciente en esta respuesta, y
 // `incidencias` cuenta cuántas, nunca cuáles.
 //
-// Y la garantía importante es la inversa de «qué ve otro inquilino»: `app_platform` no tiene
+// Y la garantía importante es la inversa de «qué ve otra consulta»: `app_platform` no tiene
 // ninguna política que le permita leer `patient`, `medical_history`, `session_note`, `photo`
 // ni `message`. No es un filtro en el código de este endpoint; es que la consulta no
 // devuelve filas ni escribiéndola a mano.
@@ -46,7 +46,7 @@ export class ReadTenant {
     const file = await this.files.read({ actor, practiceId });
     // El `id` viene de la RUTA y no autoriza nada: se busca bajo la política de
     // `app_platform` y sin fila la respuesta es la misma que la de un `id` inventado.
-    if (file === null) throw new ContractError('inquilino_no_existe');
+    if (file === null) throw new ContractError('consulta_no_existe');
 
     const owner = file.owner;
     if (owner === null) {

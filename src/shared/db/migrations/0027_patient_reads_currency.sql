@@ -3,7 +3,7 @@
 --
 -- `GET /v1/catalog` devuelve `moneda`, y la moneda vive en `practice.currency`: la única
 -- columna de la verdad (`tratamientos.md`, decisión 2). Pero `app_patient` NO TIENE POLÍTICA
--- sobre `practice` y no se le va a dar: darle una abriría todos los inquilinos para poder leer
+-- sobre `practice` y no se le va a dar: darle una abriría todos las consultas para poder leer
 -- uno, que es exactamente lo que la pregunta 7 cerró copiando el nombre en `patient_link`.
 --
 -- Así que una función, como la del estado del acceso: devuelve UNA CADENA y solo de una

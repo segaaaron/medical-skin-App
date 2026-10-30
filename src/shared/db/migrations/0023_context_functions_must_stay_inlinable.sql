@@ -27,14 +27,14 @@
 --            Buffers: shared hit=482
 --
 --   SIN la 0022 (empotrada, que es como estaba y como vuelve a estar):
---     entra por `patient_search_idx`, el GIN que empieza por el inquilino, y no recorre
---     las 8 000 filas del inquilino para descartar 7 999.
+--     entra por `patient_search_idx`, el GIN que empieza por la consulta, y no recorre
+--     las 8 000 filas de la consulta para descartar 7 999.
 --
 -- O sea que la 0022 **tiró a la basura el GIN de la búsqueda**, que es el índice que la
 -- 0010 midió y que las migraciones 0011 y 0012 existen para defender. La aguja era de 8
 -- caracteres hexadecimales de una sola palabra, lo más selectivo que puede teclear alguien:
 -- no es un artefacto de la siembra. Lo cazó `isolation.spec.ts` · «la búsqueda por
--- trigramas entra por el GIN que empieza por el inquilino», que es bloqueante en
+-- trigramas entra por el GIN que empieza por la consulta», que es bloqueante en
 -- integración continua y que **hizo exactamente su trabajo**.
 --
 -- Y NO SE PERDÍA NADA DE SEGURIDAD AL QUITARLO, que es lo que cierra la decisión. Las dos

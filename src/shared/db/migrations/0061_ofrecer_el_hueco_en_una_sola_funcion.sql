@@ -28,7 +28,7 @@
 -- que la decisión de A QUIÉN se le ofrece la tome quien puede verla entera, y que el aviso y la
 -- reserva se escriban JUNTOS o no se escriba ninguno.
 --
--- Las guardas son las de siempre: el inquilino es el del contexto —la consulta— o uno al que
+-- Las guardas son las de siempre: la consulta es el del contexto —la consulta— o uno al que
 -- ESTA cuenta está vinculada —la paciente que cancela—. Y lo que devuelve es el asiento al que
 -- se le ofreció, o nulo: ni el nombre de quien espera, ni su cuenta, ni su correo.
 -- =======================================================================================

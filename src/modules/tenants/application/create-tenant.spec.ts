@@ -169,7 +169,7 @@ describe('POST /v1/platform/tenants', () => {
     }
   });
 
-  it('si el correo falla, el inquilino QUEDA CREADO y el fallo se registra', async () => {
+  it('si el correo falla, la consulta QUEDA CREADO y el fallo se registra', async () => {
     const { caso, registrados } = armar({ mailFalla: true });
 
     // El 201 sale: la frase del 500 de este endpoint promete «no se creó nada», y decirlo

@@ -1,4 +1,4 @@
-// La prueba de lo que añade la 0015, y solo de eso: `inquilinos.md` · los cinco endpoints.
+// La prueba de lo que añade la 0015, y solo de eso: `consultas.md` · los cinco endpoints.
 //
 // Mismas reglas que `isolation.spec.ts` y `access-functions.spec.ts`: contra la base real
 // en Docker, sin un solo doble, y en ningún momento se desactiva RLS. Siembra el DUEÑO del
@@ -8,7 +8,7 @@
 // Lo que NO se repite aquí porque ya está probado en otro archivo: que la doctora no mueve
 // `license.status` por `UPDATE` directo, que `medskin_license_to_review` valida la
 // transición y exige ser la dueña, que la consola lee cinco columnas de `session` y ninguna
-// más, y que el inquilino A no lee las filas de `practice` ni de `license` del B. Eso es de
+// más, y que la consulta A no lee las filas de `practice` ni de `license` del B. Eso es de
 // la 0002 y de la 0003, y sus pruebas siguen verdes.
 //
 // Identificadores en inglés, descripciones en español: norma del 27 de octubre.
@@ -28,13 +28,13 @@ const HASH = '$argon2id$v=19$m=65536,p=4,t=3$c2VtaWxsYWRlcHJ1ZWJh$BcVqHhiTZ4RrQZ
 
 // A es la consulta que la consola da de alta DENTRO de la prueba: su `id` lo pone el
 // `INSERT` del endpoint, no la siembra, porque es justo ese camino el que se mide.
-const A = { practice: 'ffffffff-0000-4000-8000-00000000000a', email: 'duena.alta@inquilinos.local' };
+const A = { practice: 'ffffffff-0000-4000-8000-00000000000a', email: 'duena.alta@consultas.local' };
 // B es la consulta ya instalada: la que la consola abre en `Consola.dc.html` · 2.
 const B = {
   practice: 'ffffffff-0000-4000-8000-00000000000b',
   account: 'ffffffff-0000-4000-8000-00000000001b',
   practitioner: 'ffffffff-0000-4000-8000-00000000002b',
-  email: 'duena.ficha@inquilinos.local',
+  email: 'duena.ficha@consultas.local',
 };
 // Las dos consultas del plan: una pequeña, que es la que pregunta, y una grande al lado,
 // que es lo que obliga al motor a elegir entre el índice y el recorrido completo.
@@ -57,7 +57,7 @@ async function clean() {
   await owner.query('delete from practice where id = any($1::uuid[])', [
     [A.practice, B.practice, SMALL.practice, BULK.practice],
   ]);
-  await owner.query(`delete from account where email like '%@inquilinos.local'`);
+  await owner.query(`delete from account where email like '%@consultas.local'`);
   await owner.query(`delete from access_audit where actor_label = 'Soporte MedSkin'`);
 }
 
@@ -98,7 +98,7 @@ beforeAll(async () => {
   // pregunta de producto que la 0015 deja escrita.
   await owner.query(
     `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived, status, archived_at)
-     select $1::uuid, 'Ficha' || g, 'Paz', '1990-01-01', 'ficha-b-' || g || '@inquilinos.local', 'instagram',
+     select $1::uuid, 'Ficha' || g, 'Paz', '1990-01-01', 'ficha-b-' || g || '@consultas.local', 'instagram',
             case when g = 4 then 'archivada' else 'activa' end,
             case when g = 4 then now() end
        from generate_series(1, 4) g`,
@@ -275,7 +275,7 @@ describe('el plan del recuento del plan de `GET /v1/tenants/mine`', () => {
       owner.query(
         `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived, status, archived_at)
          select $1::uuid, left(md5(g::text), 9), left(md5((g * 7)::text), 9), '1990-01-01',
-                'plan-' || g || '-' || left($1::uuid::text, 4) || '@inquilinos.local', 'instagram',
+                'plan-' || g || '-' || left($1::uuid::text, 4) || '@consultas.local', 'instagram',
                 case when g % 10 = 0 then 'archivada' else 'activa' end,
                 case when g % 10 = 0 then now() end
            from generate_series(1, $2::int) g`,
@@ -288,7 +288,7 @@ describe('el plan del recuento del plan de `GET /v1/tenants/mine`', () => {
     await owner.query('vacuum analyze patient');
   }, 120_000);
 
-  it('el recuento entra por el índice que empieza por el inquilino, y sin recorrer la tabla', async () => {
+  it('el recuento entra por el índice que empieza por la consulta, y sin recorrer la tabla', async () => {
     // Tal cual lo manda el contrato («148 de 300») y SIN `where practice_id`: lo pone la
     // política, que es justo lo que hay que medir. Con el dueño este `EXPLAIN` no llevaría
     // ni un predicado de política y mediría otra consulta (§1.12 del napkin).

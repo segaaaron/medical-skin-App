@@ -24,7 +24,7 @@
 //      otro. Un token de sesión no abre la consola y un token de consola no abre la app: no
 //      comparten llave.
 //   2. No hay `alcance` ni `practice`: lo que autoriza es la lista cerrada de `permisos`, y
-//      el inquilino de cada petición sale de la RUTA.
+//      la consulta de cada petición sale de la RUTA.
 //
 // Sin NestJS, sin Fastify y sin Drizzle: esto se verifica igual desde una cola.
 
@@ -64,8 +64,8 @@ export const PLATFORM_TOKEN_LIFETIME_SECONDS = 15 * 60;
  * en `propuesto` y no existe en `route-policy.ts`. Conocido no es implementado.
  */
 export const PLATFORM_PERMISSIONS = [
-  'plataforma:inquilinos:crear',
-  'plataforma:inquilinos:leer',
+  'plataforma:consultas:crear',
+  'plataforma:consultas:leer',
   'plataforma:licencias:decidir',
   'plataforma:acceso:reenviar',
   'plataforma:pausa:levantar',
@@ -89,7 +89,7 @@ export const PLATFORM_FORBIDDEN_MESSAGE =
  * · No tiene `accountId` porque no tiene fila en `account` —la identidad vive fuera de la
  *   región—, así que tampoco tiene `accountRole` ni `sessionId`.
  * · No tiene `practiceId` porque un token de plataforma no es de ninguna consulta: cuando
- *   el endpoint lleva un inquilino, sale de la RUTA y se comprueba que existe.
+ *   el endpoint lleva una consulta, sale de la RUTA y se comprueba que existe.
  *
  * `subject` y `label` son el `sub` y la `etiqueta` del token, y son lo que viaja a la
  * auditoría: «la tabla no tiene clave foránea hacia esa persona —no vive en esta región— y

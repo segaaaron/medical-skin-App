@@ -9,8 +9,8 @@
 -- La 0010 quitó el `practice_id` del GIN porque midió que el motor no lo elegía y que un
 -- GIN de trigramas solo era 150 veces más rápido. La medición era real y la conclusión
 -- estaba mal, porque LAS MEDICIONES SE HICIERON CON `medskin_owner`, que es superusuario y
--- por tanto **no tiene RLS**. Sin política no hay predicado de inquilino, y sin predicado
--- de inquilino el caso que se medía no era el de la aplicación. La prueba de planes, que sí
+-- por tanto **no tiene RLS**. Sin política no hay predicado de consulta, y sin predicado
+-- de consulta el caso que se medía no era el de la aplicación. La prueba de planes, que sí
 -- corre con el rol de la aplicación y su contexto, lo cantó en el acto: recorrido completo
 -- de las 16 001 fichas de las dos consultas, 471 bloques, 5,4 ms.
 --
@@ -28,10 +28,10 @@
 --
 --   El único predicado que sí puede ser condición de índice es el de la propia política,
 --   `practice_id = medskin_current_practice()`. De ahí la regla 5 del diseño, y de ahí que
---   aquí NO sea un formalismo: el inquilino delante del GIN es lo único que convierte «leer
+--   aquí NO sea un formalismo: la consulta delante del GIN es lo único que convierte «leer
 --   la tabla entera» en «leer las fichas de esta consulta».
 --
--- Y acotado es poco: el plan de un inquilino es de 300 fichas (`practice.patient_limit`),
+-- Y acotado es poco: el plan de una consulta es de 300 fichas (`practice.patient_limit`),
 -- así que filtrar sus trigramas es leer un puñado de bloques. Medido con el compuesto:
 -- Bitmap Index Scan por `practice_id`, 38 bloques, 0,5 ms, y lo que el filtro descarta son
 -- las fichas de ESA consulta y de ninguna otra.
@@ -56,7 +56,7 @@ CREATE INDEX "patient_search_idx" ON "patient"
 -- Lo que decía, y sigue valiendo: `.desc()` de drizzle emite `DESC NULLS LAST`, y
 -- `order by created_at desc` significa `DESC NULLS FIRST`. Para el planificador son dos
 -- ordenaciones distintas, así que el índice no servía para el `ORDER BY` y
--- `GET /v1/pacientes` ordenaba las 8 000 fichas del inquilino para devolver 50. Las dos
+-- `GET /v1/pacientes` ordenaba las 8 000 fichas de la consulta para devolver 50. Las dos
 -- columnas son `not null`: no hay un nulo que cambie de sitio, lo único que cambia es que
 -- el plan encaja.
 -- =======================================================================================

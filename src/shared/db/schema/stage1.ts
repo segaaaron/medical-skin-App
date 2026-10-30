@@ -16,8 +16,8 @@
 // Lo que NO está aquí y es deliberado:
 //   · Las políticas de RLS, los cuatro roles y los grants: drizzle-kit no los expresa.
 //     Van en la migración, src/shared/db/migrations/.
-//   · `account` no lleva `practice_id`. La ficha es del inquilino, la cuenta es de la
-//     persona (§12.2.1). Su aislamiento es por fila, no por inquilino.
+//   · `account` no lleva `practice_id`. La ficha es de la consulta, la cuenta es de la
+//     persona (§12.2.1). Su aislamiento es por fila, no por consulta.
 
 import { sql } from 'drizzle-orm';
 import {
@@ -52,7 +52,7 @@ const updatedAt = () => timestampTz('updated_at').notNull().defaultNow();
 const REGIONS = sql`('eu', 'us', 'latam')`;
 
 // ---------------------------------------------------------------------------------------
-// practice · es el inquilino. No tiene `practice_id`: lo es (§7.3).
+// practice · es la consulta. No tiene `practice_id`: lo es (§7.3).
 // ---------------------------------------------------------------------------------------
 
 export const practice = pgTable(
@@ -66,7 +66,7 @@ export const practice = pgTable(
     currency: text('currency').notNull(),
 
     // El plan y su límite salen del catálogo de la plataforma, nunca del cuerpo de la
-    // petición (inquilinos.md · reglas de negocio).
+    // petición (consultas.md · reglas de negocio).
     plan: text('plan').notNull(),
     patientLimit: integer('patient_limit').notNull(),
     planRenewsOn: date('plan_renews_on'),
@@ -80,7 +80,7 @@ export const practice = pgTable(
     phone: text('phone'),
     logoUrl: text('logo_url'),
 
-    // Solo consola. Nunca sale a la app (inquilinos.md · petición).
+    // Solo consola. Nunca sale a la app (consultas.md · petición).
     internalNote: text('internal_note'),
 
     // La dueña de la consulta. Vive aquí, y no como un `role` de `practitioner`, porque la
@@ -107,19 +107,19 @@ export const practice = pgTable(
     check('practice_country_ck', sql`${t.country} ~ '^[A-Z]{2}$'`),
     check('practice_name_ck', sql`length(${t.name}) between 2 and 120`),
     // Sin índice compuesto: se lee por clave primaria desde la política de RLS
-    // (`id = medskin_current_practice()`), que ya es el índice que empieza por el inquilino.
+    // (`id = medskin_current_practice()`), que ya es el índice que empieza por la consulta.
     //
-    // Este sí es por cuenta y NO empieza por el inquilino, igual que
+    // Este sí es por cuenta y NO empieza por la consulta, igual que
     // `practitioner_account_idx` y por el mismo motivo: la consola pregunta «qué consulta
-    // es de esta cuenta» y eso cruza inquilinos a propósito (§7.3, regla 5 habla de las
-    // rutas calientes dentro de un inquilino). Parcial: la gran mayoría de las filas la
+    // es de esta cuenta» y eso cruza consultas a propósito (§7.3, regla 5 habla de las
+    // rutas calientes dentro de una consulta). Parcial: la gran mayoría de las filas la
     // tienen puesta, pero el nulo no se indexa porque nadie lo busca.
     index('practice_owner_account_idx').on(t.ownerAccountId).where(sql`owner_account_id is not null`),
   ],
 );
 
 // ---------------------------------------------------------------------------------------
-// license · una por consulta. La revisión es a mano (inquilinos.md).
+// license · una por consulta. La revisión es a mano (consultas.md).
 // ---------------------------------------------------------------------------------------
 
 export const license = pgTable(
@@ -154,15 +154,15 @@ export const license = pgTable(
     // Una consulta, un caso. Un rechazo reabre esta misma fila: el histórico de quién
     // decidió qué vive en `access_audit`, que no tiene claves foráneas (§12.2.8).
     uniqueIndex('license_practice_uq').on(t.practiceId),
-    // La cola de revisión de la consola cruza inquilinos a propósito, así que aquí el
-    // inquilino NO va delante: la consulta es «qué hay en revisión, por antigüedad».
+    // La cola de revisión de la consola cruza consultas a propósito, así que aquí el
+    // consulta NO va delante: la consulta es «qué hay en revisión, por antigüedad».
     index('license_review_queue_idx').on(t.status, t.submittedAt),
     check(
       'license_status_ck',
       sql`${t.status} in ('sin_enviar', 'en_revision', 'verificada', 'rechazada')`,
     ),
     // «400 motivo_rechazo_vacio»: un rechazo sin motivo no se puede guardar. La doctora
-    // lo va a leer (inquilinos.md · decision).
+    // lo va a leer (consultas.md · decision).
     check(
       'license_rejection_reason_ck',
       sql`${t.status} <> 'rechazada' or length(${t.rejectionReason}) between 10 and 300`,
@@ -175,7 +175,7 @@ export const license = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------
-// practitioner · la doctora y su equipo, dentro de un inquilino.
+// practitioner · la doctora y su equipo, dentro de una consulta.
 // ---------------------------------------------------------------------------------------
 
 export const practitioner = pgTable(
@@ -191,7 +191,7 @@ export const practitioner = pgTable(
 
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
-    // El permiso dentro de un inquilino ya resuelto. NO es el rol de autenticación:
+    // El permiso dentro de una consulta ya resuelto. NO es el rol de autenticación:
     // ese vive en `account.role` y lo pone el servidor (cuentas.md · POST /v1/team).
     role: text('role').notNull(),
     // Nulo = «los de su `role`», y es lo que tendrá el 100 % de las filas de la primera
@@ -206,12 +206,12 @@ export const practitioner = pgTable(
   },
   (t) => [
     uniqueIndex('practitioner_practice_account_uq').on(t.practiceId, t.accountId),
-    // Inquilino delante (§7.3, regla 5): «mi equipo activo», que es lo que mira
+    // Consulta delante (§7.3, regla 5): «mi equipo activo», que es lo que mira
     // «409 consulta_con_equipo» al borrar la cuenta de la dueña.
     index('practitioner_practice_status_idx').on(t.practiceId, t.status),
-    // Y uno por cuenta sola, sin inquilino delante a propósito: POST /v1/access tiene
+    // Y uno por cuenta sola, sin consulta delante a propósito: POST /v1/access tiene
     // que averiguar a qué consulta pertenece quien entra ANTES de que exista contexto
-    // de inquilino. Es la única consulta del tramo que no puede empezar por él.
+    // de consulta. Es la única consulta del tramo que no puede empezar por él.
     index('practitioner_account_idx').on(t.accountId),
     // Decisión 12 del 27 oct. `paciente` no es rol de `practitioner`: vive en `account`.
     // Y `duena` ya no es un rol: la dueña es `practice.owner_account_id` (decisión 5),
@@ -321,7 +321,7 @@ export const credential = pgTable(
 // «contraseña mal» y tarde lo mismo (acceso.md: «Sin eso, la respuesta inmediata del caso
 // "no existe" es el oráculo que la frase niega»).
 //
-// No es dato de inquilino y no hace falta que lo sea: no tiene un solo GRANT para ningún
+// No es dato de consulta y no hace falta que lo sea: no tiene un solo GRANT para ningún
 // rol de aplicación. Lo lee la función del acceso y nadie más. Está en una tabla en vez de
 // dentro de la función para poder volver a sembrarlo sin una migración el día que cambien
 // los parámetros de Argon2id del servidor: si divergen, el señuelo tarda distinto y el
@@ -340,7 +340,7 @@ export const accessDecoy = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------
-// session · un dispositivo. No lleva practice_id como inquilino propio: lo lleva como
+// session · un dispositivo. No lleva practice_id como consulta propio: lo lleva como
 // copia del reclamo del token, para que la consola pueda contar versiones de app.
 // Una doctora NO ve las sesiones de sus pacientes (acceso.md).
 // ---------------------------------------------------------------------------------------
@@ -352,7 +352,7 @@ export const session = pgTable(
     accountId: uuid('account_id')
       .notNull()
       .references(() => account.id, { onDelete: 'cascade' }),
-    // Nulo para una paciente: no es de ningún inquilino (_convenciones.md).
+    // Nulo para una paciente: no es de ninguna consulta (_convenciones.md).
     practiceId: uuid('practice_id').references(() => practice.id, { onDelete: 'cascade' }),
 
     scope: text('scope').notNull(),
@@ -397,13 +397,13 @@ export const session = pgTable(
       // cosmético: `.desc()` de drizzle emite `DESC NULLS LAST`, mientras que
       // `order by x desc` significa `DESC NULLS FIRST`. Para el planificador son dos
       // ordenaciones distintas, así que el índice NO sirve para el `ORDER BY` y la consulta
-      // acaba ordenando todo lo que el inquilino tenga. Medido con el rol de la aplicación
+      // acaba ordenando todo lo que la consulta tenga. Medido con el rol de la aplicación
       // sobre 20 000 líneas de bitácora: 421 bloques y 9,8 ms antes, 4 bloques y 0,06 ms
       // después. Las columnas son `not null`, así que no hay un nulo que cambie de sitio.
       // Corregido en la migración 0012.
       .on(t.accountId, t.lastSeenAt.desc().nullsFirst())
       .where(sql`revoked_at is null`),
-    // Inquilino delante (§7.3, regla 5): `versiones_app` de la consola.
+    // Consulta delante (§7.3, regla 5): `versiones_app` de la consola.
     index('session_practice_idx')
       .on(t.practiceId, t.lastSeenAt.desc().nullsFirst())
       .where(sql`practice_id is not null`),
@@ -467,7 +467,7 @@ export const recoveryCode = pgTable(
 // ---------------------------------------------------------------------------------------
 // idempotency_key · (clave, cuenta que llama, cuerpo hasheado) 24 h, y repite la
 // la respuesta tal como se guardo (_convenciones.md).
-// El inquilino de la fila es «el de quien llama» (§3.3): practice_id para la doctora,
+// El consulta de la fila es «el de quien llama» (§3.3): practice_id para la doctora,
 // account_id para la paciente y para la plataforma.
 // ---------------------------------------------------------------------------------------
 
@@ -490,7 +490,7 @@ export const idempotencyKey = pgTable(
     // La clave es del cliente y se guarda por cuenta que llama: la misma clave de dos
     // cuentas distintas son dos operaciones distintas.
     primaryKey({ columns: [t.accountId, t.key] }),
-    // Inquilino delante (§7.3, regla 5) para la política de app_practitioner.
+    // Consulta delante (§7.3, regla 5) para la política de app_practitioner.
     index('idempotency_key_practice_idx')
       .on(t.practiceId, t.expiresAt)
       .where(sql`practice_id is not null`),
@@ -503,7 +503,7 @@ export const idempotencyKey = pgTable(
 // publica su DDL así y «si algo contradice al diseño, gana el diseño» (servicios.md).
 // Sin claves foráneas: la fila sobrevive al borrado de lo que describe (§12.2.8).
 // Sin particionar todavía: §3.5 pone la partición como respuesta al volumen, no como
-// requisito del día uno, y el índice ya empieza por el inquilino.
+// requisito del día uno, y el índice ya empieza por la consulta.
 // ---------------------------------------------------------------------------------------
 
 export const serviceFailure = pgTable(
@@ -547,7 +547,7 @@ export const serviceFailure = pgTable(
     index('service_failure_occurred_idx').on(t.occurredAt.desc().nullsFirst()),
     index('service_failure_operation_idx').on(t.service, t.operation, t.occurredAt.desc().nullsFirst()),
     index('service_failure_code_idx').on(t.errorCode, t.occurredAt.desc().nullsFirst()),
-    // Inquilino delante (§7.3, regla 5): es lo que lee la doctora de lo que la afecta.
+    // Consulta delante (§7.3, regla 5): es lo que lee la doctora de lo que la afecta.
     index('service_failure_practice_idx').on(t.practiceId, t.occurredAt.desc().nullsFirst()),
     index('service_failure_trace_idx').on(t.traceId),
     check('service_failure_severity_ck', sql`${t.severity} in ('warning', 'error', 'critical')`),
@@ -559,7 +559,7 @@ export const serviceFailure = pgTable(
 // ningún rol, así que no se puede reescribir ni borrar desde la aplicación.
 // Sin claves foráneas (§12.2.8): un registro que desaparece con lo que describe no sirve.
 // La exigen ya tres contratos del tramo: la decisión de licencia «va a audit_log con
-// quién la tomó» (inquilinos.md), la entrega de la contraseña temporal «queda en
+// quién la tomó» (consultas.md), la entrega de la contraseña temporal «queda en
 // audit_log con quién la pidió» y las dos acciones de consola también (cuentas.md).
 // ---------------------------------------------------------------------------------------
 
@@ -583,7 +583,7 @@ export const accessAudit = pgTable(
     region: text('region'),
   },
   (t) => [
-    // Inquilino delante (§7.3, regla 5): la bitácora de accesos de una consulta.
+    // Consulta delante (§7.3, regla 5): la bitácora de accesos de una consulta.
     index('access_audit_practice_idx').on(t.practiceId, t.occurredAt.desc().nullsFirst()),
     index('access_audit_actor_idx').on(t.actorAccountId, t.occurredAt.desc().nullsFirst()),
     index('access_audit_action_idx').on(t.action, t.occurredAt.desc().nullsFirst()),

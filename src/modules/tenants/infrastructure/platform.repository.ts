@@ -1,11 +1,11 @@
-// El repositorio de los TRES endpoints de consola de `inquilinos.md`.
+// El repositorio de los TRES endpoints de consola de `consultas.md`.
 //
 // `app_platform` y `withTenantContext()`, como todo lo demás. El contexto que se fija es
 // `medskin.account_id` = el `sub` del token de plataforma, y eso **no crea ninguna fila en
 // `account`**: es lo que la política de `idempotency_key` compara
 // (`account_id = medskin_current_account()`) y lo que viaja a la bitácora. `practice_id` NO
-// se fija: la consola cruza inquilinos a propósito y sus políticas son
-// `current_user = 'app_platform'`, no por inquilino.
+// se fija: la consola cruza consultas a propósito y sus políticas son
+// `current_user = 'app_platform'`, no por consulta.
 //
 // LO QUE ESTE ROL NO PUEDE LEER, Y NO SE ABRE:
 //   · `patient` — ni para contar. Por eso `plan.pacientes` sale de
@@ -220,7 +220,7 @@ export class PlatformRepository
 
       // Los tres números de la consola. La función existe porque este rol no alcanza
       // `patient` ni `session.practice_id`, y de ella no sale un nombre, un correo ni una
-      // fecha de nacimiento: no hay `WHERE` que pasarle más que el inquilino.
+      // fecha de nacimiento: no hay `WHERE` que pasarle más que la consulta.
       const { rows: stats } = await c.query<StatsRow>(
         'select * from medskin_platform_practice_stats($1)',
         [p.practiceId],
@@ -404,7 +404,7 @@ export class PlatformRepository
 
 /**
  * `app_platform` con `medskin.account_id` = el `sub` del token, y **sin** `practice_id`: la
- * consola lee cruzando inquilinos a propósito y sus políticas no son por inquilino.
+ * consola lee cruzando consultas a propósito y sus políticas no son por consulta.
  */
 function contextOf(actor: PlatformActor): TenantContext {
   return { role: 'app_platform', accountId: actor.subject };

@@ -8,11 +8,11 @@
 -- =======================================================================================
 
 -- ---------------------------------------------------------------------------------------
--- 1 · `notification_due_idx` empezaba por el inquilino, y su consulta NO lo nombra
+-- 1 · `notification_due_idx` empezaba por la consulta, y su consulta NO lo nombra
 -- ---------------------------------------------------------------------------------------
--- La 0045 lo creó «por inquilino primero (lección 0011)», y esa lección no aplica aquí:
--- `medskin_notifications_due` **cruza inquilinos** —es un trabajo, no una petición—, así que no
--- hay ningún `practice_id = …` en su `WHERE`. Con el inquilino delante, el índice no puede
+-- La 0045 lo creó «por consulta primero (lección 0011)», y esa lección no aplica aquí:
+-- `medskin_notifications_due` **cruza consultas** —es un trabajo, no una petición—, así que no
+-- hay ningún `practice_id = …` en su `WHERE`. Con la consulta delante, el índice no puede
 -- acotar el rango de `send_after` ni servir el `ORDER BY`: recorre la rama parcial entera y
 -- ordena a mano.
 --
@@ -26,7 +26,7 @@
 -- esto corre cada minuto.
 --
 -- Es la misma excepción medida que el napkin §1.4 ya documenta para la consola, al revés: no
--- lleva el inquilino delante porque la consulta no lo nombra. La propia 0056 acertó con este
+-- lleva la consulta delante porque la consulta no lo nombra. La propia 0056 acertó con este
 -- criterio en `notification_purge_idx`.
 DROP INDEX "notification_due_idx";--> statement-breakpoint
 CREATE INDEX "notification_due_idx" ON "notification_outbox" USING btree ("send_after")
@@ -35,7 +35,7 @@ CREATE INDEX "notification_due_idx" ON "notification_outbox" USING btree ("send_
 -- ---------------------------------------------------------------------------------------
 -- 2 · `medskin_appointments_to_remind` no tenía ningún índice por el que entrar
 -- ---------------------------------------------------------------------------------------
--- Filtra por estado y por una ventana estrecha de `starts_at`, **sin inquilino**, y los tres
+-- Filtra por estado y por una ventana estrecha de `starts_at`, **sin consulta**, y los tres
 -- índices de `appointment` empiezan por `practice_id`. Medido con 40 000 citas:
 --   antes:   Bitmap Index Scan por `appointment_open_idx` (45 761 entradas) · 1 549 bloques
 --            · «Rows Removed by Filter: 22 880» · 1 636 buffers · 3,362 ms · **para devolver CERO filas**

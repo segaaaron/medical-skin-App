@@ -38,7 +38,7 @@ const PLATFORM: PlatformCaller = {
   label: 'Soporte MedSkin',
   // La región del TOKEN es otra a propósito: la fila tiene que llevar la del despliegue.
   region: 'eu',
-  permissions: ['plataforma:inquilinos:leer'],
+  permissions: ['plataforma:consultas:leer'],
 };
 
 type Row = {
@@ -120,7 +120,7 @@ afterAll(async () => {
 });
 
 describe('un 500 de una ruta de consola', () => {
-  it('deja la fila CON actor, con la región del despliegue y sin inquilino', async () => {
+  it('deja la fila CON actor, con la región del despliegue y sin consulta', async () => {
     const host = hostOf('/v1/platform/tenants/:id', { platform: PLATFORM });
 
     filter.catch(
@@ -137,7 +137,7 @@ describe('un 500 de una ruta de consola', () => {
     // La del despliegue, no la del token: para una audiencia de otra región ya hay un 403.
     expect(row?.region).toBe('latam');
     // El fallo es de una petición de soporte, no de la consulta sobre la que miraba:
-    // atribuírsela la haría aparecer en el panel de fallos de un inquilino que no hizo nada.
+    // atribuírsela la haría aparecer en el panel de fallos de una consulta que no hizo nada.
     expect(row?.practice_id).toBeNull();
     expect(row?.operation).toBe('GET /v1/platform/tenants/:id');
     expect(row?.error_code).toBe('fallo_de_servicio');

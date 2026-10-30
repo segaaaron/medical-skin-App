@@ -38,10 +38,10 @@ export function resolveRole(
  * cuyo nombre no corresponde con lo que acota deja de significar nada en cuanto la dueña la
  * edite, que es la única razón por la que existe la columna `practitioner.permissions`.
  *
- * `inquilino:licencia:enviar` es «solo la dueña» y por eso NO está aquí: la dueña es la
+ * `consulta:licencia:enviar` es «solo la dueña» y por eso NO está aquí: la dueña es la
  * `doctora` cuya cuenta está en `practice.owner_account_id`, que es una fila y no una
  * cadena, así que ese permiso no sale de una tabla por rol. Lo resuelve quien conozca esa
- * fila, y hoy no lo resuelve nadie: `inquilinos.md` es de otro encargo.
+ * fila, y hoy no lo resuelve nadie: `consultas.md` es de otro encargo.
  */
 export const PERMISSIONS_BY_ROLE: Readonly<Record<PractitionerRole, readonly string[]>> = {
   doctora: [

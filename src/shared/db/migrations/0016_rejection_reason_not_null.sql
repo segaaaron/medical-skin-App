@@ -15,7 +15,7 @@
 --
 -- entra sin una queja. El contrato promete `400 motivo_rechazo_vacio` y la frase «Escribe
 -- el motivo del rechazo: la doctora lo va a leer», y la doctora se quedaba con una
--- licencia rechazada y `motivo_rechazo: null` en su `GET /v1/inquilinos/mio`: el único
+-- licencia rechazada y `motivo_rechazo: null` en su `GET /v1/consultas/mio`: el único
 -- estado de la pantalla `Licencia.dc.html` que no tiene nada que mostrar.
 --
 -- El `CHECK` de la 0000 cubre la cadena corta y se queda —no está mal, está incompleto—; lo

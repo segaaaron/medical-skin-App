@@ -12,7 +12,7 @@
 //
 // LO QUE BORRA LO DECIDE LA BASE, NO ESTE ARCHIVO. `medskin_purge_idempotency_keys()` es
 // `SECURITY DEFINER` y propiedad de `medskin_access` porque **ningún rol de la aplicación
-// puede barrer la tabla**: las tres políticas confinan a cada uno a su inquilino o a su
+// puede barrer la tabla**: las tres políticas confinan a cada uno a su consulta o a su
 // cuenta, y está medido —`app_practitioner` sin consulta borra 0 de 3, con consulta borra 1
 // de 3, `app_patient` 0 de 3, `app_platform` 1 de 3 y `app_anonymous` da 42501—. Así que el
 // trabajo corre con `app_anonymous`, que no fija contexto y cuyo único privilegio son
@@ -160,7 +160,7 @@ export function startIdempotencySweep(
 
 /**
  * La fila del fallo. Va por el camino sin sesión —`medskin_record_anonymous_failure()`—
- * porque este trabajo no tiene cuenta ni inquilino que escribir, y es el mismo que ya usa el
+ * porque este trabajo no tiene cuenta ni consulta que escribir, y es el mismo que ya usa el
  * trabajador de recuperación.
  *
  * `severity: 'error'` y no `'warning'`: sin reintentos, un intento fallido es un barrido que
@@ -193,7 +193,7 @@ export async function recordSweepFailure(
  * Vive aquí al lado del de idempotencia porque es la misma pieza con otro plazo: una tabla que
  * promete una retención y una función de la base que la cumple. Lo que borra lo decide
  * `medskin_purge_retained()` (0051), no este archivo: el rol de la aplicación no puede
- * anonimizar una ficha de otro inquilino, y el trabajo corre con `app_anonymous`, cuyo único
+ * anonimizar una ficha de otra consulta, y el trabajo corre con `app_anonymous`, cuyo único
  * privilegio son funciones como esa.
  *
  * Y es el barrido más delicado del sistema, así que dos cotas: 50 fichas por pasada y hasta

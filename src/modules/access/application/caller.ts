@@ -11,7 +11,7 @@ export type Caller = {
   accountRole: AccountRole;
   scope: Scope;
   region: Region;
-  /** Solo doctora y equipo. Nulo para una paciente: no es de ningún inquilino. */
+  /** Solo doctora y equipo. Nulo para una paciente: no es de ninguna consulta. */
   practiceId: string | null;
   permissions: readonly string[];
 };

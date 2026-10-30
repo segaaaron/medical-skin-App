@@ -560,7 +560,7 @@ describe('el alta del equipo', () => {
     });
   });
 
-  it('el inquilino de al lado no ve la fila nueva ni nombrándola', async () => {
+  it('la consulta de al lado no ve la fila nueva ni nombrándola', async () => {
     // La prueba bloqueante de §7.3 sobre lo que la 0014 escribe: A no lee del B.
     const mine = (await read(app, ctxBusyOwner, 'select account_id from practitioner')).map((r) => r.account_id);
     expect(mine).toContain(BUSY.owner);

@@ -1,4 +1,4 @@
-// La prueba bloqueante de §7.3: falla si el inquilino A lee una fila del B.
+// La prueba bloqueante de §7.3: falla si la consulta A lee una fila del B.
 // Contra la base real en Docker, sin un solo doble: un mock de RLS prueba el mock.
 //
 // Y la prueba que de verdad importa, la última de este archivo: la misma comprobación a
@@ -49,7 +49,7 @@ const PATIENT = {
   session: 'cccccccc-0000-4000-8000-000000000002',
   code: 'cccccccc-0000-4000-8000-000000000003',
 };
-// La consola no es un inquilino y su operador no tiene fila en `account`: solo hace falta
+// La consola no es una consulta y su operador no tiene fila en `account`: solo hace falta
 // un `account_id` para el contexto.
 const PLATFORM = { account: 'dddddddd-0000-4000-8000-000000000001' };
 
@@ -159,9 +159,9 @@ async function seed() {
     [PATIENT.code, PATIENT.account],
   );
 
-  // Los dos vínculos de LA MISMA cuenta con DOS inquilinos distintos. Va después de la
+  // Los dos vínculos de LA MISMA cuenta con DOS consultas distintos. Va después de la
   // cuenta porque `patient_link.account_id` la referencia, y es el único sitio del esquema
-  // donde una fila legible cruza inquilinos: la cara por `account_id` de la política.
+  // donde una fila legible cruza consultas: la cara por `account_id` de la política.
   // A está aceptado y B todavía invitado: así se prueba que los antecedentes se abren con
   // el vínculo aceptado y no con el otro.
   const link = (t: typeof A, status: string, practiceName: string, city: string) =>
@@ -179,7 +179,7 @@ async function clean() {
   await owner.query('delete from practice where id = any($1::uuid[])', [[A.practice, B.practice]]);
   await owner.query('delete from account where id = any($1::uuid[])', [[A.account, B.account, PATIENT.account]]);
   // Estas tres no se las lleva ningún cascade porque no tienen claves foráneas: la de
-  // idempotencia porque su inquilino es «el de quien llama», y las dos bitácoras porque
+  // idempotencia porque su consulta es «el de quien llama», y las dos bitácoras porque
   // deben sobrevivir al borrado de lo que describen (§12.2.8).
   await owner.query('delete from idempotency_key where account_id = any($1::uuid[])', [
     [A.account, B.account, PATIENT.account],
@@ -226,8 +226,8 @@ afterAll(async () => {
   await Promise.all([owner.end(), app.end(), pooler.end()]);
 });
 
-describe('aislamiento entre inquilinos · conexión directa (5433)', () => {
-  it('el inquilino A no lee ni una fila del B, tabla por tabla', async () => {
+describe('aislamiento entre consultas · conexión directa (5433)', () => {
+  it('la consulta A no lee ni una fila del B, tabla por tabla', async () => {
     const fromB = {
       practice: await whatItSees(app, ctxPractitionerA, 'select id from practice where id = $1', [B.practice]),
       license: await whatItSees(app, ctxPractitionerA, 'select id from license where practice_id = $1', [B.practice]),
@@ -394,7 +394,7 @@ describe('aislamiento entre inquilinos · conexión directa (5433)', () => {
 });
 
 describe('tramo 2 · patient, patient_link y medical_history', () => {
-  it('el inquilino A no lee ni una fila del B en las cuatro tablas nuevas', async () => {
+  it('la consulta A no lee ni una fila del B en las cuatro tablas nuevas', async () => {
     expect({
       patient: await whatItSees(app, ctxPractitionerA, 'select id from patient where practice_id = $1', [B.practice]),
       patient_by_id: await whatItSees(app, ctxPractitionerA, 'select id from patient where id = $1', [B.patient]),
@@ -408,7 +408,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
       ),
       patient_link: await whatItSees(app, ctxPractitionerA, 'select id from patient_link where id = $1', [B.link]),
       // La cara por cuenta de `patient_link` no le sirve a la doctora para saltar el
-      // inquilino: su política es la otra, y las políticas se suman por rol, no por tabla.
+      // consulta: su política es la otra, y las políticas se suman por rol, no por tabla.
       link_by_account: await whatItSees(
         app,
         ctxPractitionerA,
@@ -449,9 +449,9 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     });
   });
 
-  it('la paciente ve sus dos vínculos, de dos inquilinos distintos, y seis columnas', async () => {
-    // La única lectura del sistema que cruza inquilinos, y cruza solo las fichas de quien
-    // pregunta. Sin contexto de inquilino: `app_patient` no fija ninguno.
+  it('la paciente ve sus dos vínculos, de dos consultas distintos, y seis columnas', async () => {
+    // La única lectura del sistema que cruza consultas, y cruza solo las fichas de quien
+    // pregunta. Sin contexto de consulta: `app_patient` no fija ninguno.
     const links = await read(app, ctxPatient, 'select practice_name, practitioner_name, city, status from patient_link');
     expect(links.map((r) => `${r.practice_name} · ${r.city} · ${r.status}`).sort()).toEqual([
       'Clinica A · Santa Cruz · vinculada',
@@ -524,7 +524,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     );
     expect(written.rowCount).toBe(1);
 
-    // Y su fila de bitácora no puede apuntar al inquilino de otra: el `WITH CHECK` no es
+    // Y su fila de bitácora no puede apuntar a la consulta de otra: el `WITH CHECK` no es
     // `true`, es su propio vínculo aceptado.
     expect({
       own: await whatItSees(
@@ -590,7 +590,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
 });
 
 describe('a través de PgBouncer en modo transacción (6432)', () => {
-  it('el aislamiento se mantiene cuando dos inquilinos se turnan la misma conexión', async () => {
+  it('el aislamiento se mantiene cuando dos consultas se turnan la misma conexión', async () => {
     // Las dos transacciones salen por el mismo socket de cliente y, con un solo cliente
     // activo, por la misma conexión al servidor. Si el contexto se filtrara, A vería B.
     const ofA = (await read(pooler, ctxPractitionerA, 'select id from practice')).map((r) => r.id);
@@ -675,7 +675,7 @@ describe('a través de PgBouncer en modo transacción (6432)', () => {
 });
 
 // =========================================================================================
-// LOS PLANES · regla 5 de §7.3: sin un índice que empiece por el inquilino, el predicado de
+// LOS PLANES · regla 5 de §7.3: sin un índice que empiece por la consulta, el predicado de
 // la política provoca recorridos completos de tabla. Esto no se razona, se mide:
 // `EXPLAIN (ANALYZE, BUFFERS)` por la ruta caliente y con el rol y el contexto de verdad,
 // porque el plan CAMBIA cuando la política añade su predicado.
@@ -801,7 +801,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     return rows.map((r) => r['QUERY PLAN']).join('\n');
   }
 
-  it('la lista de pacientes entra por el índice que empieza por el inquilino', async () => {
+  it('la lista de pacientes entra por el índice que empieza por la consulta', async () => {
     // `GET /v1/patients` sin búsqueda: las activas, las últimas primero. Y sin
     // `where practice_id`: lo pone la política, que es justo lo que hay que medir.
     const used = await plan(
@@ -813,10 +813,10 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     expect(used).not.toContain('Seq Scan on patient');
   });
 
-  it('la búsqueda por trigramas entra por el GIN que empieza por el inquilino', async () => {
+  it('la búsqueda por trigramas entra por el GIN que empieza por la consulta', async () => {
     // Una búsqueda de verdad es selectiva: «apellido1234» es una ficha, no mil. Con un
     // patrón que acierta a una de cada veinte, el motor hace bien en entrar por el btree
-    // del inquilino y filtrar, y eso también es un plan correcto; lo que el GIN evita es
+    // de la consulta y filtrar, y eso también es un plan correcto; lo que el GIN evita es
     // el recorrido completo cuando la aguja es fina, que es el caso que la pantalla manda.
     // La aguja sale de una ficha real de A: es el caso de la pantalla —teclear un trozo
     // de un nombre— y no un patrón inventado. Los nombres de la siembra son resúmenes
@@ -846,8 +846,8 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     expect(used).not.toContain('Seq Scan on patient');
   });
 
-  it('los vínculos de la paciente entran por el índice de cuenta, sin inquilino delante', async () => {
-    // La única lectura que cruza inquilinos. No hay `practice_id` que poner delante porque
+  it('los vínculos de la paciente entran por el índice de cuenta, sin consulta delante', async () => {
+    // La única lectura que cruza consultas. No hay `practice_id` que poner delante porque
     // quien pregunta no tiene uno, y por eso este índice es de una sola columna.
     const used = await plan(ctxPatient, 'select id, practice_name from patient_link');
     expect(used).toContain('patient_link_account_idx');
@@ -856,19 +856,19 @@ describe('los planes de las rutas calientes del tramo 2', () => {
 
   it('la autorización del reenvío de acceso entra por (practice_id, account_id)', async () => {
     // `POST /v1/accounts/{account_id}/access`: `EXISTS (... where account_id = $1)` bajo la
-    // política del inquilino. Es la consulta literal del contrato.
+    // política de la consulta. Es la consulta literal del contrato.
     const used = await plan(ctxPractitionerA, 'select exists (select 1 from patient_link where account_id = $1)', [
       PATIENT.account,
     ]);
     // `Index ONLY Scan` sobre el compuesto: las dos columnas del predicado están en el
-    // índice —la del inquilino la pone la política, la de la cuenta la pone el contrato—,
+    // índice —la de la consulta la pone la política, la de la cuenta la pone el contrato—,
     // así que la autorización se resuelve sin tocar la tabla. 3 bloques, 0,04 ms.
     expect(used).toMatch(/Index Only Scan using patient_link_practice_account_idx/);
     expect(used).not.toContain('Seq Scan on patient_link');
   });
 
   it('la bitácora de la consulta se lee por índice, sin ordenar veinte mil líneas', async () => {
-    // `order by occurred_at desc` sin `where practice_id`: el inquilino lo pone la
+    // `order by occurred_at desc` sin `where practice_id`: la consulta lo pone la
     // política. Es la forma de «lo último primero» que repiten las dos bitácoras.
     const used = await plan(ctxPractitionerA, 'select id, action from access_audit order by occurred_at desc limit 50');
     expect(used).toContain('access_audit_practice_idx');
@@ -969,7 +969,7 @@ describe('app_account · el rol del token que no dice qué eres', () => {
 
   it('una doctora que entra por este rol no se trae su consulta con ella', async () => {
     // Es el caso que da nombre al rol: su token de recuperación no dice que es doctora, y
-    // adoptar este rol no le abre nada de su inquilino. Lo suyo propio sí: si no, no podría
+    // adoptar este rol no le abre nada de su consulta. Lo suyo propio sí: si no, no podría
     // elegir su contraseña.
     expect({
       account: (await read(app, ctxAccountPractitioner, 'select id from account')).map((r) => r.id),
@@ -977,7 +977,7 @@ describe('app_account · el rol del token que no dice qué eres', () => {
       practitioner: await whatItSees(app, ctxAccountPractitioner, 'select id from practitioner'),
       patient: await whatItSees(app, ctxAccountPractitioner, 'select id from patient'),
       // Puede consultar `patient_link`, y no ve ninguno: no tiene vínculos de paciente, y
-      // los de SU consulta no son suyos por cuenta. Cero filas, no las de su inquilino.
+      // los de SU consulta no son suyos por cuenta. Cero filas, no las de su consulta.
       links: await whatItSees(app, ctxAccountPractitioner, 'select id from patient_link'),
     }).toEqual({
       account: [A.account],
@@ -988,7 +988,7 @@ describe('app_account · el rol del token que no dice qué eres', () => {
     });
   });
 
-  it('el ayudante no le deja fijar un inquilino', async () => {
+  it('el ayudante no le deja fijar una consulta', async () => {
     await expect(
       withTenantContext(app, { role: 'app_account', accountId: A.account, practiceId: A.practice }, () =>
         Promise.resolve(null),

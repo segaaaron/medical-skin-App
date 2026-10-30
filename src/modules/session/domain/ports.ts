@@ -29,7 +29,7 @@ export type SessionSnapshot = {
   revokedAt: Date | null;
   /** Nulo cuando la sesión no tiene refresco, que es el caso del alcance restringido. */
   refreshExpiresAt: Date | null;
-  /** Nulo para una paciente: no es de ningún inquilino (§12.2.1). */
+  /** Nulo para una paciente: no es de ninguna consulta (§12.2.1). */
   practice: { id: string; name: string } | null;
   licenseStatus: string | null;
   firstDayDone: boolean;
@@ -66,7 +66,7 @@ export type RotatedRefresh = {
   verdict: RefreshVerdict;
   sessionId: string | null;
   accountId: string | null;
-  /** Se copia de la FILA de la sesión, nunca del cuerpo: si no, sería cambiar de inquilino. */
+  /** Se copia de la FILA de la sesión, nunca del cuerpo: si no, sería cambiar de consulta. */
   practiceId: string | null;
   scope: Scope | null;
   /** `account.role`: el rol de autenticación, que no es el `rol` que viaja al cliente. */

@@ -5,7 +5,7 @@
 //   · `pacientes` es el recuento de fichas `activa` que trae el puerto, el mismo que usa la
 //     consola: el caso de uso no lo vuelve a calcular ni lo filtra;
 //   · una paciente recibe `403 rol_no_corresponde` ANTES de que se abra una transacción;
-//   · un inquilino sin consulta que servir es un 500 con su frase, nunca una respuesta
+//   · una consulta sin consulta que servir es un 500 con su frase, nunca una respuesta
 //     inventada.
 
 import { describe, expect, it } from 'vitest';
@@ -198,9 +198,9 @@ describe('GET /v1/tenants/mine', () => {
 
   it('un token de consulta sin `practice` tampoco se atiende, y falla cerrado', async () => {
     const { caso } = armar();
-    const sinInquilino: Caller = { ...DOCTORA, practiceId: null };
+    const sinConsulta: Caller = { ...DOCTORA, practiceId: null };
 
-    await expect(caso.run(sinInquilino)).rejects.toBeInstanceOf(ContractError);
+    await expect(caso.run(sinConsulta)).rejects.toBeInstanceOf(ContractError);
   });
 
   it('sin consulta que servir es 500 con la frase del contrato, y la causa no sale al cliente', async () => {

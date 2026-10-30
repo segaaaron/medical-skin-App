@@ -1,4 +1,4 @@
-// El contexto de inquilino, fijado por TRANSACCIÓN. Es la regla 2 de §7.3 y la única que
+// El contexto de consulta, fijado por TRANSACCIÓN. Es la regla 2 de §7.3 y la única que
 // no se rompe nunca:
 //
 //   `set_config(..., true)` y `SET LOCAL ROLE` se deshacen en el COMMIT. Un `SET` de
@@ -36,7 +36,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function validUuid(value: string | null | undefined, field: string): string | null {
   if (value === undefined || value === null || value === '') return null;
-  if (!UUID.test(value)) throw new Error(`Contexto de inquilino inválido: ${field} no es un uuid.`);
+  if (!UUID.test(value)) throw new Error(`Contexto de consulta inválido: ${field} no es un uuid.`);
   return value;
 }
 
@@ -53,7 +53,7 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   const accountId = validUuid(ctx.accountId, 'accountId');
 
   // `app_anonymous` es el rol de las peticiones SIN sesión: `POST /v1/access`, los dos de
-  // recuperación y `POST /v1/session/refresh`. Cuando llegan no hay ni inquilino ni cuenta
+  // recuperación y `POST /v1/session/refresh`. Cuando llegan no hay ni consulta ni cuenta
   // que fijar, así que no fija ninguno de los dos contextos —y se rechaza que lo intente:
   // un `account_id` puesto aquí sería un identificador que nadie ha probado todavía, y
   // habilitaría políticas por fila con el único rol que no debería disparar ninguna. No
@@ -76,22 +76,22 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
     throw new Error('app_account no fija practiceId: su token no dice a qué consulta pertenece quien llama.');
   }
   if (ctx.role === 'app_practitioner' && !practiceId) {
-    throw new Error('app_practitioner exige practiceId: sus políticas se leen por inquilino.');
+    throw new Error('app_practitioner exige practiceId: sus políticas se leen por consulta.');
   }
-  // La paciente no es de un inquilino: su cuenta se vincula a N fichas (§12.2.1). Fijarle
+  // La paciente no es de una consulta: su cuenta se vincula a N fichas (§12.2.1). Fijarle
   // un `practice_id` le daría una lectura que su rol no tiene y que ningún contrato pide.
   if (ctx.role === 'app_patient' && practiceId) {
-    throw new Error('app_patient no fija practiceId: la paciente no pertenece a ningún inquilino.');
+    throw new Error('app_patient no fija practiceId: la paciente no pertenece a ninguna consulta.');
   }
   // Y `app_platform` tampoco, que era la única puerta de esta casa sin cerradura. La
-  // consola NO es un inquilino: sus políticas son `current_user = 'app_platform'` y
+  // consola NO es una consulta: sus políticas son `current_user = 'app_platform'` y
   // NINGUNA lee `medskin.practice_id`, así que un `practice_id` puesto aquí afirmaría una
   // atribución que ninguna política comprueba. Cuando la consola necesita una consulta
   // concreta, la pasa como ARGUMENTO explícito y la función la valida: es la forma de
   // `medskin_create_practice_owner(p_practice_id, …)` y de
   // `medskin_platform_practice_stats(p_practice_id)`, y las dos son así por esto.
   if (ctx.role === 'app_platform' && practiceId) {
-    throw new Error('app_platform no fija practiceId: la consola no es un inquilino y ninguna de sus políticas lo lee.');
+    throw new Error('app_platform no fija practiceId: la consola no es una consulta y ninguna de sus políticas lo lee.');
   }
 
   return { role: ctx.role, practiceId: practiceId ?? '', accountId };

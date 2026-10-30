@@ -9,7 +9,7 @@
 // otra vez en la misma llamada, y lo que se comprueba aquí es la FILA, no un doble.
 //
 // Siembra el dueño del esquema, que es quien migra; todo lo que se comprueba del endpoint
-// pasa por `withTenantContext()` con el rol y el inquilino de verdad. En ningún momento se
+// pasa por `withTenantContext()` con el rol y la consulta de verdad. En ningún momento se
 // desactiva RLS.
 
 import { Pool } from 'pg';
@@ -39,7 +39,7 @@ const appUrl =
 // por la semilla y por las otras tres pruebas de base; dos semillas con el mismo uuid se
 // pisan y el fallo sale en el `beforeAll` de quien llegue segundo.
 const CONSULTA = '9cc09cc0-0000-4000-8000-000000000001';
-// Una consulta que no existe, para el caso del otro inquilino.
+// Una consulta que no existe, para el caso del otra consulta.
 const OTRA_CONSULTA = '9cc09cc0-0000-4000-8000-000000000002';
 const DOCTORA_CUENTA = '9cc09cc0-0000-4000-8000-000000000003';
 const PACIENTE_CUENTA = '9cc09cc0-0000-4000-8000-000000000004';
@@ -245,9 +245,9 @@ describe('`access_sent_at` solo afirma un envío que ocurrió', () => {
     // Se parte de la marca en nulo a propósito, para que este caso no dependa del
     // anterior: lo que prueba es que un 404 no escribe nada.
     await ponerMarca(null);
-    const otroInquilino: Caller = { ...DOCTORA, practiceId: OTRA_CONSULTA };
+    const otroConsulta: Caller = { ...DOCTORA, practiceId: OTRA_CONSULTA };
     const fallo = await caso(CORREO_QUE_SALE)
-      .run({ via: 'correo' }, PACIENTE_CUENTA, otroInquilino)
+      .run({ via: 'correo' }, PACIENTE_CUENTA, otroConsulta)
       .catch((e: unknown) => e);
 
     expect((fallo as ContractError).code).toBe('paciente_no_existe');

@@ -4,7 +4,7 @@ import type { HistoryRow } from './history-view';
 import type { PatientEdit } from './editing';
 import type { HistoryDraft } from '../../accounts/domain/patient-registration';
 
-/** Quién pregunta. Sale del token; ni el inquilino ni la cuenta vienen de la URL. */
+/** Quién pregunta. Sale del token; ni la consulta ni la cuenta vienen de la URL. */
 export type PracticeCaller = {
   accountId: string;
   practiceId: string;

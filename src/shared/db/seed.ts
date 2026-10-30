@@ -2,7 +2,7 @@
 // `development`: siembra contraseñas temporales conocidas y las imprime.
 //
 // Existe porque el acceso no se puede probar sin una consulta, una doctora y una paciente,
-// y los endpoints que crean inquilinos (`POST /v1/platform/tenants`,
+// y los endpoints que crean consultas (`POST /v1/platform/tenants`,
 // `POST /v1/patients`) no son de este encargo. Así que llama a las funciones que ya
 // existen —las mismas que llamarán esos endpoints— y no inventa filas a mano donde hay
 // función.

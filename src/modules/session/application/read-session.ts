@@ -35,7 +35,7 @@ export type SessionView = {
   region: Region;
   siguiente_paso: NextStep;
   /** Nulo para una paciente: su cuenta no pertenece a ninguna consulta. */
-  inquilino: { id: string; nombre: string } | null;
+  consulta: { id: string; nombre: string } | null;
   permisos: readonly string[];
   segundo_factor: { activo: boolean; obligatorio_desde: string | null };
   token_caduca_en: string;
@@ -73,14 +73,14 @@ export class ReadSession {
     if (snapshot.revokedAt !== null) throw new ContractError('sesion_revocada');
     if (snapshot.accountStatus !== 'activa') throw new ContractError('cuenta_suspendida');
 
-    // Un token que dice inquilino y una consulta que no se puede leer es una
+    // Un token que dice consulta y una consulta que no se puede leer es una
     // inconsistencia del servidor, no una sesión inválida: va a `service_failure` con su
-    // causa real y la app se queda en el splash. Inventar `inquilino: null` para una
+    // causa real y la app se queda en el splash. Inventar `consulta: null` para una
     // doctora sería devolverle una respuesta que su pantalla no sabe pintar.
     if (caller.accountRole === 'practitioner' && snapshot.practice === null) {
       throw new ServiceFailure(
         FAILURE_PHRASES.readSession,
-        new Error(`la sesión ${caller.sessionId} dice inquilino y no hay consulta que leer`),
+        new Error(`la sesión ${caller.sessionId} dice consulta y no hay consulta que leer`),
       );
     }
 
@@ -91,7 +91,7 @@ export class ReadSession {
       alcance: caller.scope,
       region: caller.region,
       siguiente_paso: this.nextStep(caller, snapshot.licenseStatus, snapshot.firstDayDone),
-      inquilino:
+      consulta:
         snapshot.practice === null
           ? null
           : { id: snapshot.practice.id, nombre: snapshot.practice.name },

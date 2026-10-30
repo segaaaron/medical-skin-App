@@ -60,7 +60,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
   constructor(private readonly pool: Pool) {}
 
   async read(owner: SessionOwner): Promise<SessionSnapshot | null> {
-    // `app_practitioner` exige inquilino porque sus políticas se leen por inquilino;
+    // `app_practitioner` exige consulta porque sus políticas se leen por consulta;
     // `app_patient` no lo fija nunca porque la paciente no pertenece a ninguno.
     const ctx: TenantContext =
       owner.accountRole === 'paciente'
@@ -107,9 +107,9 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
 
   /**
    * La consulta de quien llama, su licencia y SU fila de `practitioner`. Las tres filas
-   * son del inquilino del contexto y las políticas las acotan a él, así que no hay
+   * son de la consulta del contexto y las políticas las acotan a él, así que no hay
    * `where practice_id = …` con un valor del cliente. La de `practitioner` sí lleva
-   * filtro, y no es por inquilino: dentro de una consulta hay varias, y la que se quiere
+   * filtro, y no es por consulta: dentro de una consulta hay varias, y la que se quiere
    * es la de QUIEN PREGUNTA, que sale de `medskin_current_account()` (OWASP A01).
    */
   private async readPractice(c: PoolClient): Promise<PracticeRow | null> {
@@ -134,7 +134,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
   // -------------------------------------------------------------------------------------
 
   /**
-   * `app_anonymous`: ni inquilino ni cuenta, porque cuando llega esta petición no hay
+   * `app_anonymous`: ni consulta ni cuenta, porque cuando llega esta petición no hay
    * sesión que leer y el refresco no dice quién es hasta que la función lo resuelve. Su
    * único privilegio es el `EXECUTE` de estas funciones, así que lo que la función no
    * devuelva no se puede leer por fuera — y por eso devuelve las catorce columnas del 200.

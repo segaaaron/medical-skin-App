@@ -2,7 +2,7 @@
 // sostener:
 //
 //   1. **El alta de la consulta A no existe para la consulta B.** Es el único endpoint del
-//      tramo que escribe en tres tablas de inquilino a la vez (`patient`, `patient_link`,
+//      tramo que escribe en tres tablas de consulta a la vez (`patient`, `patient_link`,
 //      `medical_history`), y lo que las acota son sus políticas, no un `where` del código.
 //   2. **La función del alta no recibe `account_id`**: si el correo ya tiene cuenta la REUSA
 //      y no acuña nada, así que `credential` se queda intacta —incluido
@@ -13,7 +13,7 @@
 //      el correo y vuelve a nulo si el relé falla.
 //
 // Siembra el dueño del esquema, que es quien migra; todo lo que se comprueba del endpoint
-// pasa por `withTenantContext()` con el rol y el inquilino de verdad. En ningún momento se
+// pasa por `withTenantContext()` con el rol y la consulta de verdad. En ningún momento se
 // desactiva RLS.
 
 import { Pool } from 'pg';
@@ -76,7 +76,7 @@ const DOCTORA: Caller = {
   permissions: [PATIENT_CREATE_PERMISSION],
 };
 
-/** La doctora de la OTRA consulta, con su propio inquilino en el token. */
+/** La doctora de la OTRA consulta, con su propio consulta en el token. */
 const OTRA_DOCTORA: Caller = {
   ...DOCTORA,
   accountId: OTRA_DOCTORA_CUENTA,
@@ -104,7 +104,7 @@ const CORREO_CAIDO: Correo = {
 
 /**
  * El caso de uso con el repositorio de verdad. El MISMO repositorio cierra la clave de
- * idempotencia: es quien tiene el contexto de inquilino, y el puerto es aparte porque cerrar
+ * idempotencia: es quien tiene el contexto de consulta, y el puerto es aparte porque cerrar
  * una clave no es parte del alta.
  */
 function caso(mail: Correo = CORREO_QUE_SALE): RegisterPatient {
@@ -253,7 +253,7 @@ async function fichaDe(email: string): Promise<Ficha | undefined> {
   return rows[0];
 }
 
-describe('el alta escribe las tres filas del inquilino, y nada más', () => {
+describe('el alta escribe las tres filas de la consulta, y nada más', () => {
   it('la ficha, el vínculo y los antecedentes, con la cuenta nueva y su temporal', async () => {
     const respuesta = await caso().run(CUERPO, DOCTORA, clave(CUERPO));
 
@@ -412,7 +412,7 @@ describe('el alta escribe las tres filas del inquilino, y nada más', () => {
   });
 });
 
-describe('lo que la base decide, y el otro inquilino', () => {
+describe('lo que la base decide, y el otra consulta', () => {
   it('con la licencia sin verificar no se crea ni la ficha ni la cuenta', async () => {
     await licencia('en_revision');
     const fallo = await caso().run(CUERPO, DOCTORA, clave(CUERPO)).catch((e: unknown) => e);
@@ -770,7 +770,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
     await caso().run(CUERPO, DOCTORA, misma);
 
     // La MISMA clave, la misma huella, otra consulta: la política de `idempotency_key` es por
-    // inquilino y la fila se busca además por la cuenta que llama, así que esto es un alta
+    // consulta y la fila se busca además por la cuenta que llama, así que esto es un alta
     // nueva y no una repetición.
     const ajena = await caso().run(CUERPO, OTRA_DOCTORA, misma);
     expect(ajena.paciente_id).not.toBe('');

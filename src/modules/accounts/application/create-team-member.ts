@@ -1,7 +1,7 @@
 // POST /v1/team · la dueña da de alta a recepción o a un asistente clínico.
 //
 // EL ROL SÍ VIAJA EN EL CUERPO Y ES LA ÚNICA EXCEPCIÓN DEL TRAMO, «porque no es el rol de
-// autenticación sino el permiso dentro de un inquilino que ya está resuelto»: `account.role`
+// autenticación sino el permiso dentro de una consulta que ya está resuelto»: `account.role`
 // sigue siendo `practitioner` y lo pone el servidor.
 //
 // UN SOLO `409` Y OPACO A PROPÓSITO. El correo puede estar tomado porque la persona ya está

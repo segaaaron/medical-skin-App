@@ -1,8 +1,8 @@
 // El cuerpo del alta de una consulta y el del fallo de una licencia, leídos en el borde.
-// `inquilinos.md` · los dos `POST` de consola. Sin NestJS y sin `pg`.
+// `consultas.md` · los dos `POST` de consola. Sin NestJS y sin `pg`.
 //
 // NINGÚN valor de estos cuerpos autoriza nada: quien llama sale del token de plataforma y el
-// inquilino sale de la RUTA. Lo que entra aquí son datos de una consulta que todavía no
+// consulta sale de la RUTA. Lo que entra aquí son datos de una consulta que todavía no
 // existe (OWASP A01).
 
 import { ContractError } from '../../../shared/contract/error-catalog';
@@ -13,11 +13,11 @@ import { isCountry } from './rules';
 const REGIONS: readonly Region[] = ['eu', 'us', 'latam'];
 
 /**
- * EL LÍMITE DE PACIENTES SALE DEL PLAN Y NO DEL CUERPO (`inquilinos.md` · reglas de
+ * EL LÍMITE DE PACIENTES SALE DEL PLAN Y NO DEL CUERPO (`consultas.md` · reglas de
  * negocio), así que el catálogo vive en el borde: no hay tabla de planes y no se construye
  * (decisión 37).
  *
- * **Solo `consultorio: 300` está escrito en algún sitio** —el 201 de `inquilinos.md` y
+ * **Solo `consultorio: 300` está escrito en algún sitio** —el 201 de `consultas.md` y
  * «Plan Consultorio · 148 de 300» de `Consola.dc.html`—. Los otros dos números son
  * provisionales y están marcados: es pregunta para `producto`, y está dicho en la entrega.
  *
@@ -194,7 +194,7 @@ function text(value: unknown, maxLength: number): string | null {
 
 /**
  * El cuerpo del correo del alta de la dueña · `Correo.dc.html` · 1. **El texto no está en el
- * contrato** —`inquilinos.md` nombra el correo y su formato de frase, no su cuerpo— y está
+ * contrato** —`consultas.md` nombra el correo y su formato de frase, no su cuerpo— y está
  * anotado para `producto`, igual que el del equipo.
  *
  * Ni un dato clínico y ni una palabra de más: un correo es lo que se lee en la pantalla

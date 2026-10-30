@@ -53,7 +53,7 @@ export class DecideLicense {
         return result.served;
       // Los tres `4xx` que la base distingue. El primero cubre también «esa consulta no
       // existe»: sin fila de licencia no hay nada que decidir, y no se le dice a quien
-      // pregunta si el inquilino existe o no.
+      // pregunta si la consulta existe o no.
       case 'no_license':
         throw new ContractError('licencia_no_existe');
       case 'not_submitted':

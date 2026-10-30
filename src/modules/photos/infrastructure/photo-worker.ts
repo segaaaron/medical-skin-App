@@ -42,7 +42,7 @@ export class PhotoWorker {
   /**
    * Una pasada. La llama la cola; devuelve cuántas procesó para que quien la programa sepa si
    * queda trabajo. Corre con `medskin_access`, que es el rol de los trabajos: no hay petición y
-   * no hay inquilino que fijar.
+   * no hay consulta que fijar.
    */
   async run(limit = 5): Promise<number> {
     // POR FUNCIÓN, y no con `SET ROLE`: `medskin_access` es NOLOGIN y el rol de la aplicación

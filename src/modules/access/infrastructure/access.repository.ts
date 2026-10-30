@@ -44,8 +44,8 @@ type CredentialRow = {
 
 /**
  * El contexto de la base que le toca a quien llama. No es una elección: `app_practitioner`
- * exige `practiceId` porque sus políticas se leen por inquilino, y `app_patient` no lo
- * fija nunca porque la paciente no pertenece a ningún inquilino (§12.2.1).
+ * exige `practiceId` porque sus políticas se leen por consulta, y `app_patient` no lo
+ * fija nunca porque la paciente no pertenece a ninguna consulta (§12.2.1).
  */
 function contextFor(owner: {
   accountId: string;
@@ -81,7 +81,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
   // Credenciales
   // -------------------------------------------------------------------------------------
 
-  /** `app_anonymous`: ni inquilino ni cuenta, porque todavía no se sabe quién llama. */
+  /** `app_anonymous`: ni consulta ni cuenta, porque todavía no se sabe quién llama. */
   async read(email: string): Promise<AccessCredential> {
     return withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
       const { rows } = await c.query<CredentialRow>(
@@ -358,9 +358,9 @@ export class AccessRepository implements CredentialPort, SessionPort {
     };
     if (accountRole === 'paciente') return sinConsulta;
 
-    // Las tres filas son del inquilino del contexto y las políticas las acotan a él: por
+    // Las tres filas son de la consulta del contexto y las políticas las acotan a él: por
     // eso no hay `where practice_id = …` escrito a mano con un valor del cliente. La de
-    // `practitioner` sí lleva filtro, y no es por inquilino: dentro de una consulta hay
+    // `practitioner` sí lleva filtro, y no es por consulta: dentro de una consulta hay
     // varias, y la que se quiere es la de QUIEN PREGUNTA, que sale de
     // `medskin_current_account()` y nunca del cuerpo ni de la URL (OWASP A01).
     const { rows } = await c.query<{

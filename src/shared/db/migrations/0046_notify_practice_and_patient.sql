@@ -6,14 +6,14 @@
 --
 -- 1 · LA INCIDENCIA. La encola la PACIENTE —«Tu doctora lo recibió»— y va a la consulta.
 --     `app_patient` no lee `practice`, así que no conoce `owner_account_id`, y dárselo para
---     esto abriría la tabla de todos los inquilinos para poder leer uno (la decisión de la
+--     esto abriría la tabla de todos las consultas para poder leer uno (la decisión de la
 --     0027). La función lo resuelve ella.
 --
 -- 2 · EL HUECO LIBRE DE LA LISTA DE ESPERA. Lo encola quien CANCELA —que puede ser otra
 --     paciente— y va a la cuenta de la siguiente de la lista. Una paciente no lee el
 --     `patient_link` de otra, y no va a leerlo.
 --
--- Las dos guardas son las mismas de siempre: el inquilino es el del contexto —la consulta— o
+-- Las dos guardas son las mismas de siempre: la consulta es el del contexto —la consulta— o
 -- uno al que ESTA cuenta está vinculada. Y lo que devuelven es un identificador o nulo: ni el
 -- nombre de la doctora, ni el de la otra paciente, ni su correo.
 -- =======================================================================================

@@ -28,7 +28,7 @@ export type RequestContext = {
    * El tercero, y el único que no sale de ninguna cuenta de esta región: quien llama desde
    * la consola interna con un token que firmó el servicio de plataforma
    * (`plataforma-acceso.md`). No es un `Caller` porque no tiene cuenta, ni sesión, ni
-   * inquilino: lo que trae es `sub`, `etiqueta` y su lista cerrada de permisos.
+   * consulta: lo que trae es `sub`, `etiqueta` y su lista cerrada de permisos.
    *
    * Como mucho uno de los tres es no nulo, y en las rutas anónimas ninguno.
    */

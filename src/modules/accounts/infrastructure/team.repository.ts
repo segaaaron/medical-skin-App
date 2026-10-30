@@ -1,6 +1,6 @@
 // `POST /v1/team` contra la base. Única puerta: `withTenantContext()`.
 //
-// Siempre `app_practitioner` con el inquilino del token: `medskin_create_team_member()` saca
+// Siempre `app_practitioner` con la consulta del token: `medskin_create_team_member()` saca
 // el `practice_id` del CONTEXTO y comprueba ella misma que quien llama es
 // `practice.owner_account_id`. La autorización no es un `if` de este archivo ni del
 // controlador: es la misma transacción que escribiría (OWASP A01).
@@ -118,7 +118,7 @@ export class TeamRepository implements TeamPort, TeamAccessPort {
     return withTenantContext(this.pool, contextFor(owner), async (c) => {
       // Sin `where practice_id = …`: las políticas de `practitioner` y de `practice` lo
       // ponen las dos (`practice_id = medskin_current_practice()` y
-      // `id = medskin_current_practice()`), así que el `join` no puede cruzar inquilinos.
+      // `id = medskin_current_practice()`), así que el `join` no puede cruzar consultas.
       //
       // `account_id <> medskin_current_account()` es «eres tú», y está aquí Y en la función:
       // aquí para que ese 404 llegue antes de gastar contador, y allí porque es la frontera

@@ -237,7 +237,7 @@ CREATE POLICY message_patient ON "message" FOR ALL TO app_patient
                          AND l.account_id = medskin_current_account()
                          AND l.status = 'vinculada'));--> statement-breakpoint
 
--- El dispositivo y las preferencias son de LA CUENTA, no del inquilino: las usan los cuatro
+-- El dispositivo y las preferencias son de LA CUENTA, no de la consulta: las usan los cuatro
 -- roles con sesión y por eso su política es por `medskin.account_id`.
 CREATE POLICY device_own ON "device" FOR ALL TO app_practitioner, app_patient, app_account
   USING (account_id = medskin_current_account())

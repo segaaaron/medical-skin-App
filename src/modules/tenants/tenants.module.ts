@@ -1,9 +1,9 @@
-// El cableado de los inquilinos · los CINCO endpoints de `inquilinos.md`: los dos de la
+// El cableado de las consultas · los CINCO endpoints de `consultas.md`: los dos de la
 // doctora —leer su consulta y mandar su licencia— y los tres de la consola interna.
 //
 // Dos controladores y no uno, porque son dos puertas distintas: `TenantsController` entra con
 // un token de sesión y su alcance, y `PlatformTenantsController` con el token de plataforma,
-// que no tiene cuenta ni inquilino. Lo único que comparten es el recurso.
+// que no tiene cuenta ni consulta. Lo único que comparten es el recurso.
 //
 // Todo por FÁBRICA y con `@Inject` explícito, que es la regla del repo: esbuild no emite
 // `emitDecoratorMetadata`, así que la inyección por el tipo del constructor funciona con
@@ -46,7 +46,7 @@ import { TenantsController } from './tenants.controller';
     {
       provide: SubmitLicense,
       // La zona del despliegue, que es con la que se cuentan las «24 h hábiles». No sale de
-      // la fila del inquilino porque un despliegue es una región (§7.4) y porque el mismo
+      // la fila de la consulta porque un despliegue es una región (§7.4) y porque el mismo
       // criterio ya cerró `region_etiqueta` y el plazo de conservación (decisiones 6 y 8).
       useFactory: (repo: TenantsRepository, clock: SystemClock, cfg: Config) =>
         new SubmitLicense(repo, clock, cfg.ZONA_HORARIA),
@@ -95,7 +95,7 @@ import { TenantsController } from './tenants.controller';
     {
       provide: ReadTenant,
       // «Bolivia · bo-1» sale de la configuración del despliegue y no de la base: no es dato
-      // de inquilino —todos los de un despliegue comparten la etiqueta— y guardarla por fila
+      // de consulta —todos los de un despliegue comparten la etiqueta— y guardarla por fila
       // serían N copias del mismo literal (decisión 6).
       useFactory: (repo: PlatformRepository, cfg: Config) =>
         new ReadTenant(repo, cfg.REGION_ETIQUETA),

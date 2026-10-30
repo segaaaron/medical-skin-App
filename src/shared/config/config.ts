@@ -19,18 +19,18 @@ const esquema = z.object({
 
 
   // §7.4: un despliegue por región. La etiqueta sale de aquí y no de la base (decisión 6
-  // de preguntas-abiertas): todos los inquilinos de un despliegue comparten la etiqueta.
+  // de preguntas-abiertas): todos las consultas de un despliegue comparten la etiqueta.
   REGION: z.enum(['eu', 'us', 'latam']),
   REGION_ETIQUETA: z.string().min(1),
   // La zona del despliegue, para las frases con hora («Puedes volver a entrar a las
-  // 10:29»). No sale de la fila del inquilino a propósito: cuando esa frase se escribe
-  // —una pausa de acceso, sin sesión— no hay inquilino, y la respuesta tiene que ser
+  // 10:29»). No sale de la fila de la consulta a propósito: cuando esa frase se escribe
+  // —una pausa de acceso, sin sesión— no hay consulta, y la respuesta tiene que ser
   // idéntica exista o no la cuenta.
   ZONA_HORARIA: z.string().min(1),
 
   // El plazo legal de conservación del expediente, en años. Sale de aquí y NO de una tabla
   // (decisión del 28 de octubre, `cuentas.md` · DELETE /v1/accounts/mine): no es dato de
-  // inquilino —todos los de un despliegue comparten el plazo— y guardarlo por fila serían N
+  // consulta —todos los de un despliegue comparten el plazo— y guardarlo por fila serían N
   // copias del mismo literal que se pueden desincronizar. `se_conserva.hasta` se calcula
   // sumándolo a la fecha del borrado, y lo que queda escrito en la bitácora es la FECHA
   // resultante, no el parámetro: si mañana cambia el plazo, no cambia lo que se le prometió

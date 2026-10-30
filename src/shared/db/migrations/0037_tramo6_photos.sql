@@ -107,7 +107,7 @@ CREATE POLICY photo_patient_update ON "photo" FOR UPDATE TO app_patient
   WITH CHECK (uploaded_by = 'paciente');--> statement-breakpoint
 
 -- `medskin_access` lee y escribe el estado del proceso: el trabajador corre fuera de la
--- petición y no tiene contexto de inquilino. Es el mismo patrón que el barrido de idempotencia.
+-- petición y no tiene contexto de consulta. Es el mismo patrón que el barrido de idempotencia.
 CREATE POLICY photo_access ON "photo" FOR ALL TO medskin_access
   USING (current_user = 'medskin_access') WITH CHECK (current_user = 'medskin_access');--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON "photo" TO app_practitioner;--> statement-breakpoint

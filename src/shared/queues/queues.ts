@@ -45,7 +45,7 @@ export const QUEUE_NAMES = {
    * LOS TRES DE LOS AVISOS (0045 · hallazgo H-01). Lo que va en el trabajo es «mira la bandeja»
    * y nada más: ni a quién avisar, ni de qué. La carga de un aviso vive en
    * `notification_outbox`, que es una tabla con RLS forzada, y no en Redis —que no tiene
-   * políticas, no tiene inquilinos y guarda sus claves en disco sin cifrar—. Es la misma razón
+   * políticas, no tiene consultas y guarda sus claves en disco sin cifrar—. Es la misma razón
    * por la que el código de recuperación no viaja en su trabajo.
    */
   notificationsSend: 'avisos-enviar',
@@ -99,7 +99,7 @@ export const QUEUE_SCHEMA = 'bullmq';
  * encuentran sus tablas. Dándole la cadena, lo construye él y el `schema` surte efecto.
  *
  * Y que sea un pool aparte es además lo que se quiere: el nuestro va con `SET ROLE` por petición
- * (`withTenantContext`), y las colas no tienen inquilino.
+ * (`withTenantContext`), y las colas no tienen consulta.
  */
 export function queueConnection(databaseUrl: string): QueueConnection {
   return { connectionString: databaseUrl, schema: QUEUE_SCHEMA };

@@ -81,7 +81,7 @@ DECLARE
   v_chosen boolean;
 BEGIN
   IF v_practice IS NULL THEN
-    RAISE EXCEPTION 'medskin_resend_patient_access: sin contexto de inquilino'
+    RAISE EXCEPTION 'medskin_resend_patient_access: sin contexto de consulta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_account_id IS NULL THEN

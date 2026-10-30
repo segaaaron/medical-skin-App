@@ -1,6 +1,6 @@
 // El catálogo de la paciente, con `app_patient` y los DOS contextos.
 //
-// AQUÍ ESTÁ LO DELICADO DEL ENDPOINT: la paciente no tiene contexto de inquilino, pero las
+// AQUÍ ESTÁ LO DELICADO DEL ENDPOINT: la paciente no tiene contexto de consulta, pero las
 // políticas de `treatment`, `price` y `promotion` son por `practice_id`. Así que el
 // `practice_id` se fija DESDE SU PROPIA FILA de `patient_link` —leída con `app_patient` y su
 // política por `account_id`— y nunca desde el parámetro: el parámetro solo elige cuál de sus
@@ -19,7 +19,7 @@ export class PatientCatalogRepository implements PatientCatalogPort {
   constructor(private readonly pool: Pool) {}
 
   async read(accountId: string, practiceId: string): Promise<PatientFacts | 'invitada' | null> {
-    // 1 · Su vínculo, con contexto de cuenta y nada más. De aquí sale el inquilino.
+    // 1 · Su vínculo, con contexto de cuenta y nada más. De aquí sale la consulta.
     const link = await withTenantContext(
       this.pool,
       { role: 'app_patient', accountId },
@@ -125,7 +125,7 @@ export class PatientCatalogRepository implements PatientCatalogPort {
 
 /**
  * La moneda, por la función de la 0027: `app_patient` no lee `practice`, y darle política ahí
- * abriría todos los inquilinos para poder leer uno. Devuelve nulo si el vínculo no es suyo.
+ * abriría todos las consultas para poder leer uno. Devuelve nulo si el vínculo no es suyo.
  */
 async function currencyOf(c: { query: PoolClient['query'] }, practiceId: string): Promise<string> {
   const { rows } = await c.query<{ currency: string | null }>(

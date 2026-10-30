@@ -205,9 +205,9 @@ export type ErrorCode =
   | 'consulta_con_equipo'
   | 'consulta_con_pacientes'
   | 'suscripcion_activa'
-  // GET /v1/tenants/mine · `inquilinos.md`
+  // GET /v1/tenants/mine · `consultas.md`
   | 'rol_no_corresponde'
-  // POST /v1/tenants/mine/license · `inquilinos.md`
+  // POST /v1/tenants/mine/license · `consultas.md`
   | 'matricula_vacia'
   | 'pais_sin_cobertura'
   | 'especialidad_desconocida'
@@ -237,11 +237,11 @@ export type ErrorCode =
   | 'token_de_plataforma_no_valido'
   | 'token_de_plataforma_caducado'
   | 'region_no_corresponde'
-  // Los tres endpoints de consola de `inquilinos.md`
+  // Los tres endpoints de consola de `consultas.md`
   | 'region_desconocida'
   | 'plan_desconocido'
   | 'correo_ya_tiene_cuenta'
-  | 'inquilino_no_existe'
+  | 'consulta_no_existe'
   | 'licencia_no_existe'
   | 'licencia_ya_decidida'
   | 'licencia_sin_enviar'
@@ -1042,7 +1042,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   // El contrato escribe «Ese número no parece un celular de Bolivia.» y la validación es
   // E.164, que no es por país: no hay en ningún sitio la regla de marcación de cada país,
-  // y una frase que nombra Bolivia sería falsa en el primer inquilino de otro. La genérica
+  // y una frase que nombra Bolivia sería falsa en el primer consulta de otro. La genérica
   // tiene que ser verdadera en todos los casos, así que nombra el formato. Anotado para
   // `producto`: si la frase con el país importa, hace falta la regla por país de donde
   // sacarla.
@@ -1116,7 +1116,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // `inquilinos.md` · los dos endpoints de la doctora. Las frases son las de su tabla de
+  // `consultas.md` · los dos endpoints de la doctora. Las frases son las de su tabla de
   // errores, palabra por palabra.
   //
   // `403 sin_permiso` NO se repite aquí: es el mismo `codigo` del catálogo con la frase de
@@ -1282,7 +1282,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
 
   // ---------------------------------------------------------------------------------
-  // `inquilinos.md` · los tres de la consola. Las frases son las de sus tablas, palabra
+  // `consultas.md` · los tres de la consola. Las frases son las de sus tablas, palabra
   // por palabra.
   //
   // `409 correo_ya_tiene_cuenta` SÍ revela que el correo existe, y está bien: «aquí quien
@@ -1302,7 +1302,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Ese correo ya tiene una cuenta en MedSkin. Busca la consulta antes de crear otra.',
     field: 'doctora.correo',
   },
-  inquilino_no_existe: { status: 404, message: 'No encontramos esa consulta.', field: null },
+  consulta_no_existe: { status: 404, message: 'No encontramos esa consulta.', field: null },
   licencia_no_existe: {
     status: 404,
     message: 'Esa consulta no tiene ninguna licencia en revisión.',
@@ -1637,7 +1637,7 @@ export const FAILURE_PHRASES = {
   refreshSession: 'No pudimos renovar tu sesión. Puedes seguir con lo último guardado.',
 
   /**
-   * `inquilinos.md` · los dos de la doctora, literales de su tabla.
+   * `consultas.md` · los dos de la doctora, literales de su tabla.
    *
    * La de la lectura **no es alerta**: es el estado «sin conexión» de
    * `Plataforma.dc.html` · 4, con lo último guardado y su fecha. La del envío promete «lo
@@ -1657,7 +1657,7 @@ export const FAILURE_PHRASES = {
     'No pudimos completar lo que pediste. El servidor no respondió: puedes volver a intentarlo.',
 
   // ---------------------------------------------------------------------------------
-  // Los cinco de la consola interna, literales de `inquilinos.md` y de `cuentas.md` ·
+  // Los cinco de la consola interna, literales de `consultas.md` y de `cuentas.md` ·
   // «Consola interna». Viven aquí y no en el módulo porque la tabla de rutas las necesita
   // ANTES de que exista el controlador: una ruta sin su frase es un 500 sin segunda frase.
   // ---------------------------------------------------------------------------------

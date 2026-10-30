@@ -62,11 +62,11 @@ const EMAIL_MASK = '[correo]';
  * El rol de base con el que se escribe la fila, y es el de quien llama: cada uno entra por
  * su propia política y ninguno adopta el rol de otro para registrar un fallo. La consola es
  * `app_platform`, cuya política de `service_failure` es `FOR ALL` desde la 0001; la paciente
- * no fija inquilino porque no pertenece a ninguno.
+ * no fija consulta porque no pertenece a ninguno.
  */
 function roleOf(where: FailureContext): TenantContext {
   if (where.accountRole === 'plataforma') {
-    // Sin `practiceId`: la consola cruza inquilinos y sus políticas no son por inquilino. La
+    // Sin `practiceId`: la consola cruza consultas y sus políticas no son por consulta. La
     // columna `practice_id` de la fila queda nula, que es la verdad — el fallo es de una
     // petición de soporte, no de la consulta sobre la que miraba.
     return { role: 'app_platform', accountId: where.accountId };
@@ -119,7 +119,7 @@ export class FailureLog {
 
     if (failure.context === null) {
       // Un 500 de una petición SIN sesión —`POST /v1/access`, los dos de recuperación, el
-      // refresco— no tiene inquilino ni actor que escribir, y `app_anonymous` no tiene
+      // refresco— no tiene consulta ni actor que escribir, y `app_anonymous` no tiene
       // `INSERT` sobre `service_failure`. Va por `medskin_record_anonymous_failure()`,
       // que es `SECURITY DEFINER`, escribe las doce columnas que no necesitan contexto y
       // TAPA LA DIRECCIÓN DE CORREO del mensaje del motor: «Key (email)=(…) already

@@ -1,4 +1,4 @@
-// El correo del alta de una consulta · `Correo.dc.html` · 1, nombrado por `inquilinos.md`:
+// El correo del alta de una consulta · `Correo.dc.html` · 1, nombrado por `consultas.md`:
 // «El correo del alta sale en el mismo acto».
 //
 // MISMO MECANISMO que los otros tres correos del tramo —el `MailPort` de siempre, texto

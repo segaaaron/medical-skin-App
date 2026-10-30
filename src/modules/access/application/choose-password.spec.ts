@@ -255,7 +255,7 @@ describe('POST /v1/access/new-password · el guardado', () => {
     );
 
     // `practitionerRole: 'doctora'` sale de la fila de `practitioner` que se lee con el
-    // inquilino puesto, y de ahí el `siguiente_paso` de una doctora.
+    // consulta puesto, y de ahí el `siguiente_paso` de una doctora.
     expect(respuesta.siguiente_paso).toBe('licencia');
     expect(respuesta.refresco_caduca_en).toBe(
       new Date(AHORA.getTime() + 12 * 60 * 60 * 1000).toISOString(),

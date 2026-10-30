@@ -79,7 +79,7 @@ GRANT UPDATE (account_id, status, updated_at) ON "patient_link" TO medskin_acces
 
 -- `409 consulta_con_pacientes` necesita CONTAR las fichas de la consulta de la dueña, y el
 -- error lleva el número en la frase («Tu consulta tiene 148 pacientes»). Dos columnas y
--- ninguna clínica: el identificador y el inquilino. `medskin_access` no tenía política en
+-- ninguna clínica: el identificador y la consulta. `medskin_access` no tenía política en
 -- `patient`, así que hace falta la suya —igual que las otras siete de la 0002: no filtra
 -- filas, el filtro es el cuerpo de la función y la frontera de confianza es su firma—.
 ALTER TABLE "patient" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -105,7 +105,7 @@ GRANT DELETE ON "practice" TO medskin_access;--> statement-breakpoint
 -- `p_retention_until` ES UN ARGUMENTO Y NO SALE DE UNA TABLA. Es la decisión de producto
 -- del 28 de octubre, y cierra la pregunta 8 («Bloquean el tramo 2») igual que la 6 cerró
 -- `region_etiqueta`: el plazo legal de conservación es configuración del despliegue
--- (`CONSERVACION_ANOS`), no dato de inquilino. Todos los inquilinos de una región comparten
+-- (`CONSERVACION_ANOS`), no dato de consulta. Todos las consultas de una región comparten
 -- el plazo, y guardarlo por fila serían N copias del mismo literal que se pueden
 -- desincronizar.
 --
@@ -328,7 +328,7 @@ GRANT EXECUTE ON FUNCTION medskin_delete_own_account(date, text)
 -- `409` que el contrato define, `correo_ya_en_el_equipo`.
 --
 -- LA IDEMPOTENCIA POR CABECERA NO NECESITA NADA NUEVO: `idempotency_key` existe desde la
--- 0000 con su política por inquilino y su `GRANT SELECT, INSERT, UPDATE, DELETE` para
+-- 0000 con su política por consulta y su `GRANT SELECT, INSERT, UPDATE, DELETE` para
 -- `app_practitioner`, y su clave primaria es `(account_id, key)`. Y la función es segura
 -- ante un reintento sin cabecera igual: el segundo intento con el mismo correo encuentra la
 -- cuenta y devuelve `email_taken` en vez de crear una segunda.
@@ -347,7 +347,7 @@ DECLARE
   v_practitioner uuid;
 BEGIN
   IF v_practice IS NULL OR v_caller IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_team_member: sin contexto de inquilino o de cuenta'
+    RAISE EXCEPTION 'medskin_create_team_member: sin contexto de consulta o de cuenta'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF p_email IS NULL OR btrim(p_email::text) = ''
@@ -377,7 +377,7 @@ BEGIN
   SELECT pc.owner_account_id, pc.region INTO v_owner, v_region
     FROM practice pc WHERE pc.id = v_practice;
   IF v_region IS NULL THEN
-    RAISE EXCEPTION 'medskin_create_team_member: el inquilino del contexto no existe'
+    RAISE EXCEPTION 'medskin_create_team_member: la consulta del contexto no existe'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF v_owner IS NULL OR v_owner <> v_caller THEN

@@ -1,6 +1,6 @@
 // El repositorio de la recuperación. La ÚNICA puerta a la base es `withTenantContext()`,
 // y aquí siempre con `app_anonymous`: cuando llegan estas peticiones no hay sesión, así que
-// no hay ni inquilino ni cuenta que fijar.
+// no hay ni consulta ni cuenta que fijar.
 //
 // `app_anonymous` NO TIENE UN SOLO PRIVILEGIO DE TABLA. No puede leer `account`, no puede
 // leer `recovery_code` y no puede escribir en ninguna: lo único que puede hacer es ejecutar

@@ -5,7 +5,7 @@
 // hecho»: la revisión es a mano y no hay aprobación automática, ni por un proveedor, ni por
 // una heurística.
 //
-// QUIÉN PUEDE ES LA DUEÑA, Y NO LO DECIDE ESTE ARCHIVO. `inquilino:licencia:enviar` no sale
+// QUIÉN PUEDE ES LA DUEÑA, Y NO LO DECIDE ESTE ARCHIVO. `consulta:licencia:enviar` no sale
 // de la tabla de permisos por rol a propósito (`role.ts`): la dueña es la cuenta que está en
 // `practice.owner_account_id`, que es una FILA. Lo comprueba `medskin_license_to_review()`,
 // que no recibe ni la cuenta ni la consulta —las toma del contexto— y devuelve `not_owner`.

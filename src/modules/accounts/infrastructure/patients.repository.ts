@@ -9,7 +9,7 @@
 // siempre de `medskin_current_practice()`, que lo fija `withTenantContext()` con el del
 // token, y las políticas de `patient`, `patient_link` y `medical_history` lo exigen en el
 // `WITH CHECK`: un alta no puede caer en otra consulta ni por error de programación. Lo que
-// sí viene del cuerpo —`referida_por`— es criterio de búsqueda DENTRO del inquilino, y si no
+// sí viene del cuerpo —`referida_por`— es criterio de búsqueda DENTRO de la consulta, y si no
 // hay fila, la respuesta es la misma que la de un identificador inventado (OWASP A01).
 
 import type { Pool, PoolClient } from 'pg';
@@ -29,7 +29,7 @@ import type {
 
 /**
  * Siempre `app_practitioner`: el alta es de la doctora y de su asistente clínico, y sus
- * políticas se leen por inquilino. Una paciente no llega aquí —no tiene `pacientes:crear`—
+ * políticas se leen por consulta. Una paciente no llega aquí —no tiene `pacientes:crear`—
  * y si llegara, su contexto no fijaría `practice_id` y todo fallaría cerrado.
  */
 function contextFor(owner: AccountOwner): TenantContext {
@@ -270,7 +270,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     if (row === undefined) {
       throw new ServiceFailure(
         FAILURE_PHRASES.createPatient,
-        new Error('el inquilino del contexto no tiene consulta con licencia'),
+        new Error('la consulta del contexto no tiene consulta con licencia'),
       );
     }
     return {
@@ -511,7 +511,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
   /**
    * El vínculo, con las TRES COPIAS que la paciente lee desde su app —consulta, doctora y
    * ciudad—: `app_patient` no tiene política en `practice` ni en `practitioner`, y dárselas
-   * para servir dos nombres abriría todos los inquilinos (pregunta 7, resuelta el 28 oct).
+   * para servir dos nombres abriría todos las consultas (pregunta 7, resuelta el 28 oct).
    */
   private async insertLink(
     c: PoolClient,

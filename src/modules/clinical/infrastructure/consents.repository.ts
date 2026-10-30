@@ -130,7 +130,7 @@ export class ConsentsRepository implements ConsentPort {
     });
   }
 
-  /** El inquilino sale del vínculo de la paciente, nunca del cuerpo. */
+  /** El consulta sale del vínculo de la paciente, nunca del cuerpo. */
   private async practiceOf(
     c: { query: (sql: string, values: unknown[]) => Promise<{ rows: { practice_id: string }[] }> },
     patientId: string,

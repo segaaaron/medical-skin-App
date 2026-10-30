@@ -147,8 +147,8 @@ export type SessionOpening = {
 };
 
 /**
- * El estado del inquilino que decide `siguiente_paso`, MÁS las dos cosas que solo se
- * pueden leer con el contexto de ese inquilino puesto: el `practitioner.role` de esta
+ * El estado de la consulta que decide `siguiente_paso`, MÁS las dos cosas que solo se
+ * pueden leer con el contexto de esa consulta puesto: el `practitioner.role` de esta
  * consulta y su lista explícita de permisos. Van juntas porque se leen en la misma
  * consulta y porque quien necesita una necesita las otras: el `rol` que viaja al cliente
  * sale del `practitioner.role`, no de `account.role` (`_convenciones.md`).
@@ -204,8 +204,8 @@ export interface ClockPort {
   now(): Date;
   /**
    * «a las 10:29» en la hora del despliegue. La zona sale de la configuración de la región
-   * y no de la fila del inquilino: cuando esta frase se escribe —una pausa de acceso— no
-   * hay inquilino todavía, y la respuesta tiene que ser idéntica exista o no la cuenta.
+   * y no de la fila de la consulta: cuando esta frase se escribe —una pausa de acceso— no
+   * hay consulta todavía, y la respuesta tiene que ser idéntica exista o no la cuenta.
    */
   localTime(moment: Date): string;
 }

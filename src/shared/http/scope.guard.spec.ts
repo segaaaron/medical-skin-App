@@ -76,7 +76,7 @@ async function comoPaciente(alcance: Scope): Promise<string> {
   return `Bearer ${(await tokens.sign(claims)).token}`;
 }
 
-/** El token de recuperación, que NO lleva rol, ni sesión, ni inquilino. */
+/** El token de recuperación, que NO lleva rol, ni sesión, ni consulta. */
 async function conCodigo(): Promise<string> {
   const { token } = await tokens.signRecovery({
     sub: CUENTA,
@@ -240,12 +240,12 @@ describe('GuardiaDeAlcance · el portador y la coherencia del token', () => {
     expect((await denegar('DELETE', '/v1/access', 'Bearer   ')).code).toBe('token_no_valido');
   });
 
-  it('un token de doctora SIN `practice` no se atiende: no se improvisa un inquilino', async () => {
+  it('un token de doctora SIN `practice` no se atiende: no se improvisa una consulta', async () => {
     const error = await denegar('DELETE', '/v1/access', await comoDoctora('completo', false));
     expect(error.code).toBe('token_no_valido');
   });
 
-  it('`caller` sale del token: cuenta, sesión, rol, inquilino y permisos', async () => {
+  it('`caller` sale del token: cuenta, sesión, rol, consulta y permisos', async () => {
     const req = peticion('GET', '/v1/access/sessions', await comoDoctora('completo'));
     await guardia.canActivate(contexto(req));
 

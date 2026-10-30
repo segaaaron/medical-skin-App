@@ -1,5 +1,5 @@
 // POST /v1/patients · solo HTTP. La autorización la hizo el guardia por lista blanca de
-// rutas, el permiso lo mira el caso de uso y el inquilino lo ponen las políticas.
+// rutas, el permiso lo mira el caso de uso y la consulta lo ponen las políticas.
 //
 // LA IDEMPOTENCIA YA NO VIVE AQUÍ, y el cambio es el arreglo de tres defectos que el revisor
 // bloqueó el 28 de octubre:

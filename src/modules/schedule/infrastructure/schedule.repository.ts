@@ -1,6 +1,6 @@
 // La agenda contra la base. Dos puertas y dos roles, y por eso el contexto se arma distinto:
-// la consulta entra con `app_practitioner` y su inquilino; la paciente con `app_patient` y SIN
-// inquilino, porque `withTenantContext()` lo prohíbe y tiene razón — no pertenece a ninguno.
+// la consulta entra con `app_practitioner` y su consulta; la paciente con `app_patient` y SIN
+// consulta, porque `withTenantContext()` lo prohíbe y tiene razón — no pertenece a ninguno.
 //
 // EL HUECO NO SE COMPRUEBA, SE INTENTA. La restricción `appointment_no_overlap` (0032) es lo
 // que hace imposible que dos pacientes se queden el mismo hueco: la segunda recibe `23P01`
@@ -24,7 +24,7 @@ import type { Window } from '../domain/slots';
 import { dayOf, depositOnCancel } from '../domain/slots';
 
 function contextOf(caller: ScheduleCaller): TenantContext {
-  // La paciente no fija inquilino: sus políticas son por `account_id` y por su vínculo.
+  // La paciente no fija consulta: sus políticas son por `account_id` y por su vínculo.
   if (caller.isPatient) return { role: 'app_patient', accountId: caller.accountId };
   return { role: 'app_practitioner', practiceId: caller.practiceId, accountId: caller.accountId };
 }

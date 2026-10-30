@@ -14,8 +14,8 @@
 --     transacción abortada no hace falta para decir «ya no hay cupo».
 --
 --     Tres guardas, y ninguna es decorativa:
---       · `practice_id = p_practice_id`, que el identificador del cuerpo no elige inquilino;
---       · el inquilino es el del contexto —la consulta— o uno al que ESTA cuenta está
+--       · `practice_id = p_practice_id`, que el identificador del cuerpo no elige consulta;
+--       · la consulta es el del contexto —la consulta— o uno al que ESTA cuenta está
 --         vinculada —la paciente—, así que nadie mueve el contador de una consulta ajena;
 --       · el cupo, que es la regla.
 --
@@ -24,7 +24,7 @@
 --     reactivarla. No hace falta tabla nueva: el estado ya está en los datos —`patient.status`
 --     y `photo.derivatives_ready`—, así que lo que falta son las dos consultas que el
 --     trabajador necesita y los dos sellos que escribe. Mismo patrón que la 0038: el
---     trabajador no tiene contexto de inquilino y pide el trabajo por función.
+--     trabajador no tiene contexto de consulta y pide el trabajo por función.
 -- =======================================================================================
 GRANT UPDATE ON "promotion" TO medskin_access;--> statement-breakpoint
 CREATE POLICY promotion_access ON "promotion" FOR ALL TO medskin_access
@@ -100,7 +100,7 @@ REVOKE ALL ON FUNCTION medskin_photo_derivatives(uuid, boolean) FROM PUBLIC;--> 
 GRANT EXECUTE ON FUNCTION medskin_photo_derivatives(uuid, boolean) TO app_anonymous;--> statement-breakpoint
 
 -- `patient.status` entra en el predicado de las dos consultas de arriba, y `photo` se recorre
--- por `derivatives_ready`: un índice parcial por inquilino para que el barrido no lea la tabla
--- entera cada cinco segundos. Escrito a mano y con el inquilino primero (lección de la 0011).
+-- por `derivatives_ready`: un índice parcial por consulta para que el barrido no lea la tabla
+-- entera cada cinco segundos. Escrito a mano y con la consulta primero (lección de la 0011).
 CREATE INDEX "photo_derivatives_idx" ON "photo" USING btree ("practice_id", "derivatives_ready", "updated_at")
   WHERE "status" = 'lista' AND "deleted_at" IS NULL;

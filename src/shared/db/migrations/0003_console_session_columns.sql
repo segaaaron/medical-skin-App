@@ -2,7 +2,7 @@
 --
 -- Cierra la pregunta 14 de docs/contratos/preguntas-abiertas.md: la decisión 5 concedió
 -- `(account_id, app_version, last_seen_at)` de `session` a `app_platform`, y con esas tres
--- `GET /v1/plataforma/inquilinos/{id}` no puede devolver ninguno de sus dos campos:
+-- `GET /v1/plataforma/consultas/{id}` no puede devolver ninguno de sus dos campos:
 --
 --   `doctora.sesiones_activas`  necesita `revoked_at` → «vivas» es `revoked_at IS NULL`.
 --   `versiones_app: {ios, android}`  necesita `platform` → sin ella la versión no se

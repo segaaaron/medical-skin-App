@@ -16,7 +16,7 @@
 //
 // 1. `patient_link` COPIA el nombre de la consulta, el de la doctora y la ciudad. Es la
 //    respuesta a la pregunta 7: `app_patient` no tiene política en `practice` ni en
-//    `practitioner`, y dársela abriría TODOS los inquilinos para poder leer uno. El coste
+//    `practitioner`, y dársela abriría TODOS las consultas para poder leer uno. El coste
 //    está aceptado y escrito en `pacientes.md`: renombrar una consulta actualiza las copias
 //    de sus propios vínculos en la misma transacción.
 // 2. Los antecedentes guardan la PROCEDENCIA EN COLUMNAS, dos por campo (`…_source` y
@@ -114,12 +114,12 @@ export const patient = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // Inquilino delante (§7.3, regla 5; §12.2.9). Es la lista por omisión: las activas, las
+    // Consulta delante (§7.3, regla 5; §12.2.9). Es la lista por omisión: las activas, las
     // últimas primero, y es también el recuento del `409 limite_del_plan`.
     // `.nullsFirst()` y no el `DESC NULLS LAST` que drizzle pone por omisión, Y NO ES
     // COSMÉTICO: `order by created_at desc` significa NULLS FIRST, así que con un índice
     // NULLS LAST el orden no coincide, el motor NO puede leer las 50 primeras por el
-    // índice y acaba ordenando las 8 000 filas del inquilino. Medido con
+    // índice y acaba ordenando las 8 000 filas de la consulta. Medido con
     // `EXPLAIN (ANALYZE, BUFFERS)`: 2,6 ms y 515 bloques contra 0,1 ms y 7. La columna es
     // `not null`, así que los nulos no existen: lo único que cambia es que el plan encaja.
     index('patient_practice_status_idx').on(t.practiceId, t.status, t.createdAt.desc().nullsFirst()),
@@ -137,10 +137,10 @@ export const patient = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------
-// patient_link · lo que une la ficha del inquilino con la cuenta de la persona (§12.2.2).
+// patient_link · lo que une la ficha de la consulta con la cuenta de la persona (§12.2.2).
 // Una fila por ficha. Es la ÚNICA tabla con dos caras de política: por `practice_id` para
 // la doctora y por `account_id` para la paciente, porque es la única lectura del sistema
-// que cruza inquilinos —y cruza solo las fichas de quien pregunta—.
+// que cruza consultas —y cruza solo las fichas de quien pregunta—.
 //
 // NO lleva `codigo`. El código de vinculación de seis caracteres está muerto: lo que prueba
 // el alta es la contraseña temporal (cuentas.md, `Vinculacion.dc.html`).
@@ -179,14 +179,14 @@ export const patientLink = pgTable(
   },
   (t) => [
     // Una fila por ficha (§12.1: `patient_link 1`). Una sola columna, así que la regla 5 no
-    // la alcanza: no hay índice compuesto que pudiera empezar por el inquilino.
+    // la alcanza: no hay índice compuesto que pudiera empezar por la consulta.
     uniqueIndex('patient_link_patient_uq').on(t.patientId),
-    // Inquilino delante: es la autorización literal de `POST /v1/accounts/{account_id}/access`
+    // Consulta delante: es la autorización literal de `POST /v1/accounts/{account_id}/access`
     // —`EXISTS (SELECT 1 FROM patient_link WHERE account_id = $1)` bajo la política de
     // `practice_id`— y la que distingue «no es tuya» de «no existe» sin decir cuál.
     index('patient_link_practice_account_idx').on(t.practiceId, t.accountId),
-    // Y uno por cuenta sola, SIN inquilino delante y a propósito: es `GET /v1/links` y
-    // los `doctoras[]` de `GET /v1/accounts/mine`, la única lectura que cruza inquilinos. No
+    // Y uno por cuenta sola, SIN consulta delante y a propósito: es `GET /v1/links` y
+    // los `doctoras[]` de `GET /v1/accounts/mine`, la única lectura que cruza consultas. No
     // hay `practice_id` que poner delante porque quien pregunta no tiene uno.
     index('patient_link_account_idx').on(t.accountId),
     check('patient_link_status_ck', sql`${t.status} in ('invitada', 'vinculada', 'revocada')`),
@@ -252,8 +252,8 @@ export const medicalHistory = pgTable(
   },
   (t) => [
     uniqueIndex('medical_history_patient_uq').on(t.patientId),
-    // Inquilino delante: la `alerta` ámbar de la lista de pacientes se resuelve por
-    // inquilino, sin tocar la ficha de nadie más.
+    // Consulta delante: la `alerta` ámbar de la lista de pacientes se resuelve por
+    // consulta, sin tocar la ficha de nadie más.
     index('medical_history_practice_idx').on(t.practiceId, t.patientId),
     check(
       'medical_history_pregnancy_ck',
@@ -322,7 +322,7 @@ export const medicalHistoryAudit = pgTable(
     actorSource: historySource('actor_source').notNull(),
   },
   (t) => [
-    // Inquilino delante: «qué cambió en esta ficha y cuándo», que es como se lee.
+    // Consulta delante: «qué cambió en esta ficha y cuándo», que es como se lee.
     index('medical_history_audit_practice_idx').on(
       t.practiceId,
       t.patientId,

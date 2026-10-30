@@ -113,11 +113,11 @@ describe('GET /v1/platform/tenants/{id}', () => {
     expect(respuesta.doctora.pausa_hasta).toBe('2026-10-28T14:29:00.000Z');
   });
 
-  it('sin consulta con ese `id` es `404 inquilino_no_existe`', async () => {
+  it('sin consulta con ese `id` es `404 consulta_no_existe`', async () => {
     const { caso } = armar(null);
 
     await expect(caso.run(PRACTICE, ACTOR)).rejects.toMatchObject({
-      code: 'inquilino_no_existe',
+      code: 'consulta_no_existe',
       status: 404,
       userMessage: 'No encontramos esa consulta.',
     });

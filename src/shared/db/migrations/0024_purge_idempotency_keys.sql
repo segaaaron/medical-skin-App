@@ -19,7 +19,7 @@
 -- El `GRANT DELETE` está puesto desde la 0000; lo que confina son **las tres políticas**
 -- (`practice_id = medskin_current_practice()`, `practice_id IS NULL AND account_id =
 -- medskin_current_account()`, y la de plataforma). Un barrido global tendría que recorrer
--- inquilino por inquilino y cuenta por cuenta, y para eso haría falta **enumerarlos**, que
+-- consulta por consulta y cuenta por cuenta, y para eso haría falta **enumerarlos**, que
 -- es exactamente la lectura cruzada que ninguno de esos roles tiene ni va a tener. Y
 -- `medskin_owner` no es salida: lo usa `migrate.ts` y nadie más.
 --
@@ -40,7 +40,7 @@
 -- LAS TRES DECISIONES QUE SE PIDIÓ JUZGAR
 --
 -- 1 · EL `EXECUTE` ES DE `app_anonymous`, Y SÍ ES EL ROL CORRECTO. El trabajador no tiene
---     sesión: cuando corre no hay ni inquilino ni cuenta que fijar, que es la definición de
+--     sesión: cuando corre no hay ni consulta ni cuenta que fijar, que es la definición de
 --     ese rol. Y la frontera no la sostiene quién llama, la sostiene **la firma**: la
 --     función **no recibe ningún argumento**, así que no hay nada que pasarle, nada que
 --     inyectarle y nada que ensanchar. Lo único que puede hacer quien la llame es borrar
@@ -48,7 +48,7 @@
 --     desde fuera. Es recolección de basura, no una capacidad.
 --     Se descartó un sexto rol `app_worker`: sería un nombre más que listar en cada
 --     `ALTER POLICY … TO`, y eso es justo donde alguien se olvida de uno y abre un
---     inquilino (§1.15). Un rol nuevo para una función de basura no se paga.
+--     consulta (§1.15). Un rol nuevo para una función de basura no se paga.
 --
 -- 2 · DEVUELVE CUÁNTAS BORRÓ, Y EL NÚMERO TIENE UN SIGNIFICADO EXACTO: **filas borradas en
 --     ESTA llamada**, no «filas que estaban caducadas». Con la cota de abajo los dos

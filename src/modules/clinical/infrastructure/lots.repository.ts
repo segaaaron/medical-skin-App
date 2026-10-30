@@ -128,7 +128,7 @@ export class LotsRepository implements LotPort {
       if (lots[0] === undefined) return null;
 
       // Las cuatro tablas del cruce van con política sobre `practice_id`: un lote de otra
-      // consulta no devuelve filas, y no hace falta nombrar el inquilino en el `where`.
+      // consulta no devuelve filas, y no hace falta nombrar la consulta en el `where`.
       const { rows } = await c.query<{
         patient_id: string;
         full_name: string;

@@ -6,7 +6,7 @@
 --     WHERE p_practice_id = medskin_current_practice() OR <vínculo de esta cuenta>
 --
 -- `p_account_id` entra sin comprobar. Reproducido contra la base de desarrollo, con
--- `app_practitioner` y contexto de la consulta Alfa: encolar en el inquilino de Beta queda
+-- `app_practitioner` y contexto de la consulta Alfa: encolar en la consulta de Beta queda
 -- bloqueado —correcto—, pero encolar **en Alfa con el `account_id` de la dueña de Beta**
 -- devuelve un identificador y la fila queda escrita. La política `notification_own` (0045) deja
 -- leer por `account_id` sin mirar la consulta, así que la víctima lo ve en su pantalla de

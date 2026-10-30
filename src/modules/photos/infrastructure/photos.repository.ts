@@ -300,7 +300,7 @@ export class PhotosRepository implements PhotoPort {
     });
   }
 
-  /** El vínculo de la paciente: de ahí salen su inquilino y su ficha, nunca del cuerpo. */
+  /** El vínculo de la paciente: de ahí salen su consulta y su ficha, nunca del cuerpo. */
   async linkedPatient(
     accountId: string,
     practiceId: string,

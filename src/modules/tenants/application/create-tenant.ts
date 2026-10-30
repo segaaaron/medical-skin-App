@@ -139,7 +139,7 @@ export class CreateTenant {
   }
 
   /**
-   * «El correo del alta sale en el mismo acto. Si el envío falla, el inquilino **queda
+   * «El correo del alta sale en el mismo acto. Si el envío falla, la consulta **queda
    * creado** y el fallo va a `service_failure`: la consola tiene "Reenviar la contraseña
    * temporal" para eso.»
    *
