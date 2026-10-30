@@ -10,6 +10,7 @@ import {
   hasRoomForPatients,
   isOwnCredentialKey,
   planLabel,
+  readConsoleLicenseDraft,
   readLicenseForm,
   SPECIALTIES,
 } from './rules';
@@ -226,5 +227,60 @@ describe('`respuesta_estimada_en` · 24 h hábiles en la zona del despliegue', (
   it('siempre está en el futuro, que es lo que la función de la base exige', () => {
     const ahora = new Date('2026-10-27T22:24:00Z');
     expect(estimatedResponseAt(ahora, LA_PAZ).getTime()).toBeGreaterThan(ahora.getTime());
+  });
+});
+
+// =========================================================================================
+// LOS TRES DATOS DE LA LICENCIA QUE RECOGE LA CONSOLA · 30 de octubre de 2026
+//
+// La línea que estas pruebas fijan: un número de matrícula es un DATO y lo puede teclear
+// quien dé el alta; la credencial escaneada y las dos aceptaciones legales son ACTOS de la
+// doctora y no entran por aquí ni aunque los manden.
+// =========================================================================================
+describe('readConsoleLicenseDraft · lo que la consola puede recoger', () => {
+  const bueno = { pais_ejercicio: 'BO', especialidad: 'dermatologia', matricula: 'MP-12345' };
+
+  it('sin bloque `licencia` devuelve null: el alta se puede hacer sin él', () => {
+    expect(readConsoleLicenseDraft(undefined)).toBeNull();
+    expect(readConsoleLicenseDraft(null)).toBeNull();
+  });
+
+  it('con los tres campos devuelve los tres, y nada más', () => {
+    expect(readConsoleLicenseDraft(bueno)).toEqual({
+      practiceCountry: 'BO',
+      specialty: 'dermatologia',
+      licenseNumber: 'MP-12345',
+    });
+  });
+
+  it('IGNORA la credencial y las dos aceptaciones aunque las manden', () => {
+    // Es la razón de que esta función exista y no se reuse `readLicenseForm`: aquí no hay
+    // por dónde colar una aceptación legal firmada por soporte.
+    const salida = readConsoleLicenseDraft({
+      ...bueno,
+      credencial_clave: 'lic/otra-consulta/documento.pdf',
+      declaracion_aceptada: true,
+      terminos_aceptados: true,
+    });
+    expect(salida).toEqual({
+      practiceCountry: 'BO',
+      specialty: 'dermatologia',
+      licenseNumber: 'MP-12345',
+    });
+    expect(Object.keys(salida ?? {})).toHaveLength(3);
+  });
+
+  it('valida igual que la app: si aquí pasa, allí también', () => {
+    // Si la consola admitiera algo que la app rechaza, la doctora encontraría su formulario
+    // prellenado con un valor que no puede guardar.
+    expect(() => readConsoleLicenseDraft({ ...bueno, matricula: 'ab' })).toThrow(
+      /matricula_vacia/,
+    );
+    expect(() => readConsoleLicenseDraft({ ...bueno, pais_ejercicio: '11' })).toThrow(
+      /pais_sin_cobertura/,
+    );
+    expect(() => readConsoleLicenseDraft({ ...bueno, especialidad: 'inventada' })).toThrow(
+      /especialidad_desconocida/,
+    );
   });
 });

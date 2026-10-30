@@ -98,6 +98,9 @@ export class CreateTenant {
       actor,
       idempotency,
       practice: form.practice,
+      // Lo que la consola recogió del formulario, o `null`. No cambia el estado de la
+      // licencia: la manda a revisar la doctora, desde su app, con su credencial.
+      license: form.license,
       owner: { ...form.owner, hash: await this.passwords.hash(temporary), expiresAt },
       // Se ejecuta DENTRO de la transacción del alta: la respuesta que se guarda para el
       // reintento es la MISMA que se devuelve, contraseña temporal incluida.

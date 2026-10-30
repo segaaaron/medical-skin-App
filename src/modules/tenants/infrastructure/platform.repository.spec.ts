@@ -180,6 +180,68 @@ afterAll(async () => {
 });
 
 describe('POST /v1/platform/tenants · contra la función del alta', () => {
+  it('los tres datos de la licencia que recogió la consola quedan en la fila, en `sin_enviar`', async () => {
+    // Decidido por el dueño el 30 de octubre de 2026: el formulario del alta pregunta lo
+    // mismo que la app le preguntará después a la doctora, así que se recoge una vez.
+    const admission = await repository.create({
+      actor: ACTOR,
+      idempotency: { key: 'consola-licencia', bodyHash: 'huella-licencia' },
+      practice: {
+        name: 'Consultorio Con Matrícula',
+        region: 'latam',
+        country: 'BO',
+        timeZone: 'America/La_Paz',
+        currency: 'BOB',
+        plan: 'consultorio',
+        patientLimit: 300,
+        internalNote: null,
+      },
+      owner: {
+        firstName: 'Rocío',
+        lastName: 'Villarroel',
+        email: 'rocio.villarroel@plataforma.local',
+        hash: HASH,
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      },
+      license: {
+        practiceCountry: 'BO',
+        specialty: 'dermatologia',
+        licenseNumber: 'MP-98765',
+      },
+      respond: (created) => created,
+    });
+
+    expect(admission.verdict).toBe('created');
+    const creada = admission.served?.response as CreatedTenant;
+
+    const { rows } = await owner.query<{
+      status: string;
+      practice_country: string | null;
+      specialty: string | null;
+      license_number: string | null;
+      credential_key: string | null;
+      declaration_accepted: boolean | null;
+      terms_accepted: boolean | null;
+    }>(
+      `select status, practice_country, specialty, license_number, credential_key,
+              declaration_accepted, terms_accepted
+         from license where practice_id = $1`,
+      [creada.practiceId],
+    );
+
+    const licencia = rows[0];
+    expect(licencia?.practice_country).toBe('BO');
+    expect(licencia?.specialty).toBe('dermatologia');
+    expect(licencia?.license_number).toBe('MP-98765');
+
+    // Y LA LÍNEA QUE NO SE CRUZA: sigue `sin_enviar`, sin credencial y sin aceptaciones.
+    // Una fila en `en_revision` sin documento es una bandeja que miente.
+    expect(licencia?.status).toBe('sin_enviar');
+    expect(licencia?.credential_key).toBeNull();
+    expect(licencia?.declaration_accepted).not.toBe(true);
+    expect(licencia?.terms_accepted).not.toBe(true);
+  });
+
   it('crea consulta, dueña, credencial y LICENCIA `sin_enviar` sin insertar la licencia', async () => {
     const admission = await repository.create({
       actor: ACTOR,
@@ -201,6 +263,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
         hash: HASH,
         expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
       },
+      license: null,
       respond: (created) => created,
     });
 
@@ -250,6 +313,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
         hash: HASH,
         expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
       },
+      license: null,
       respond: (created) => created,
     });
 
@@ -290,6 +354,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
       idempotency,
       practice,
       owner: ownerData,
+      license: null,
       respond: (created) => ({ ...created, contrasena_temporal: 'tejado-lila-07' }),
     });
     expect(first.served?.replayed).toBe(false);
@@ -301,6 +366,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
       idempotency,
       practice,
       owner: ownerData,
+      license: null,
       respond: () => ({
         practiceId: 'no',
         accountId: 'se',
@@ -348,7 +414,8 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
           hash: HASH,
           expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
         },
-        respond: (created) => created,
+        license: null,
+      respond: (created) => created,
       }),
     ).rejects.toMatchObject({ code: 'clave_idempotencia_reutilizada', status: 409 });
 
@@ -365,6 +432,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
         hash: HASH,
         expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
       },
+      license: null,
       respond: (created) => created,
     });
     expect(other.verdict).toBe('created');
@@ -408,6 +476,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
       hash: HASH,
       expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
     },
+    license: null,
     respond: (created: CreatedTenant) => created,
   });
 

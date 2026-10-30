@@ -5,6 +5,7 @@
 // motivos distintos —una pantalla interna de soporte contra la app de la consulta— y el
 // doble de prueba de cada caso de uso no tiene que implementar lo que no llama.
 
+import type { ConsoleLicenseDraft } from './rules';
 import type { Region } from '../../../shared/contract/session';
 
 /**
@@ -102,6 +103,13 @@ export interface TenantAdmissionPort {
     idempotency: IdempotencyRecord;
     practice: NewPractice;
     owner: NewOwner;
+    /**
+     * Los tres datos de la licencia que recogió la consola, o `null`. Van en la MISMA
+     * transacción que el alta: si se escribieran después, un fallo entre las dos dejaría una
+     * consulta creada con el formulario de su doctora a medio prellenar y nadie se enteraría.
+     * No cambian el `status`, que sigue en `sin_enviar`.
+     */
+    license: ConsoleLicenseDraft | null;
     respond: (created: CreatedTenant) => T;
   }): Promise<Admission<T>>;
 }

@@ -43,6 +43,7 @@ import type {
   TenantFile,
   TenantFilePort,
 } from '../domain/platform-ports';
+import type { ConsoleLicenseDraft } from '../domain/rules';
 
 type StatsRow = {
   patient_count: string;
@@ -107,6 +108,7 @@ export class PlatformRepository
     idempotency: IdempotencyRecord;
     practice: NewPractice;
     owner: NewOwner;
+    license: ConsoleLicenseDraft | null;
     respond: (created: CreatedTenant) => T;
   }): Promise<Admission<T>> {
     try {
@@ -164,6 +166,24 @@ export class PlatformRepository
           throw new Error('medskin_create_practice_owner no devolvió veredicto');
         if (row.verdict !== 'created' || row.account_id === null) {
           throw new AdmissionRejected(row.verdict as Exclude<AdmissionVerdict, 'created'>);
+        }
+
+        // LOS TRES DATOS DE LA LICENCIA QUE RECOGIÓ LA CONSOLA, si los recogió. Van aquí y
+        // no dentro de `medskin_create_practice_owner` para no cambiar la firma de una
+        // función que ya usan la semilla y las pruebas: la fila existe desde la línea de
+        // arriba, así que esto la completa.
+        //
+        // `status` NO se toca: la licencia sigue en `sin_enviar`. Sin la credencial escaneada
+        // y sin las dos aceptaciones no hay nada que revisar, y una fila en `en_revision` sin
+        // documento es una bandeja que miente.
+        if (p.license !== null) {
+          await c.query(
+            `update license
+                set practice_country = $2, specialty = $3, license_number = $4,
+                    updated_at = now()
+              where practice_id = $1`,
+            [practice.id, p.license.practiceCountry, p.license.specialty, p.license.licenseNumber],
+          );
         }
 
         const response = p.respond({

@@ -141,6 +141,49 @@ export type ReadLicenseForm = {
  * enlace firmado el documento de identidad de otra doctora (OWASP A01). No se comprueba
  * contra la URL que mandó nadie: se compara con la consulta del token.
  */
+/**
+ * LOS TRES DATOS DE LA LICENCIA QUE PUEDE RECOGER LA CONSOLA · decidido por el dueño el 30 de
+ * octubre de 2026.
+ *
+ * El formulario del alta pregunta lo mismo que la app le preguntará después a la doctora, así
+ * que se recoge una vez y viaja prellenado. Lo que NO entra aquí, y es la línea que no se
+ * cruza: la credencial escaneada y las dos aceptaciones legales. Un número de matrícula es un
+ * DATO —lo teclea quien sea— y una aceptación es un ACTO de ella; que soporte marque «acepto
+ * los términos» en su nombre es firmar por otra persona.
+ *
+ * Por eso esto no deja la licencia `en_revision`: la fila se queda en `sin_enviar`, con los
+ * tres campos puestos, y la bandeja de revisión no la ve. Lo que la manda a revisar sigue
+ * siendo `POST /v1/tenants/mine/license`, con `readLicenseForm()` entero.
+ *
+ * Mismas validaciones que allí, a propósito: si la consola admitiera una especialidad que la
+ * app rechaza, la doctora encontraría su formulario prellenado con algo que no puede guardar.
+ */
+export type ConsoleLicenseDraft = {
+  practiceCountry: string;
+  specialty: string;
+  licenseNumber: string;
+};
+
+export function readConsoleLicenseDraft(input: unknown): ConsoleLicenseDraft | null {
+  if (input === undefined || input === null) return null;
+  const body: LicenseFormInput = typeof input === 'object' ? input : {};
+
+  const licenseNumber = text(body.matricula, LICENSE_NUMBER_MAX_LENGTH);
+  if (licenseNumber === null || licenseNumber.length < LICENSE_NUMBER_MIN_LENGTH) {
+    throw new ContractError('matricula_vacia');
+  }
+
+  const country = text(body.pais_ejercicio, 2);
+  if (country === null || !isCountry(country)) throw new ContractError('pais_sin_cobertura');
+
+  const specialty = text(body.especialidad, 60);
+  if (specialty === null || !SPECIALTIES.includes(specialty)) {
+    throw new ContractError('especialidad_desconocida');
+  }
+
+  return { practiceCountry: country, specialty, licenseNumber };
+}
+
 export function readLicenseForm(input: unknown, practiceId: string): ReadLicenseForm {
   const body: LicenseFormInput = typeof input === 'object' && input !== null ? input : {};
 

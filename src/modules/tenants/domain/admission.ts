@@ -8,7 +8,7 @@
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Region } from '../../../shared/contract/session';
 import type { Decision, NewOwner, NewPractice } from './platform-ports';
-import { isCountry } from './rules';
+import { isCountry , readConsoleLicenseDraft, type ConsoleLicenseDraft } from './rules';
 
 const REGIONS: readonly Region[] = ['eu', 'us', 'latam'];
 
@@ -42,6 +42,12 @@ const REJECTION_MAX = 300;
 export type AdmissionForm = {
   practice: Omit<NewPractice, 'patientLimit'> & { patientLimit: number };
   owner: Omit<NewOwner, 'hash' | 'expiresAt'>;
+  /**
+   * Los tres datos de la licencia que la consola puede recoger, o `null` si el formulario
+   * no los pidió. Opcional a propósito: el alta tiene que poder hacerse sin ellos —una
+   * doctora que todavía no tiene la matrícula a mano— y la fila de `license` nace igual.
+   */
+  license: ConsoleLicenseDraft | null;
 };
 
 /**
@@ -104,6 +110,7 @@ export function readAdmission(
       internalNote: text(body.nota_interna, INTERNAL_NOTE_MAX),
     },
     owner: readOwner(body.doctora, readEmail),
+    license: readConsoleLicenseDraft(body.licencia),
   };
 }
 
