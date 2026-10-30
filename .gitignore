@@ -7,15 +7,3 @@ coverage/
 .secrets/
 *.log
 .DS_Store
-
-# Nada de agentes, ni notas de trabajo, ni documentación: se quedan en local.
-.claude/
-.claude*
-CLAUDE.md
-AGENTS.md
-GEMINI.md
-.mcp.json
-handoff-*.md
-.cursor/
-.flujo/
-docs/
