@@ -800,3 +800,88 @@ describe('POST /v1/platform/tenants/{id}/license/decision · sin función', () =
     expect(again.served?.status).toBe(200);
   });
 });
+
+// =========================================================================================
+// LAS DOS LECTURAS DE LISTA, CONTRA LA BASE · `consultas.md`, 30 de octubre de 2026
+//
+// Lo que no se puede probar con dobles: que el cursor atraviese las filas sin saltarse ni
+// repetir ninguna, y que `ilike` encuentre por nombre y por correo.
+// =========================================================================================
+describe('GET /v1/platform/tenants · buscar contra la base', () => {
+  it('encuentra por nombre y por correo de la doctora, y lo que no existe da lista vacía', async () => {
+    const porNombre = await repository.searchTenants({
+      actor: ACTOR,
+      search: { query: 'Clínica', license: null, cursor: null, perPage: 25 },
+    });
+    expect(porNombre.length).toBeGreaterThan(0);
+
+    const unCorreo = porNombre[0]?.ownerEmail;
+    expect(unCorreo).not.toBeNull();
+
+    const porCorreo = await repository.searchTenants({
+      actor: ACTOR,
+      search: { query: unCorreo ?? '', license: null, cursor: null, perPage: 25 },
+    });
+    expect(porCorreo.map((r) => r.id)).toContain(porNombre[0]?.id);
+
+    const nada = await repository.searchTenants({
+      actor: ACTOR,
+      search: { query: 'no-existe-esta-consulta', license: null, cursor: null, perPage: 25 },
+    });
+    expect(nada).toEqual([]);
+  });
+
+  it('el cursor no se salta ni repite: página a página sale el mismo conjunto', async () => {
+    const todas = await repository.searchTenants({
+      actor: ACTOR,
+      search: { query: null, license: null, cursor: null, perPage: 100 },
+    });
+    expect(todas.length).toBeGreaterThan(1);
+
+    // De una en una, siguiendo el cursor.
+    const recorrido: string[] = [];
+    let cursor: { at: Date; id: string } | null = null;
+    for (let i = 0; i < todas.length + 2; i += 1) {
+      const pagina: readonly { id: string; createdAt: Date }[] = await repository.searchTenants({
+        actor: ACTOR,
+        search: { query: null, license: null, cursor, perPage: 1 },
+      });
+      const fila = pagina[0];
+      if (fila === undefined) break;
+      recorrido.push(fila.id);
+      cursor = { at: fila.createdAt, id: fila.id };
+    }
+
+    expect(recorrido).toEqual(todas.map((r) => r.id));
+    expect(new Set(recorrido).size).toBe(recorrido.length);
+  });
+
+  it('filtra por estado de licencia, y la que no tiene fila cuenta como `sin_enviar`', async () => {
+    const sinEnviar = await repository.searchTenants({
+      actor: ACTOR,
+      search: { query: null, license: 'sin_enviar', cursor: null, perPage: 100 },
+    });
+    expect(sinEnviar.every((r) => r.licenseStatus === 'sin_enviar')).toBe(true);
+  });
+});
+
+describe('GET /v1/platform/licenses · la bandeja contra la base', () => {
+  it('trae la matrícula y la clave de la credencial, y ordena lo más viejo arriba', async () => {
+    const bandeja = await repository.listLicenses({
+      actor: ACTOR,
+      inbox: { state: 'sin_enviar', cursor: null, perPage: 100 },
+    });
+
+    expect(bandeja.length).toBeGreaterThan(0);
+    // Ascendente: lo que lleva más esperando va primero.
+    const fechas = bandeja.map((r) => r.cursorAt.getTime());
+    expect([...fechas].sort((a, b) => a - b)).toEqual(fechas);
+
+    // Y la fila que sembró el alta con matrícula la trae.
+    const conMatricula = bandeja.find((r) => r.licenseNumber === 'MP-98765');
+    expect(conMatricula?.specialty).toBe('dermatologia');
+    expect(conMatricula?.practiceCountry).toBe('BO');
+    // Sin credencial subida: es lo que hace que el enlace salga nulo.
+    expect(conMatricula?.credentialKey).toBeNull();
+  });
+});

@@ -5,6 +5,7 @@
 // motivos distintos —una pantalla interna de soporte contra la app de la consulta— y el
 // doble de prueba de cada caso de uso no tiene que implementar lo que no llama.
 
+import type { ConsoleSearch, LicenseInbox } from './console-search';
 import type { ConsoleLicenseDraft } from './rules';
 import type { Region } from '../../../shared/contract/session';
 
@@ -227,3 +228,61 @@ export interface WelcomeMailPort {
     expiryText: string;
   }): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------------------
+// GET /v1/platform/tenants · buscar · `consultas.md`, 30 oct 2026
+// GET /v1/platform/licenses · la bandeja
+//
+// Las dos devuelven MÁS DE UNA fila, que es lo que las hace distintas de todo lo anterior de
+// consola: hasta hoy, un error de campo exponía la ficha que ya se estaba mirando; aquí
+// expondría el padrón. Por eso el renglón de la búsqueda es un subconjunto EXACTO de la
+// ficha, y una prueba lo fija comparando las claves.
+// ---------------------------------------------------------------------------------------
+
+/** Un renglón de la búsqueda. Ni un campo que la ficha no tenga. */
+export type TenantRow = {
+  id: string;
+  name: string;
+  region: string;
+  createdOn: string;
+  plan: string;
+  licenseStatus: string;
+  /**
+   * SOLO EL CORREO, y es lo que la consola puede leer: `app_platform` tiene `SELECT` sobre
+   * cinco columnas de `account` y NINGUNA sobre `practitioner`, que es donde vive el nombre.
+   * La ficha tampoco lo devuelve, por lo mismo. Prometerlo aquí habría sido prometer un campo
+   * que la base niega — lo cazó la prueba contra la base con «permission denied».
+   */
+  ownerEmail: string | null;
+  /** Para el cursor. No sale en la respuesta. */
+  createdAt: Date;
+};
+
+/** Un renglón de la bandeja. La credencial va como CLAVE: el enlace lo firma el caso de uso. */
+export type LicenseRow = {
+  practiceId: string;
+  practiceName: string;
+  /**
+   * SOLO EL CORREO, y es lo que la consola puede leer: `app_platform` tiene `SELECT` sobre
+   * cinco columnas de `account` y NINGUNA sobre `practitioner`, que es donde vive el nombre.
+   * La ficha tampoco lo devuelve, por lo mismo. Prometerlo aquí habría sido prometer un campo
+   * que la base niega — lo cazó la prueba contra la base con «permission denied».
+   */
+  ownerEmail: string | null;
+  status: string;
+  submittedAt: Date | null;
+  responseEstimatedAt: Date | null;
+  specialty: string | null;
+  licenseNumber: string | null;
+  practiceCountry: string | null;
+  credentialKey: string | null;
+  /** Para el cursor. No sale en la respuesta. */
+  cursorAt: Date;
+};
+
+export interface ConsoleSearchPort {
+  /** Devuelve `perPage + 1` filas: la de más es cómo se sabe que hay siguiente página. */
+  searchTenants(p: { actor: PlatformActor; search: ConsoleSearch }): Promise<readonly TenantRow[]>;
+  listLicenses(p: { actor: PlatformActor; inbox: LicenseInbox }): Promise<readonly LicenseRow[]>;
+}
+

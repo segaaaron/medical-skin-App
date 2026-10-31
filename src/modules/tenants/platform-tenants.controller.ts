@@ -18,10 +18,12 @@ import type { FastifyReply } from 'fastify';
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
 import type { PlatformCaller } from '../../shared/platform/platform-token';
+import { SearchTenants } from './application/console-reads';
 import { CreateTenant } from './application/create-tenant';
 import { DecideLicense } from './application/decide-license';
 import { ReadTenant } from './application/read-tenant';
 import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
+import { readConsoleSearch } from './domain/console-search';
 import type { PlatformActor } from './domain/platform-ports';
 
 /**
@@ -32,6 +34,12 @@ import type { PlatformActor } from './domain/platform-ports';
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Los parámetros de la query, tal y como los deja Fastify. Quien valida es el dominio. */
+function queryOf(req: RequestWithContext): Record<string, unknown> {
+  const query = (req as { query?: unknown }).query;
+  return typeof query === 'object' && query !== null ? (query as Record<string, unknown>) : {};
+}
+
 @Controller('v1/platform/tenants')
 export class PlatformTenantsController {
   // `@Inject` explícito: esbuild no emite `emitDecoratorMetadata`.
@@ -39,6 +47,7 @@ export class PlatformTenantsController {
     @Inject(CreateTenant) private readonly createTenant: CreateTenant,
     @Inject(ReadTenant) private readonly readTenant: ReadTenant,
     @Inject(DecideLicense) private readonly decideLicense: DecideLicense,
+    @Inject(SearchTenants) private readonly searchTenants: SearchTenants,
   ) {}
 
   /**
@@ -52,6 +61,17 @@ export class PlatformTenantsController {
     const served = await this.createTenant.run(body, actorOf(req), keyOf(req, body), traceOf(req));
     // `void` y no `await`: `send()` de Fastify devuelve la propia respuesta, no una promesa.
     void res.status(served.replayed ? 200 : 201).send(served.response);
+  }
+
+  /**
+   * LA BÚSQUEDA SE DECLARA ANTES QUE `:id`, y no es cosmética: Fastify casa por especificidad
+   * y una ruta estática gana a un parámetro, pero el orden del archivo es lo que se lee para
+   * entender cuál es cuál. `GET /v1/platform/tenants` sin nada detrás es la lista.
+   */
+  @Get()
+  @HttpCode(200)
+  async search(@Req() req: RequestWithContext) {
+    return this.searchTenants.run(readConsoleSearch(queryOf(req)), actorOf(req));
   }
 
   // El `id` de la RUTA no autoriza nada: entra como criterio de búsqueda bajo la política de

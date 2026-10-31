@@ -27,11 +27,13 @@ import { AdmissionFailures } from './infrastructure/admission-failures';
 import { PlatformRepository } from './infrastructure/platform.repository';
 import { TenantsRepository } from './infrastructure/tenants.repository';
 import { WelcomeMail } from './infrastructure/welcome-mail';
+import { ListLicenses, SearchTenants } from './application/console-reads';
+import { PlatformLicensesController } from './platform-licenses.controller';
 import { PlatformTenantsController } from './platform-tenants.controller';
 import { TenantsController } from './tenants.controller';
 
 @Module({
-  controllers: [TenantsController, PlatformTenantsController],
+  controllers: [TenantsController, PlatformTenantsController, PlatformLicensesController],
   providers: [
     {
       provide: TenantsRepository,
@@ -58,6 +60,32 @@ import { TenantsController } from './tenants.controller';
     // rol de base es otro (`app_platform`), lo que puede leer es otro, y lo que cambia por
     // el mismo motivo va junto.
     // -----------------------------------------------------------------------------------
+    {
+      // Las dos lecturas de lista. `SearchTenants` solo necesita la etiqueta de la región
+      // —la misma que la ficha— y `ListLicenses` el almacenamiento, para firmar el enlace de
+      // cinco minutos a la credencial en cada lectura.
+      provide: SearchTenants,
+      useFactory: (repo: PlatformRepository, cfg: Config) =>
+        new SearchTenants(repo, cfg.REGION_ETIQUETA),
+      inject: [PlatformRepository, CONFIG],
+    },
+    {
+      provide: ListLicenses,
+      useFactory: (repo: PlatformRepository, cfg: Config, clock: SystemClock) =>
+        new ListLicenses(
+          repo,
+          {
+            endpoint: cfg.S3_ENDPOINT,
+            region: cfg.S3_REGION,
+            bucket: cfg.S3_BUCKET,
+            accessKey: cfg.S3_ACCESS_KEY,
+            secretKey: cfg.S3_SECRET_KEY,
+            forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
+          },
+          clock,
+        ),
+      inject: [PlatformRepository, CONFIG, SystemClock],
+    },
     {
       provide: PlatformRepository,
       useFactory: (pool: Pool, cfg: Config) => new PlatformRepository(pool, cfg.ZONA_HORARIA),

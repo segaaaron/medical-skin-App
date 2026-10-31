@@ -449,6 +449,18 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:consultas:crear',
     failurePhrase: FAILURE_PHRASES.createTenant,
   },
+  // Las dos lecturas de LISTA, con el permiso que ya existe: no se toca el token, ni el
+  // guardia, ni la lista cerrada de permisos. Son las primeras de consola que devuelven más
+  // de una consulta, y lo que las acota es el subconjunto de campos, no un permiso nuevo.
+  'GET /v1/platform/tenants': {
+    platformPermission: 'plataforma:consultas:leer',
+    failurePhrase: FAILURE_PHRASES.searchTenants,
+  },
+  'GET /v1/platform/licenses': {
+    platformPermission: 'plataforma:consultas:leer',
+    failurePhrase: FAILURE_PHRASES.listLicenses,
+  },
+
   'GET /v1/platform/tenants/:id': {
     platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.readTenant,

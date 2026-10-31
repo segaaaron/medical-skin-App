@@ -40,9 +40,12 @@ import type {
   PlatformActor,
   Served,
   TenantAdmissionPort,
+  LicenseRow,
   TenantFile,
   TenantFilePort,
+  TenantRow,
 } from '../domain/platform-ports';
+import type { ConsoleSearch, LicenseInbox } from '../domain/console-search';
 import type { ConsoleLicenseDraft } from '../domain/rules';
 
 type StatsRow = {
@@ -428,7 +431,137 @@ export class PlatformRepository
       throw failure;
     }
   }
+
+  // -------------------------------------------------------------------------------------
+  // GET /v1/platform/tenants · buscar
+  //
+  // `q` busca en el nombre de la consulta Y en el correo de la dueña: quien busca teclea
+  // «paz» o «andrea.paz@», y pedirle que sepa cuál de los dos campos mira sería un formulario
+  // con dos cajas para una sola pregunta.
+  //
+  // El cursor compara TUPLAS —`(a, b) < ($1, $2)`— y no dos condiciones con `OR`: la tupla usa
+  // el índice, el `OR` no, y la versión con `OR` escrita a mano se equivoca en el empate.
+  // -------------------------------------------------------------------------------------
+  async searchTenants(p: {
+    actor: PlatformActor;
+    search: ConsoleSearch;
+  }): Promise<readonly TenantRow[]> {
+    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
+      const { rows } = await c.query<TenantSearchRow>(
+        `select p.id, p.name, p.region, p.plan, p.created_at,
+                (p.created_at at time zone $1)::date::text as created_on,
+                coalesce(l.status, 'sin_enviar') as license_status,
+                a.email
+           from practice p
+           left join license l on l.practice_id = p.id
+           left join account a on a.id = p.owner_account_id
+          where ($2::text is null
+                 or p.name ilike '%' || $2 || '%'
+                 or a.email ilike '%' || $2 || '%')
+            and ($3::text is null or coalesce(l.status, 'sin_enviar') = $3)
+            and ($4::timestamptz is null or (p.created_at, p.id) < ($4, $5::uuid))
+          order by p.created_at desc, p.id desc
+          limit $6`,
+        [
+          this.timeZone,
+          p.search.query,
+          p.search.license,
+          p.search.cursor?.at ?? null,
+          p.search.cursor?.id ?? null,
+          // Una de más: si viene, hay página siguiente. Contar aparte sería una segunda
+          // consulta sobre la misma tabla para saber algo que esta ya sabe.
+          p.search.perPage + 1,
+        ],
+      );
+
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        region: row.region,
+        createdOn: row.created_on,
+        plan: row.plan,
+        licenseStatus: row.license_status,
+        ownerEmail: row.email,
+        createdAt: row.created_at,
+      }));
+    });
+  }
+
+  // -------------------------------------------------------------------------------------
+  // GET /v1/platform/licenses · la bandeja
+  //
+  // Orden ASCENDENTE por fecha de envío: lo que lleva más esperando va arriba. Una bandeja al
+  // revés es una bandeja donde lo viejo no se revisa nunca.
+  //
+  // `coalesce(submitted_at, created_at)` para el orden y el cursor: una licencia en
+  // `sin_enviar` no tiene fecha de envío, y sin el `coalesce` las nulas se irían juntas a un
+  // extremo y el cursor no podría atravesarlas.
+  // -------------------------------------------------------------------------------------
+  async listLicenses(p: {
+    actor: PlatformActor;
+    inbox: LicenseInbox;
+  }): Promise<readonly LicenseRow[]> {
+    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
+      const { rows } = await c.query<LicenseInboxRow>(
+        `select l.practice_id, p.name as practice_name,
+                l.status, l.submitted_at, l.response_estimated_at,
+                l.specialty, l.license_number, l.practice_country, l.credential_key,
+                coalesce(l.submitted_at, l.created_at) as cursor_at,
+                a.email
+           from license l
+           join practice p on p.id = l.practice_id
+           left join account a on a.id = p.owner_account_id
+          where l.status = $1
+            and ($2::timestamptz is null
+                 or (coalesce(l.submitted_at, l.created_at), l.practice_id) > ($2, $3::uuid))
+          order by coalesce(l.submitted_at, l.created_at) asc, l.practice_id asc
+          limit $4`,
+        [p.inbox.state, p.inbox.cursor?.at ?? null, p.inbox.cursor?.id ?? null, p.inbox.perPage + 1],
+      );
+
+      return rows.map((row) => ({
+        practiceId: row.practice_id,
+        practiceName: row.practice_name,
+        ownerEmail: row.email,
+        status: row.status,
+        submittedAt: row.submitted_at,
+        responseEstimatedAt: row.response_estimated_at,
+        specialty: row.specialty,
+        licenseNumber: row.license_number,
+        practiceCountry: row.practice_country,
+        credentialKey: row.credential_key,
+        cursorAt: row.cursor_at,
+      }));
+    });
+  }
 }
+
+type TenantSearchRow = {
+  id: string;
+  name: string;
+  region: string;
+  plan: string;
+  created_at: Date;
+  created_on: string;
+  license_status: string;
+  email: string | null;
+};
+
+type LicenseInboxRow = {
+  practice_id: string;
+  practice_name: string;
+  status: string;
+  submitted_at: Date | null;
+  response_estimated_at: Date | null;
+  specialty: string | null;
+  license_number: string | null;
+  practice_country: string | null;
+  credential_key: string | null;
+  cursor_at: Date;
+  email: string | null;
+};
+
+
 
 /**
  * `app_platform` con `medskin.account_id` = el `sub` del token, y **sin** `practice_id`: la

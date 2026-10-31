@@ -1678,6 +1678,12 @@ export const FAILURE_PHRASES = {
    */
   platformSignIn:
     'No pudimos entrar. El servidor no respondió: puedes volver a intentarlo.',
+
+  /** `consultas.md` · las dos lecturas de lista de la consola, 30 de octubre de 2026. */
+  searchTenants:
+    'No pudimos buscar consultas. El servidor no respondió: puedes volver a intentarlo.',
+  listLicenses:
+    'No pudimos cargar las licencias pendientes. El servidor no respondió: puedes volver a intentarlo.',
 } as const;
 
 /**
