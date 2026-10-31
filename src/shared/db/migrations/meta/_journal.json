@@ -519,6 +519,13 @@
       "when": 1793404137273,
       "tag": "0073_el_refresco_no_mira_la_licencia",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793404137274,
+      "tag": "0074_el_permiso_que_ya_no_existe",
+      "breakpoints": true
     }
   ]
 }
