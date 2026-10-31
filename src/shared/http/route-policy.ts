@@ -474,6 +474,33 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:cuentas:buscar',
     failurePhrase: FAILURE_PHRASES.searchAccounts,
   },
+  // Las pacientes vistas desde la consola · `pacientes-consola.md`, 31 de octubre de 2026.
+  //
+  // TRES PERMISOS Y NO UNO, y la separación es la decisión: `historia:leer` abre la historia
+  // clínica y NADA más, que es lo único que permite una cuenta de soporte que administra y no
+  // lee expedientes.
+  'GET /v1/platform/tenants/:id/patients': {
+    platformPermission: 'plataforma:pacientes:leer',
+    failurePhrase: FAILURE_PHRASES.platformPatients,
+  },
+  'GET /v1/platform/patients/:pid': {
+    platformPermission: 'plataforma:pacientes:leer',
+    failurePhrase: FAILURE_PHRASES.platformPatient,
+  },
+  // `POST` y no `GET` porque deja fila en el registro que el doctor lee, y porque el motivo no
+  // puede viajar en la URL.
+  'POST /v1/platform/patients/:pid/medical-history/read': {
+    platformPermission: 'plataforma:historia:leer',
+    failurePhrase: FAILURE_PHRASES.platformHistory,
+  },
+  'POST /v1/platform/patients/:pid/archive': {
+    platformPermission: 'plataforma:pacientes:crear',
+    failurePhrase: FAILURE_PHRASES.platformArchivePatient,
+  },
+  'POST /v1/platform/patients/:pid/reactivate': {
+    platformPermission: 'plataforma:pacientes:crear',
+    failurePhrase: FAILURE_PHRASES.platformArchivePatient,
+  },
   'POST /v1/platform/accounts/:account_id/access/resend': {
     platformPermission: 'plataforma:acceso:reenviar',
     failurePhrase: FAILURE_PHRASES.resendPlatformAccess,

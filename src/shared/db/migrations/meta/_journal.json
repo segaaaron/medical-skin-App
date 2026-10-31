@@ -540,6 +540,13 @@
       "when": 1793404137276,
       "tag": "0076_quien_actua_sobre_una_cuenta_puede_buscarla",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793404137277,
+      "tag": "0077_la_consola_ve_pacientes",
+      "breakpoints": true
     }
   ]
 }

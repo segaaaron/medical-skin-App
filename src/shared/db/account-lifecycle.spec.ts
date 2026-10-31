@@ -576,19 +576,25 @@ describe('el reenvío de acceso de la consola', () => {
     ).toBe('permiso denegado');
   });
 
-  it('y la consola sigue sin leer una sola fila clínica', async () => {
-    // La otra mitad del contrato: las dos acciones están marcadas «Seguro» en la pantalla
-    // porque no tocan ningún dato clínico, y eso tiene que ser verdad en la base.
+  it('y estas dos acciones siguen sin tocar la contraseña de nadie', async () => {
+    // ESTA PRUEBA DECÍA «la consola sigue sin leer una sola fila clínica», y era verdad hasta
+    // el 31 de octubre de 2026: el dueño decidió lo contrario y la 0077 le abrió `patient`,
+    // `patient_link` y `medical_history`. Lo clínico ya no se comprueba aquí — tiene sus
+    // propios endpoints, sus propios permisos y su propia auditoría, y su prueba es
+    // `platform-patients.spec.ts`.
+    //
+    // Lo que esta prueba vigila SÍ sigue siendo verdad, y es lo que hace que las dos acciones
+    // de esta pantalla estén marcadas «Seguro»: reenviar un acceso y levantar una pausa **no
+    // tocan la contraseña de nadie**. `credential` no tiene política ni grant para este rol y
+    // no la va a tener: «no cambia su contraseña» es un permiso que no existe, no una
+    // comprobación del código.
     expect({
-      patient: await whatItSees(app, ctxPlatform, 'select id from patient'),
-      patient_link: await whatItSees(app, ctxPlatform, 'select id from patient_link'),
-      medical_history: await whatItSees(app, ctxPlatform, 'select id from medical_history'),
       credential: await whatItSees(app, ctxPlatform, 'select account_id from credential'),
+      // Y el hash no lo lee NADIE, ni siquiera quien sí alcanza la tabla.
+      hash: await whatItSees(app, ctxPlatform, 'select hash from credential'),
     }).toEqual({
-      patient: 'permiso denegado',
-      patient_link: 'permiso denegado',
-      medical_history: 'permiso denegado',
       credential: 'permiso denegado',
+      hash: 'permiso denegado',
     });
   });
 });

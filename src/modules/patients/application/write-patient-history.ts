@@ -19,14 +19,6 @@ import { patientOf } from './patient-links';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Los cinco campos que la paciente puede tocar, en el nombre que viaja a la app. */
-export const PATIENT_FIELDS = [
-  'alergias',
-  'medicacion',
-  'embarazo_o_lactancia',
-  'antecedentes',
-  'tratamientos_previos',
-] as const;
 
 export type HistoryWriteResponse = {
   guardado: readonly string[];

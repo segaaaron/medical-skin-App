@@ -244,6 +244,12 @@ export type ErrorCode =
   | 'plan_desconocido'
   | 'correo_ya_tiene_cuenta'
   | 'consulta_no_existe'
+  // Los de `pacientes-consola.md`, 31 de octubre de 2026.
+  // `paciente_no_existe` NO se repite: ya existe en `pacientes.md` con la frase «Esa paciente
+  // no está en tu lista», que sirve igual aquí. Un código es contrato y no se duplica por un
+  // endpoint nuevo.
+  | 'historia_no_se_recoge_aqui'
+  | 'motivo_necesario'
   | 'fallo_de_servicio';
 
 type Entry = {
@@ -1280,6 +1286,28 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: 'doctora.correo',
   },
   consulta_no_existe: { status: 404, message: 'No encontramos esa consulta.', field: null },
+
+  // ---------------------------------------------------------------------------------
+  // `pacientes-consola.md` · 31 de octubre de 2026.
+  //
+  // `historia_no_se_recoge_aqui` existe en vez de ignorar el bloque en silencio, y esa es la
+  // diferencia que importa: ignorarlo deja a quien lo mandó creyendo que la alergia quedó
+  // guardada. El motivo no es de permisos sino de verdad del dato — cada campo guarda su
+  // `fuente`, y una alergia tecleada por soporte diría `fuente: 'doctor'`.
+  //
+  // `motivo_necesario` dice «queda registrado» a propósito: quien lo lee tiene que saber que
+  // esa frase la va a leer el doctor de esa paciente.
+  // ---------------------------------------------------------------------------------
+  historia_no_se_recoge_aqui: {
+    status: 400,
+    message: 'La historia clínica la llena la doctora. Quita ese bloque.',
+    field: 'antes_de_atenderla',
+  },
+  motivo_necesario: {
+    status: 400,
+    message: 'Escribe por qué necesitas abrir esta historia. Queda registrado.',
+    field: 'motivo',
+  },
 };
 
 /** El cuerpo exacto de _convenciones.md. Nada más y nada menos. */
@@ -1627,6 +1655,16 @@ export const FAILURE_PHRASES = {
   readTenant: 'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
   searchAccounts:
     'No pudimos buscar la cuenta. El servidor no respondió: puedes volver a intentarlo.',
+  platformPatients:
+    'No pudimos cargar las pacientes. El servidor no respondió: puedes volver a intentarlo.',
+  platformPatient:
+    'No pudimos cargar la ficha. El servidor no respondió: puedes volver a intentarlo.',
+  platformCreatePatient:
+    'No pudimos dar de alta a la paciente. El servidor no respondió. No se creó nada: puedes volver a intentarlo.',
+  platformHistory:
+    'No pudimos abrir la historia. El servidor no respondió: puedes volver a intentarlo.',
+  platformArchivePatient:
+    'No pudimos cambiar el estado de la ficha. El servidor no respondió: puedes volver a intentarlo.',
   resendPlatformAccess:
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
   liftAccessPause:

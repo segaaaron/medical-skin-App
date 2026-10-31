@@ -162,50 +162,11 @@ export function platformAccessMailBody(facts: PlatformDeliveryFacts): string {
   ].join('\n');
 }
 
-/** Lo que la frase del equipo necesita. Ni un dato clínico, igual que la de la paciente. */
-export type TeamDeliveryFacts = {
-  firstName: string;
-  email: string;
-  /** El nombre de la consulta a la que la dieron de alta: «Clínica Paz». */
-  practiceName: string;
-  temporaryPassword: string;
-  expiryText: string;
-};
+// AQUÍ VIVÍA EL CORREO DEL ALTA DE EQUIPO (`TeamDeliveryFacts` y `teamAccessMailBody`), y se
+// fue el 31 de octubre de 2026: quedó huérfano cuando se borró `POST /v1/team` con los tres
+// roles en inglés. Nadie lo llamaba desde entonces — una plantilla de correo viva que ningún
+// camino puede disparar es la que alguien reusa dentro de seis meses creyendo que está probada.
 
-/**
- * EL CORREO DEL ACCESO DEL EQUIPO · `POST /v1/team`. «El acceso del equipo sale solo por
- * correo: no hay `wa.me` aquí. La vía por WhatsApp existe porque muchas pacientes no abren
- * el correo; quien trabaja en la consulta sí.»
- *
- * ES UNA PLANTILLA MÁS, NO UN MECANISMO MÁS: el envío es el mismo `MailPort` y el asunto es
- * el mismo «Tu acceso a MedSkin». Lo que cambia es la primera frase, porque la de la
- * paciente habla de «tus tratamientos, tus cuidados y tus citas» y eso no es lo que una
- * recepcionista va a ver.
- *
- * El texto NO está en el contrato —`cuentas.md` escribe el de la paciente y el de WhatsApp,
- * no este— y está anotado para `producto`. No dice el rol ni nada clínico: un correo es lo
- * que se lee en la pantalla bloqueada de un teléfono.
- */
-export function teamAccessMailBody(facts: TeamDeliveryFacts): string {
-  return [
-    `Hola ${facts.firstName}, te dieron de alta en el equipo de ${facts.practiceName} en MedSkin.`,
-    '',
-    `Entra con ${facts.email} y esta contraseña:`,
-    facts.temporaryPassword,
-    '',
-    'Caduca en 72 horas y al entrar eliges la tuya.',
-    'medskin.app/entrar',
-  ].join('\n');
-}
-
-/**
- * El `wa.me` con el texto escapado. El número va SIN el `+` y sin signos, que es lo que
- * `wa.me` admite.
- *
- * El destino es una constante del producto, no una URL que venga del cliente: lo único que
- * el cliente aporta es el número, y ese sale de la ficha de SU paciente, ya validado como
- * E.164 (OWASP A10 · SSRF — y además este enlace no lo abre el servidor, lo abre la app).
- */
 export function whatsappUrl(phoneE164: string, text: string): string {
   const digits = phoneE164.replace(/\D/g, '');
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;

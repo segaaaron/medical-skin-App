@@ -546,22 +546,54 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     }).toEqual({ own: '0 filas', other_tenant: 'permiso denegado', read: 'permiso denegado' });
   });
 
-  it('el rol de plataforma no lee NADA de las cuatro tablas, que es el punto', async () => {
+  // ESTA PRUEBA DECÍA «el rol de plataforma no lee NADA de las cuatro tablas, que es el
+  // punto», y era verdad hasta el 31 de octubre de 2026. **El dueño lo decidió al revés** ese
+  // día: la consola ve pacientes, vínculos e historias (migración 0077). Se actualiza en vez
+  // de borrarse, porque la mitad que sigue cerrada es la que ahora hay que vigilar.
+  it('el rol de plataforma LEE pacientes e historias, y escribe en NINGUNA de las dos', async () => {
     expect({
       patient: await whatItSees(app, ctxPlatform, 'select id from patient'),
       patient_link: await whatItSees(app, ctxPlatform, 'select id from patient_link'),
       medical_history: await whatItSees(app, ctxPlatform, 'select id from medical_history'),
+      // La bitácora de CAMBIOS de la historia sigue cerrada: lo que se decidió es que soporte
+      // lea el expediente, no el rastro de quién lo editó dentro de la consulta.
       medical_history_audit: await whatItSees(app, ctxPlatform, 'select id from medical_history_audit'),
-      // Ni por el correo, que es lo que la consola sí tiene en `account`.
-      by_email: await whatItSees(app, ctxPlatform, 'select id from patient where email = $1', [
-        'paciente@prueba.local',
-      ]),
+      // DOS filas y no una, y el número es la prueba: este archivo siembra A y B, y la
+      // consola ve las dos. Cruzar inquilinos es lo que la distingue de todos los demás roles
+      // —no fija `medskin.practice_id` y su política es `current_user = 'app_platform'`—, así
+      // que un `1 fila` aquí significaría que el aislamiento se le aplicó por error.
     }).toEqual({
-      patient: 'permiso denegado',
-      patient_link: 'permiso denegado',
-      medical_history: 'permiso denegado',
+      patient: '2 filas',
+      patient_link: '2 filas',
+      medical_history: '2 filas',
       medical_history_audit: 'permiso denegado',
-      by_email: 'permiso denegado',
+    });
+
+    // Y LO QUE NO PUEDE, que es lo que esta prueba vigila a partir de hoy: escribir una
+    // historia por cualquiera de los tres caminos, y tocar de `patient` una columna que no sea
+    // de archivar. Su `GRANT` es de tres columnas y su política de `medical_history` es
+    // `FOR SELECT`, así que ni un `GRANT` añadido por error abriría la escritura.
+    expect({
+      escribir_historia: await whatItSees(
+        app, ctxPlatform, `update medical_history set notes = 'inventada'`,
+      ),
+      crear_historia: await whatItSees(
+        app, ctxPlatform, `insert into medical_history (practice_id, patient_id) values ($1, $2)`,
+        [A.practice, A.patient],
+      ),
+      borrar_historia: await whatItSees(app, ctxPlatform, 'delete from medical_history'),
+      renombrar_paciente: await whatItSees(
+        app, ctxPlatform, `update patient set first_name = 'Otra'`,
+      ),
+      borrar_paciente: await whatItSees(app, ctxPlatform, 'delete from patient'),
+      escribir_vinculo: await whatItSees(app, ctxPlatform, `update patient_link set status = 'activo'`),
+    }).toEqual({
+      escribir_historia: 'permiso denegado',
+      crear_historia: 'permiso denegado',
+      borrar_historia: 'permiso denegado',
+      renombrar_paciente: 'permiso denegado',
+      borrar_paciente: 'permiso denegado',
+      escribir_vinculo: 'permiso denegado',
     });
   });
 

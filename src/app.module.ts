@@ -13,6 +13,7 @@ import { PatientsModule } from './modules/patients/patients.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { RecoveryModule } from './modules/recovery/recovery.module';
 import { SessionModule } from './modules/session/session.module';
+import { PlatformPatientsModule } from './modules/platform-patients/module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import type { Config } from './shared/config/config';
 import { FailureLog } from './shared/failures/service-failure';
@@ -47,6 +48,7 @@ import { CONFIG, SharedModule } from './shared/shared.module';
     AccountsModule,
     SessionModule,
     TenantsModule,
+    PlatformPatientsModule,
   ],
   providers: [
     {

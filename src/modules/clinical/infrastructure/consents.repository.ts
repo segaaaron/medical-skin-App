@@ -12,7 +12,7 @@ import { withTenantContext, type TenantContext } from '../../../shared/db/tenant
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
 import type { ConsentPort, ConsentText } from '../domain/ports';
-import { wrongAnswers, type ConsentDraft } from '../domain/session';
+import type { ConsentDraft } from '../domain/session';
 
 type Caller = { accountId: string; practiceId: string | null; isPatient: boolean };
 
@@ -145,5 +145,3 @@ export class ConsentsRepository implements ConsentPort {
   }
 }
 
-/** La corrección vive en la base porque la clave no se puede leer desde aquí. */
-export const WRONG_ANSWERS_IN_DOMAIN = wrongAnswers;

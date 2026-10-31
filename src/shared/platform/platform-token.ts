@@ -79,6 +79,14 @@ export const PLATFORM_PERMISSIONS = [
   // sujeto, porque una cuenta puede ser de una paciente. Reusar el de consultas habría
   // concedido la segunda pregunta a todo el que tenía la primera sin que nadie lo decidiera.
   'plataforma:cuentas:buscar',
+  // Los tres de pacientes, decididos por el dueño el 31 de octubre de 2026. SEPARADOS y no
+  // uno solo, y esa separación es la única razón por la que puede existir una cuenta de
+  // soporte que administra y NO lee expedientes. Con un permiso único, «quien reenvía un
+  // acceso puede leer alergias» sería verdad para siempre y nadie lo habría decidido.
+  'plataforma:pacientes:leer',
+  'plataforma:pacientes:crear',
+  // El más caro de los tres, y por eso es propio: abre la historia clínica y NADA MÁS.
+  'plataforma:historia:leer',
   'plataforma:suplantar',
 ] as const;
 

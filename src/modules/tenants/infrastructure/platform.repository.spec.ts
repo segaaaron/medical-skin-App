@@ -603,11 +603,13 @@ describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
   });
 
   it('lo que este rol NO puede leer sigue cerrado, y por eso las dos consultas van por la función', async () => {
-    // Si alguien «simplifica» el repositorio contando fichas o leyendo `session.practice_id`
-    // a pelo, la ficha entera muere con «permiso denegado». Esto es lo que lo recuerda.
-    await expect(
-      read(ctxPlatform, 'select count(*) from patient where practice_id = $1', [FILE.practice]),
-    ).rejects.toThrow(/permission denied for table patient/i);
+    // Si alguien «simplifica» el repositorio leyendo `session.practice_id` a pelo, la ficha
+    // entera muere con «permiso denegado». Esto es lo que lo recuerda.
+    // CAMBIÓ EL 31 DE OCTUBRE DE 2026, decidido por el dueño: la consola pasa a ver
+    // pacientes, así que `patient` ya NO está cerrado (migración 0077). Esta prueba se
+    // actualiza en vez de borrarse, porque lo que de verdad vigila sigue vivo: que `session`
+    // y `credential` siguen cerrados, y que el recuento del plan va por la FUNCIÓN y no por
+    // un `count(*)` a pelo — la función existe porque `session.practice_id` no se alcanza.
     await expect(read(ctxPlatform, 'select practice_id from session limit 1')).rejects.toThrow(
       /permission denied for table session/i,
     );

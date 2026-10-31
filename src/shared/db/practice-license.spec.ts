@@ -180,10 +180,12 @@ describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
 });
 
 describe('la ficha de la consola · cuenta fichas sin leer ninguna (0015)', () => {
-  it('`app_platform` no lee `patient` ni con la función delante: de ella salen tres números y ni una fila', async () => {
-    await expect(read(ctxPlatform, 'select count(*) from patient where practice_id = $1', [B.practice])).rejects.toThrow(
-      /permission denied for table patient/i,
-    );
+  it('`app_platform` no alcanza `session`, y por eso los tres números van por la función', async () => {
+    // CAMBIÓ EL 31 DE OCTUBRE DE 2026, decidido por el dueño: la consola pasa a ver
+    // pacientes, así que `patient` ya NO está cerrado (migración 0077). Esta prueba se
+    // actualiza en vez de borrarse, porque lo que de verdad vigila sigue vivo: que `session`
+    // y `credential` siguen cerrados, y que el recuento del plan va por la FUNCIÓN y no por
+    // un `count(*)` a pelo — la función existe porque `session.practice_id` no se alcanza.
     await expect(read(ctxPlatform, 'select practice_id from session limit 1')).rejects.toThrow(
       /permission denied for table session/i,
     );
