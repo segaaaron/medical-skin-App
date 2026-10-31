@@ -117,8 +117,15 @@ async function seed(p: { practice: string; account: string; name: string }) {
 async function clean() {
   // Las consultas que el alta crea dentro de la prueba no tienen un `id` fijo: se buscan por
   // su nombre, que es el que esta prueba escribe.
+  //
+  // `Consultorio Con Matrícula` entra en la lista el 31 de octubre de 2026, y faltaba desde
+  // que se escribió esa prueba: la creaba y NADIE la borraba, así que cada corrida de la suite
+  // dejaba una fila viva. Se vio al querer el padrón local vacío para probar la consola — 22
+  // consultas de ese nombre, una por corrida. Si se añade otra prueba que cree una consulta,
+  // su nombre va aquí en el mismo commit.
   const { rows } = await owner.query<{ id: string }>(
-    `select id from practice where name in ('Clínica Nueva', 'Clínica Repetida')`,
+    `select id from practice
+      where name in ('Clínica Nueva', 'Clínica Repetida', 'Consultorio Con Matrícula')`,
   );
   const created = rows.map((row) => row.id);
   await owner.query('delete from practice where id = any($1::uuid[])', [[...SEEDED, ...created]]);
