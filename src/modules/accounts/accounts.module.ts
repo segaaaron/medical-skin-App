@@ -19,6 +19,7 @@ import { ChangeOwnPassword } from './application/change-password';
 import { DeleteOwnAccount } from './application/delete-own-account';
 import { ReadOwnAccount } from './application/read-own-account';
 import { LiftAccessPause } from './application/lift-access-pause';
+import { SearchAccounts } from './application/search-accounts';
 import { RegisterPatient } from './application/register-patient';
 import { ResendPlatformAccess } from './application/resend-platform-access';
 import { SendPatientAccess } from './application/send-patient-access';
@@ -164,6 +165,14 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         mail: PlatformAccessMail,
       ) => new ResendPlatformAccess(repo, passwords, clock, mail),
       inject: [ConsoleRepository, Argon2Passwords, SystemClock, PlatformAccessMail],
+    },
+    {
+      // La búsqueda por correo: solo el repositorio de consola. No lleva reloj ni correo —es
+      // una lectura y no manda nada— y no lleva la etiqueta de región, porque su respuesta no
+      // la dibuja.
+      provide: SearchAccounts,
+      useFactory: (repo: ConsoleRepository) => new SearchAccounts(repo),
+      inject: [ConsoleRepository],
     },
     {
       provide: LiftAccessPause,

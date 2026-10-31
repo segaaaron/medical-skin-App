@@ -226,8 +226,12 @@ describe('PlatformTokens · las reclamaciones', () => {
     const error = await rechazo(await acunar({ vida: -30 }));
     expect(error.code).toBe('token_de_plataforma_caducado');
     expect(error.status).toBe(401);
-    // «Nada. La consola pide otro token y repite la petición.»
-    expect(error.userMessage).toBe('');
+    // LLEVA FRASE desde el 31 de octubre de 2026. Antes iba vacía, porque el contrato decía
+    // «Nada. La consola pide otro token y repite la petición» — y eso era imposible: no hay
+    // refresco de token de consola, así que «pedir otro» es volver a teclear la contraseña, y
+    // hacerlo en silencio obligaría a la consola a guardar las credenciales. A los 15 minutos
+    // la pantalla se quedaba sin nada que decir.
+    expect(error.userMessage).toBe('Tu sesión de consola caducó. Entra otra vez.');
   });
 
   it('un token más viejo que los 15 minutos del contrato no pasa aunque su `exp` sea largo', async () => {

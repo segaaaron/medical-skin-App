@@ -1228,9 +1228,15 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // en una pantalla interna, así que la frase puede ser técnica: «aquí no hay nada que
   // proteger de quien pregunta». Es la única familia del catálogo donde eso vale.
   //
-  // `token_de_plataforma_caducado` va con `mensaje` VACÍO y es lo que dice el contrato
-  // —«Nada. La consola pide otro token y repite la petición»—, igual que los tres del
-  // refresco: no hay refresco en la región y la pantalla no muestra texto.
+  // `token_de_plataforma_caducado` LLEVA FRASE desde el 31 de octubre de 2026, y antes iba
+  // con `mensaje` vacío porque el contrato decía «Nada. La consola pide otro token y repite la
+  // petición». Eso describía algo imposible: **no hay refresco de token de consola** y no va a
+  // haberlo, así que «pedir otro token» es volver a teclear la contraseña, y hacerlo en
+  // silencio obligaría a la consola a GUARDAR las credenciales — justo lo que no debe hacer.
+  // A los 15 minutos, que es el final normal de toda sesión de consola, la pantalla se quedaba
+  // sin nada que decir. Se queda como código aparte de su hermano aunque las dos frases lleven
+  // a la misma pantalla: distinguir «caducó» de «no es válido» es lo que permite ver si alguien
+  // manda tokens rotos o simplemente se le pasó la hora.
   //
   // `region_no_corresponde` lleva la región de destino dentro de la frase y la pone quien
   // lanza, con `datos.region`. Decir a qué región ir es correcto AQUÍ: es información
@@ -1241,7 +1247,11 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Tu sesión de consola no es válida. Vuelve a entrar.',
     field: null,
   },
-  token_de_plataforma_caducado: { status: 401, message: '', field: null },
+  token_de_plataforma_caducado: {
+    status: 401,
+    message: 'Tu sesión de consola caducó. Entra otra vez.',
+    field: null,
+  },
   region_no_corresponde: {
     status: 403,
     message: 'Ese token es de otra región. Abre la consola de {region}.',
@@ -1615,6 +1625,8 @@ export const FAILURE_PHRASES = {
   createTenant:
     'No pudimos crear la consulta. El servidor no respondió. No se creó nada: puedes volver a intentarlo.',
   readTenant: 'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
+  searchAccounts:
+    'No pudimos buscar la cuenta. El servidor no respondió: puedes volver a intentarlo.',
   resendPlatformAccess:
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
   liftAccessPause:

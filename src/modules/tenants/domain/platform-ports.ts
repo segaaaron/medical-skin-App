@@ -158,6 +158,11 @@ export type TenantFile = {
   owner: {
     accountId: string;
     email: string;
+    /**
+     * Nulo cuando no lo dio: es opcional en el alta. Legible desde la 0075, que le dio a este
+     * rol el `SELECT (phone)` que le faltaba — lo escribía y no lo podía volver a leer.
+     */
+    phone: string | null;
     status: string;
     lockedUntil: Date | null;
     liveSessions: number;

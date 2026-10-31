@@ -424,3 +424,32 @@ export interface PlatformAccessPort {
 export interface PlatformAccessMailPort {
   sendAccess(facts: PlatformDeliveryFacts): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------------------
+// GET /v1/platform/accounts?correo= · `cuentas.md`, 31 de octubre de 2026
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Un renglón de la búsqueda, con las columnas que `app_platform` puede leer de `account`.
+ *
+ * **El teléfono NO está aunque este rol ya pueda leerlo** (migración 0075): esta lectura barre
+ * `account` por correo, así que puede devolver la fila de una paciente, y un campo de más aquí
+ * es un campo de más sobre ella. El teléfono viaja en la ficha de la consulta, que es de la
+ * dueña y es donde soporte lo necesita.
+ */
+export type ConsoleAccountRow = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  lockedUntil: Date | null;
+};
+
+export interface ConsoleAccountSearchPort {
+  /**
+   * Correo EXACTO, comparado como `citext`: cero filas o una, nunca más —lo garantiza
+   * `account_email_uq`—. No es un `ilike` a propósito: un `%paz%` sobre `account` devolvería un
+   * listado de personas de MedSkin con dos caracteres, y ahí dentro hay pacientes.
+   */
+  findByEmail(p: { actor: ConsoleActor; email: string }): Promise<readonly ConsoleAccountRow[]>;
+}

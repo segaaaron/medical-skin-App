@@ -42,6 +42,8 @@ export type TenantFileResponse = {
   doctora: {
     cuenta_id: string;
     correo: string;
+    /** Nulo cuando no lo dio. Legible por la consola desde la 0075. */
+    telefono: string | null;
     estado: string;
     pausa_hasta: string | null;
     sesiones_activas: number;
@@ -110,6 +112,7 @@ function view(
     doctora: {
       cuenta_id: owner.accountId,
       correo: owner.email,
+      telefono: owner.phone,
       estado: owner.status,
       pausa_hasta: owner.lockedUntil?.toISOString() ?? null,
       sesiones_activas: owner.liveSessions,

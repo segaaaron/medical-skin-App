@@ -467,6 +467,13 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.readTenant,
   },
+  // Permiso PROPIO y no `plataforma:consultas:leer`: quien mira el padrón responde «qué
+  // consultas hay», y esto responde «esta persona tiene cuenta en MedSkin» — otro oráculo y
+  // sobre otra clase de sujeto, porque una cuenta puede ser de una paciente.
+  'GET /v1/platform/accounts': {
+    platformPermission: 'plataforma:cuentas:buscar',
+    failurePhrase: FAILURE_PHRASES.searchAccounts,
+  },
   'POST /v1/platform/accounts/:account_id/access/resend': {
     platformPermission: 'plataforma:acceso:reenviar',
     failurePhrase: FAILURE_PHRASES.resendPlatformAccess,

@@ -1,0 +1,23 @@
+-- =======================================================================================
+-- LA CONSOLA PUEDE LEER EL TELÉFONO DE LA DUEÑA · 31 de octubre de 2026
+--
+-- Tenía `GRANT INSERT (phone)` sobre `account` —lo escribe en el alta de una consulta— y NO
+-- tenía `SELECT`. O sea que la consola guardaba un teléfono que después no podía volver a ver,
+-- y pedirlo en la consulta de la ficha la mataba entera con «permiso denegado»: un privilegio
+-- de columna se comprueba ANTES que la política, así que no es un campo que sale nulo, es la
+-- lectura completa que se cae.
+--
+-- POR QUÉ SE CONCEDE, decidido por el dueño: ese teléfono se recoge en el alta precisamente
+-- porque si el correo de bienvenida no sale **no hay otra forma de avisarle**, y quien tiene
+-- que llamarla es soporte. Es el dato de contacto de la DUEÑA de la consulta, no de una
+-- paciente, y la consola ya ve su correo: no abre ninguna puerta nueva sobre la relación
+-- médico-paciente.
+--
+-- LO QUE ESTO NO CONCEDE, y es la línea: ni un teléfono de paciente. `patient` no tiene
+-- política ni `GRANT` para `app_platform` y sigue sin tenerlos. Lo que se amplía es UNA columna
+-- de `account`, que pasa de cinco columnas legibles a seis.
+--
+-- `REVOKE` no hace falta y además sería dañino: en PostgreSQL un `REVOKE SELECT` de tabla borra
+-- también los privilegios de columna, y aquí solo se añade uno (napkin §1.7).
+-- =======================================================================================
+GRANT SELECT ("phone") ON "account" TO app_platform;

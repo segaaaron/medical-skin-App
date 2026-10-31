@@ -38,6 +38,7 @@ const FICHA: TenantFile = {
   owner: {
     accountId: '22222222-2222-4222-8222-222222222222',
     email: 'andrea.paz@clinicapaz.bo',
+    phone: '+59171234567',
     status: 'activa',
     lockedUntil: null,
     liveSessions: 2,
@@ -77,6 +78,9 @@ describe('GET /v1/platform/tenants/{id}', () => {
       doctora: {
         cuenta_id: FICHA.owner?.accountId,
         correo: 'andrea.paz@clinicapaz.bo',
+        // Legible desde la 0075: antes la consola lo ESCRIBÍA en el alta y no lo podía volver
+        // a leer, porque tenía `INSERT (phone)` y no `SELECT`.
+        telefono: '+59171234567',
         estado: 'activa',
         pausa_hasta: null,
         sesiones_activas: 2,
@@ -109,6 +113,12 @@ describe('GET /v1/platform/tenants/{id}', () => {
       matricula: null,
       declarada_en: null,
     });
+  });
+
+  it('sin teléfono declarado viaja nulo: es opcional en el alta', async () => {
+    const { caso } = armar({ ...FICHA, owner: { ...FICHA.owner!, phone: null } });
+    const respuesta = await caso.run(PRACTICE, ACTOR);
+    expect(respuesta.doctora.telefono).toBeNull();
   });
 
   it('una consulta sin sesiones vivas devuelve las dos versiones nulas, que también es una respuesta', async () => {

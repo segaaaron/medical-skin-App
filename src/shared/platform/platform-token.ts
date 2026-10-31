@@ -73,6 +73,12 @@ export const PLATFORM_PERMISSIONS = [
   // el que alguien reutiliza en seis meses sin leer para qué era.
   'plataforma:acceso:reenviar',
   'plataforma:pausa:levantar',
+  // `GET /v1/platform/accounts?correo=`, nuevo el 31 de octubre de 2026. PROPIO y no
+  // `plataforma:consultas:leer`: quien mira el padrón responde «qué consultas hay», y esto
+  // responde «esta persona tiene cuenta en MedSkin» — otro oráculo y sobre otra clase de
+  // sujeto, porque una cuenta puede ser de una paciente. Reusar el de consultas habría
+  // concedido la segunda pregunta a todo el que tenía la primera sin que nadie lo decidiera.
+  'plataforma:cuentas:buscar',
   'plataforma:suplantar',
 ] as const;
 

@@ -71,6 +71,7 @@ type FileRow = {
 
 type OwnerRow = {
   email: string;
+  phone: string | null;
   status: string;
   locked_until: Date | null;
   live_sessions: string;
@@ -273,9 +274,11 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
   }
 
   /**
-   * La dueña, en TRES columnas: «la consola ve correo, rol, estado y pausa», literal. Ni
-   * nombre, ni apellido, ni celular, ni región —no los necesita para reenviar un acceso ni
-   * para levantar una pausa, y lo que no se puede leer no se filtra—.
+   * La dueña, en las columnas que este rol puede leer. **El celular entra el 31 de octubre de
+   * 2026** (migración 0075): soporte va a llamarla, y ese teléfono se recoge en el alta
+   * precisamente porque si el correo de bienvenida no sale no hay otra forma de avisarle.
+   * Siguen fuera el nombre, el apellido y la región: no se necesitan para reenviar un acceso ni
+   * para levantar una pausa, y lo que no se puede leer no se filtra.
    *
    * Las sesiones vivas se cuentan por `account_id`, que es la primera columna de
    * `session_account_active_idx (account_id, last_seen_at DESC) WHERE revoked_at IS NULL`.
@@ -283,7 +286,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
    */
   private async readOwner(c: PoolClient, accountId: string): Promise<TenantFile['owner']> {
     const { rows } = await c.query<OwnerRow>(
-      `select a.email::text as email, a.status, a.locked_until,
+      `select a.email::text as email, a.phone, a.status, a.locked_until,
               (select count(*) from session s
                 where s.account_id = a.id and s.revoked_at is null) as live_sessions
          from account a
@@ -296,6 +299,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
     return {
       accountId,
       email: row.email,
+      phone: row.phone,
       status: row.status,
       lockedUntil: row.locked_until,
       liveSessions: Number(row.live_sessions),

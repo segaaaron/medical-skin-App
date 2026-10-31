@@ -14,14 +14,17 @@
 //     aunque alguien quiera.
 //   · `patient`, `patient_link`, `medical_history` — nada clínico alcanza a plataforma nunca.
 //     De ahí que el correo del reenvío no pueda nombrar a ninguna doctora.
-//   · de `account`, cuatro columnas: «correo, rol, estado y pausa», literal. Ni nombre, ni
-//     apellido, ni celular. Lo que no se puede leer no se filtra.
+//   · de `account`, las columnas de «correo, rol, estado y pausa», más el celular desde la
+//     0075 —soporte llama a la dueña, y ese teléfono se recoge en el alta justo para eso—. Ni
+//     nombre ni apellido. Lo que no se puede leer no se filtra.
 
 import type { Pool, PoolClient } from 'pg';
 
 import { FAILURE_PHRASES, ServiceFailure } from '../../../shared/contract/error-catalog';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type {
+  ConsoleAccountRow,
+  ConsoleAccountSearchPort,
   ConsoleActor,
   PlatformAccessPort,
   PlatformResendOutcome,
@@ -31,8 +34,47 @@ function contextOf(actor: ConsoleActor): TenantContext {
   return { role: 'app_platform', accountId: actor.subject };
 }
 
-export class ConsoleRepository implements PlatformAccessPort {
+export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSearchPort {
   constructor(private readonly pool: Pool) {}
+
+  /**
+   * `GET /v1/platform/accounts?correo=` · la búsqueda por correo EXACTO.
+   *
+   * `$1::citext` y no `lower(a.email) = lower($1)`: la columna ES `citext`, así que la
+   * comparación ya ignora mayúsculas y **entra por `account_email_uq`**. Bajarla a `lower()`
+   * desactivaría ese índice y convertiría la búsqueda en un recorrido de la tabla entera.
+   *
+   * Las columnas van UNA POR UNA, como en todo lo que corre con este rol: un privilegio de
+   * columna se comprueba antes que la política, así que un `select *` aquí es «permiso
+   * denegado» — y eso es lo que mantiene honesta la lista de lo que soporte puede ver.
+   */
+  async findByEmail(p: {
+    actor: ConsoleActor;
+    email: string;
+  }): Promise<readonly ConsoleAccountRow[]> {
+    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
+      const { rows } = await c.query<{
+        id: string;
+        email: string;
+        role: string;
+        status: string;
+        locked_until: Date | null;
+      }>(
+        `select a.id, a.email::text as email, a.role, a.status, a.locked_until
+           from account a
+          where a.email = $1::citext
+          limit 1`,
+        [p.email],
+      );
+      return rows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+        lockedUntil: row.locked_until,
+      }));
+    });
+  }
 
   async resend(p: {
     actor: ConsoleActor;
