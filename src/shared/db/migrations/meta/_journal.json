@@ -547,6 +547,13 @@
       "when": 1793404137277,
       "tag": "0077_la_consola_ve_pacientes",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793404137278,
+      "tag": "0078_los_permisos_de_pacientes_a_quien_toca",
+      "breakpoints": true
     }
   ]
 }
