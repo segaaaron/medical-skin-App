@@ -8,8 +8,13 @@ import type { NextStep, Role } from '../../../shared/contract/session';
 export type NextStepInput = {
   /** La credencial sigue siendo la temporal, o se acaba de recuperar. */
   passwordIsTemporary: boolean;
-  /** `license.status` de su consulta. Nulo para una paciente. */
-  licenseStatus: string | null;
+  /**
+   * «¿Declaró su matrícula?», que es `license.license_number IS NOT NULL`. Era
+   * `licenseStatus: string | null` con los cuatro estados de la revisión manual, y la
+   * revisión se fue (migración 0072). `false` para una paciente, que no tiene consulta — y no
+   * la manda a ninguna pantalla porque `role === 'patient'` sale antes.
+   */
+  licenseDeclared: boolean;
   /** Las tres tareas de `PrimerDia` terminadas, o la lista cerrada por ella. */
   firstDayDone: boolean;
 };
@@ -28,7 +33,12 @@ export type NextStepInput = {
 export function resolveNextStep(role: Role, facts: NextStepInput): NextStep {
   if (facts.passwordIsTemporary) return 'contrasena_nueva';
   if (role === 'patient') return 'inicio';
-  if (facts.licenseStatus === 'sin_enviar') return 'licencia';
+  // «¿Declaró su matrícula?», y NO «¿en qué estado está su revisión?». Era
+  // `licenseStatus === 'sin_enviar'`, y ese estado se fue con la revisión manual (0072).
+  // El paso se queda porque lo que promete sigue siendo verdad: quien no la declaró acaba en
+  // esa pantalla. Lo que ya no pasa es que una doctora que SÍ la declaró se quede ahí
+  // esperando a que alguien la apruebe.
+  if (!facts.licenseDeclared) return 'licencia';
   if (!facts.firstDayDone) return 'primer_dia';
   return 'inicio';
 }

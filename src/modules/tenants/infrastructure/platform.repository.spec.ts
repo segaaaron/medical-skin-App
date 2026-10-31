@@ -7,15 +7,19 @@
 // `withTenantContext()`. En ningún momento se desactiva RLS.
 //
 // Lo que NO se repite aquí porque ya está probado en otro archivo: que la fila de `license`
-// nace con la consulta (0015), que la decisión mueve el estado con un `UPDATE` acotado, y que
-// `app_platform` no lee `patient` ni `session.practice_id`. Lo que sí se comprueba es que
-// ESTE código no los nombra: las dos consultas que los necesitan van por la función.
+// nace con la consulta (0015) y que `app_platform` no lee `patient` ni `session.practice_id`.
+// Lo que sí se comprueba es que ESTE código no los nombra: las dos consultas que los
+// necesitan van por la función.
+//
+// SE FUERON DE AQUÍ, con la revisión manual de licencias (migración 0072): el describe entero
+// de `POST /{id}/license/decision`, su carrera de dos decisiones simultáneas, el filtro por
+// estado de la búsqueda y el describe de la bandeja `GET /v1/platform/licenses`.
 
 import { Pool, type QueryResultRow } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
-import type { CreatedTenant, DecidedLicense, PlatformActor } from '../domain/platform-ports';
+import type { CreatedTenant, PlatformActor } from '../domain/platform-ports';
 import { PlatformRepository, fingerprintOf } from './platform.repository';
 
 const ownerUrl =
@@ -29,8 +33,7 @@ const HASH =
 
 const ACTOR: PlatformActor = {
   // `sub` es un uuid y es lo que se fija en `medskin.account_id`: no hay fila en `account`
-  // detrás, y por eso `license.reviewed_by` y `access_audit.actor_account_id` no tienen clave
-  // foránea.
+  // detrás, y por eso `access_audit.actor_account_id` no tiene clave foránea.
   subject: 'cccccccc-0000-4000-8000-00000000000f',
   label: 'Soporte MedSkin',
   region: 'latam',
@@ -43,30 +46,24 @@ const FILE = {
   practice: 'cccccccc-0000-4000-8000-00000000000b',
   account: 'cccccccc-0000-4000-8000-00000000001b',
 };
-/** La de la decisión: nace en `en_revision`. */
-const REVIEW = {
+/**
+ * Una segunda consulta, para que la búsqueda y su cursor tengan más de una fila que atravesar.
+ *
+ * ERAN TRES MÁS: `REVIEW` nacía `en_revision`, `UNSENT` en `sin_enviar` para el `409
+ * licencia_sin_enviar`, y `RACE` existía solo para la carrera de dos decisiones simultáneas.
+ * Las tres se sembraban por un estado de licencia que ya no existe.
+ */
+const OTHER = {
   practice: 'cccccccc-0000-4000-8000-00000000000c',
   account: 'cccccccc-0000-4000-8000-00000000001c',
 };
-/** La que nunca mandó su licencia: el `409 licencia_sin_enviar`. */
-const UNSENT = {
-  practice: 'cccccccc-0000-4000-8000-00000000000d',
-  account: 'cccccccc-0000-4000-8000-00000000001d',
-};
 
-/** La de la carrera de decisiones: propia, para no moverle el estado a las otras pruebas. */
-const RACE = {
-  // El último carácter decide el correo de su dueña en `seed()`, así que es distinto del de
-  // las otras tres: con `c` chocaba con `REVIEW` contra `account_email_uq`.
-  practice: 'cccccccc-0000-4000-8000-0000000000a9',
-  account: 'cccccccc-0000-4000-8000-0000000001a9',
-};
-
-const SEEDED = [FILE.practice, REVIEW.practice, UNSENT.practice, RACE.practice];
+const SEEDED = [FILE.practice, OTHER.practice];
 
 const owner = new Pool({ connectionString: ownerUrl, max: 1 });
-// `max: 2` y no 1: la prueba de concurrencia abre DOS transacciones a la vez, y con una sola
-// conexión la segunda esperaría a que la primera la suelte en vez de competir por la clave.
+// `max: 2` y no 1: la prueba de concurrencia del alta abre DOS transacciones a la vez, y con
+// una sola conexión la segunda esperaría a que la primera la suelte en vez de competir por la
+// clave.
 const app = new Pool({ connectionString: appUrl, max: 2 });
 const repository = new PlatformRepository(app, 'America/La_Paz');
 
@@ -80,7 +77,11 @@ async function read<T extends QueryResultRow>(
   return withTenantContext(app, context, async (c) => (await c.query<T>(sql, params)).rows);
 }
 
-async function seed(p: { practice: string; account: string; name: string; licenseStatus: string }) {
+/**
+ * Sin `licenseStatus`: la licencia no tiene estado desde la 0072. Lo que se siembra son los
+ * tres datos declarados y su fecha, que es todo lo que esa fila guarda.
+ */
+async function seed(p: { practice: string; account: string; name: string }) {
   await owner.query(
     `insert into practice (id, name, region, country, time_zone, currency, plan, patient_limit,
                            internal_note, created_at)
@@ -107,12 +108,9 @@ async function seed(p: { practice: string; account: string; name: string; licens
     p.practice,
   ]);
   await owner.query(
-    `insert into license (practice_id, status, practice_country, specialty, license_number,
-                          credential_key, declaration_accepted, terms_accepted, submitted_at,
-                          response_estimated_at)
-     values ($1, $2, 'BO', 'medicina_estetica', '48921', 'lic/x/4f2a.pdf', true, true,
-             now() - interval '1 day', now() + interval '1 day')`,
-    [p.practice, p.licenseStatus],
+    `insert into license (practice_id, practice_country, specialty, license_number, declared_at)
+     values ($1, 'BO', 'medicina_estetica', '48921', now() - interval '1 day')`,
+    [p.practice],
   );
 }
 
@@ -136,18 +134,8 @@ async function clean() {
 
 beforeAll(async () => {
   await clean();
-  await seed({ ...FILE, name: 'Clínica Paz', licenseStatus: 'verificada' });
-  await owner.query(
-    `update license set decided_at = now(), reviewed_by = $2 where practice_id = $1`,
-    [FILE.practice, ACTOR.subject],
-  );
-  await seed({ ...REVIEW, name: 'Clínica En Revisión', licenseStatus: 'en_revision' });
-  await seed({ ...UNSENT, name: 'Clínica Sin Enviar', licenseStatus: 'sin_enviar' });
-  await seed({ ...RACE, name: 'Clínica De La Carrera', licenseStatus: 'en_revision' });
-  await owner.query(
-    `update license set submitted_at = null, response_estimated_at = null where practice_id = $1`,
-    [UNSENT.practice],
-  );
+  await seed({ ...FILE, name: 'Clínica Paz' });
+  await seed({ ...OTHER, name: 'Clínica Segunda' });
 
   // Tres fichas activas y una archivada: el recuento del plan es de tres, el MISMO que ve la
   // doctora (las archivadas no cuentan contra el límite).
@@ -180,7 +168,7 @@ afterAll(async () => {
 });
 
 describe('POST /v1/platform/tenants · contra la función del alta', () => {
-  it('los tres datos de la licencia que recogió la consola quedan en la fila, en `sin_enviar`', async () => {
+  it('los tres datos de la licencia que recogió la consola quedan en la fila', async () => {
     // Decidido por el dueño el 30 de octubre de 2026: el formulario del alta pregunta lo
     // mismo que la app le preguntará después a la doctora, así que se recoge una vez.
     const admission = await repository.create({
@@ -216,17 +204,11 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
     const creada = admission.served?.response as CreatedTenant;
 
     const { rows } = await owner.query<{
-      status: string;
       practice_country: string | null;
       specialty: string | null;
       license_number: string | null;
-      credential_key: string | null;
-      declaration_accepted: boolean | null;
-      terms_accepted: boolean | null;
     }>(
-      `select status, practice_country, specialty, license_number, credential_key,
-              declaration_accepted, terms_accepted
-         from license where practice_id = $1`,
+      `select practice_country, specialty, license_number from license where practice_id = $1`,
       [creada.practiceId],
     );
 
@@ -235,15 +217,13 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
     expect(licencia?.specialty).toBe('dermatologia');
     expect(licencia?.license_number).toBe('MP-98765');
 
-    // Y LA LÍNEA QUE NO SE CRUZA: sigue `sin_enviar`, sin credencial y sin aceptaciones.
-    // Una fila en `en_revision` sin documento es una bandeja que miente.
-    expect(licencia?.status).toBe('sin_enviar');
-    expect(licencia?.credential_key).toBeNull();
-    expect(licencia?.declaration_accepted).not.toBe(true);
-    expect(licencia?.terms_accepted).not.toBe(true);
+    // AQUÍ SE COMPROBABA LA LÍNEA QUE NO SE CRUZABA: que la fila siguiera `sin_enviar`, sin
+    // credencial y sin las dos aceptaciones, para que la bandeja de revisión no la viera.
+    // Las cinco columnas se fueron con la revisión, así que no hay línea que vigilar: lo que
+    // la consola recoge es lo que se guarda, y nadie lo aprueba.
   });
 
-  it('crea consulta, dueña, credencial y LICENCIA `sin_enviar` sin insertar la licencia', async () => {
+  it('crea consulta, dueña, credencial y la FILA DE LICENCIA sin insertarla a mano', async () => {
     const admission = await repository.create({
       actor: ACTOR,
       idempotency: { key: 'consola-1', bodyHash: 'huella-1' },
@@ -275,13 +255,14 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
     expect(admission.served?.status).toBe(201);
 
     // La fila de `license` la creó la FUNCIÓN (0015): aquí nadie la insertó, y antes de esa
-    // migración la dueña se quedaba sin poder enviar nada y nadie se enteraba.
-    const license = await read<{ status: string; submitted_at: Date | null }>(
+    // migración la dueña se quedaba sin poder declarar nada y nadie se enteraba. Nace VACÍA:
+    // este alta no mandó bloque de licencia, así que no hay matrícula ni fecha.
+    const license = await read<{ license_number: string | null; declared_at: Date | null }>(
       ctxPlatform,
-      'select status, submitted_at from license where practice_id = $1',
+      'select license_number, declared_at from license where practice_id = $1',
       [created?.practiceId],
     );
-    expect(license).toEqual([{ status: 'sin_enviar', submitted_at: null }]);
+    expect(license).toEqual([{ license_number: null, declared_at: null }]);
 
     // Y la dueña quedó atada a su consulta, que es lo que «una consulta sin dueña no existe»
     // significa en la base.
@@ -523,54 +504,14 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
     expect(rows[0]).toEqual({ consultas: '1', cuentas: '1', claves: '1' });
   });
 
-  it('la decisión de licencia no da `already_decided` a la perdedora', async () => {
-    // El `FOR UPDATE` serializa la licencia, NO la clave: sin `claim()` delante, la segunda
-    // esperaba, encontraba el estado ya movido y recibía el 409 que el propio contrato
-    // promete que no va a ver («la misma decisión dos veces no manda dos avisos»).
-    const decision = {
-      actor: ACTOR,
-      practiceId: RACE.practice,
-      decision: { status: 'verificada' as const, rejectionReason: null },
-      idempotency: { key: 'consola-carrera-decision', bodyHash: 'huella-decision' },
-      respond: (decided: DecidedLicense) => decided,
-    };
-
-    const [una, otra] = await Promise.all([
-      repository.decide(decision),
-      repository.decide(decision),
-    ]);
-
-    expect([una.outcome, otra.outcome]).toEqual(['decided', 'decided']);
-    expect([una.served?.replayed, otra.served?.replayed].filter(Boolean)).toHaveLength(1);
-    // Lo mismo, y aquí además MEDIDO: `jsonb` devolvió las claves en otro orden
-    // —`patientLimit` antes de `activePatients`—, así que ni comparar las dos cadenas sirve.
-    // Lo que se repite es la misma respuesta, no los mismos bytes.
-    expect(comoJson(una.served?.response)).toEqual(comoJson(otra.served?.response));
-
-    // Una sola decisión en la bitácora: no se mandaron dos avisos.
-    const { rows } = await owner.query<{ total: string }>(
-      `select count(*)::text as total from access_audit
-        where practice_id = $1 and action = 'license.decision'`,
-      [RACE.practice],
-    );
-    expect(rows[0]?.total).toBe('1');
-
-    // Y A LA DUEÑA SE LE AVISA, por los dos canales y una sola vez. Antes la decisión se
-    // escribía y la doctora no se enteraba de nada: abría la app y mirába si había cambiado.
-    const { rows: avisos } = await owner.query<{
-      channel: string;
-      subject_key: string;
-      data: Record<string, unknown>;
-    }>(
-      `select channel, subject_key, data from notification_outbox
-        where practice_id = $1 and kind = 'seguridad' order by channel`,
-      [RACE.practice],
-    );
-    expect(avisos.map((a) => a.channel)).toEqual(['correo', 'push']);
-    expect(avisos[0]?.subject_key).toBe('licencia_aprobada');
-    // Y el aviso no lleva el motivo de nada: solo el estado.
-    expect(avisos[0]?.data).toEqual({ estado: 'verificada' });
-  });
+  // AQUÍ ESTABA «la decisión de licencia no da `already_decided` a la perdedora», que probaba
+  // que `claim()` va DELANTE del `FOR UPDATE`: el `FOR UPDATE` serializa la licencia, no la
+  // clave, así que sin la reserva por delante la segunda decisión simultánea recibía el `409`
+  // que el contrato prometía que no iba a ver. Comprobaba también los dos avisos a la dueña,
+  // uno por canal, y que el aviso no llevara el motivo del rechazo.
+  //
+  // Se fue con la decisión. **Lo que probaba sigue probado** por la carrera del alta de
+  // arriba, que es el otro camino con `claim()` por delante y el mismo mecanismo.
 
   it('una clave CADUCADA no sirve una respuesta vieja, y se puede volver a usar', async () => {
     // Era el tercer defecto de este camino, y el peor: sin `expires_at > now()` la consola
@@ -611,7 +552,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
 });
 
 describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
-  it('sirve metadatos, estados y TRES números, sin leer una sola fila de paciente', async () => {
+  it('sirve metadatos, lo declarado y TRES números, sin leer una sola fila de paciente', async () => {
     const file = await repository.read({ actor: ACTOR, practiceId: FILE.practice });
 
     expect(file).toMatchObject({
@@ -629,7 +570,13 @@ describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
       // Las versiones de las sesiones VIVAS: la revocada traía `9.9.9`.
       appVersions: { ios: '2.4.1', android: '2.4.0' },
     });
-    expect(file?.license.status).toBe('verificada');
+    // Lo que el doctor declaró, sin estado: nadie lo aprueba (0072).
+    expect(file?.license).toMatchObject({
+      practiceCountry: 'BO',
+      specialty: 'medicina_estetica',
+      licenseNumber: '48921',
+    });
+    expect(file?.license.declaredAt).toBeInstanceOf(Date);
     expect(file?.owner).toMatchObject({
       accountId: FILE.account,
       email: `duena.${FILE.practice.slice(-1)}@plataforma.local`,
@@ -664,145 +611,8 @@ describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
   });
 });
 
-describe('POST /v1/platform/tenants/{id}/license/decision · sin función', () => {
-  const inReview = () => ({ status: 'verificada' as const, rejectionReason: null });
-
-  it('sin licencia es `no_license`, y `sin_enviar` es su propio resultado', async () => {
-    const missing = await repository.decide({
-      actor: ACTOR,
-      practiceId: '00000000-0000-4000-8000-000000000000',
-      decision: inReview(),
-      idempotency: { key: 'consola-3', bodyHash: 'huella-3' },
-      respond: (decided) => decided,
-    });
-    expect(missing.outcome).toBe('no_license');
-
-    const unsent = await repository.decide({
-      actor: ACTOR,
-      practiceId: UNSENT.practice,
-      decision: inReview(),
-      idempotency: { key: 'consola-4', bodyHash: 'huella-4' },
-      respond: (decided) => decided,
-    });
-    // El código nuevo del 28 de octubre: decirle «ya se decidió» a soporte le haría buscar
-    // una decisión que no existe.
-    expect(unsent.outcome).toBe('not_submitted');
-  });
-
-  it('verifica una vez, deja su fila de auditoría con quién decidió, y la segunda vez es `already_decided`', async () => {
-    const decided = await repository.decide({
-      actor: ACTOR,
-      practiceId: REVIEW.practice,
-      decision: inReview(),
-      idempotency: { key: 'consola-5', bodyHash: 'huella-5' },
-      respond: (result) => result,
-    });
-
-    expect(decided.outcome).toBe('decided');
-    expect(decided.served?.response).toMatchObject({
-      status: 'verificada',
-      activePatients: 0,
-      patientLimit: 300,
-    });
-
-    const license = await read<{ status: string; reviewed_by: string; decided_at: Date }>(
-      ctxPlatform,
-      'select status, reviewed_by, decided_at from license where practice_id = $1',
-      [REVIEW.practice],
-    );
-    // `reviewed_by` es el `sub` del token de plataforma: un `uuid` SIN clave foránea, porque
-    // esa persona no tiene fila en `account` y no vive en esta región.
-    expect(license[0]?.status).toBe('verificada');
-    expect(license[0]?.reviewed_by).toBe(ACTOR.subject);
-
-    const audit = await read<{
-      action: string;
-      actor_label: string;
-      actor_account_id: string;
-      data: unknown;
-    }>(
-      ctxPlatform,
-      `select action, actor_label, actor_account_id, data
-         from access_audit where practice_id = $1 and action = 'license.decision'`,
-      [REVIEW.practice],
-    );
-    expect(audit).toEqual([
-      {
-        action: 'license.decision',
-        actor_label: 'Soporte MedSkin',
-        actor_account_id: ACTOR.subject,
-        // La decisión, y NUNCA el motivo del rechazo: esta tabla la lee soporte entera.
-        data: { decision: 'verificada' },
-      },
-    ]);
-
-    const again = await repository.decide({
-      actor: ACTOR,
-      practiceId: REVIEW.practice,
-      decision: inReview(),
-      idempotency: { key: 'consola-6', bodyHash: 'huella-6' },
-      respond: (result) => result,
-    });
-    expect(again.outcome).toBe('already_decided');
-    // Y no hay una segunda línea de bitácora: la transacción del `409` se deshizo entera.
-    const audits = await read<{ count: string }>(
-      ctxPlatform,
-      `select count(*) as count from access_audit
-        where practice_id = $1 and action = 'license.decision'`,
-      [REVIEW.practice],
-    );
-    expect(audits).toEqual([{ count: '1' }]);
-  });
-
-  it('un rechazo escribe su motivo, y con su clave el reintento repite el 200 en vez del 409', async () => {
-    await owner.query(
-      `update license set status = 'en_revision', decided_at = null,
-                              rejection_reason = null where practice_id = $1`,
-      [REVIEW.practice],
-    );
-
-    const idempotency = { key: 'decision-1', bodyHash: fingerprintOf({ decision: 'rechazada' }) };
-    const decision = {
-      status: 'rechazada' as const,
-      rejectionReason: 'La credencial está vencida: manda la vigente.',
-    };
-
-    const first = await repository.decide({
-      actor: ACTOR,
-      practiceId: REVIEW.practice,
-      decision,
-      idempotency,
-      respond: (result) => result,
-    });
-    expect(first.outcome).toBe('decided');
-    expect(first.served?.replayed).toBe(false);
-
-    const license = await read<{ status: string; rejection_reason: string }>(
-      ctxPlatform,
-      'select status, rejection_reason from license where practice_id = $1',
-      [REVIEW.practice],
-    );
-    expect(license).toEqual([
-      { status: 'rechazada', rejection_reason: 'La credencial está vencida: manda la vigente.' },
-    ]);
-
-    // «La misma decisión dos veces no manda dos avisos»: con su clave, el reintento devuelve
-    // el 200 de la primera y no el `409` de «ya se decidió».
-    const again = await repository.decide({
-      actor: ACTOR,
-      practiceId: REVIEW.practice,
-      decision,
-      idempotency,
-      respond: (result) => result,
-    });
-    expect(again.outcome).toBe('decided');
-    expect(again.served?.replayed).toBe(true);
-    expect(again.served?.status).toBe(200);
-  });
-});
-
 // =========================================================================================
-// LAS DOS LECTURAS DE LISTA, CONTRA LA BASE · `consultas.md`, 30 de octubre de 2026
+// LA LECTURA DE LISTA, CONTRA LA BASE · `consultas.md`, 30 de octubre de 2026
 //
 // Lo que no se puede probar con dobles: que el cursor atraviese las filas sin saltarse ni
 // repetir ninguna, y que `ilike` encuentre por nombre y por correo.
@@ -811,7 +621,7 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
   it('encuentra por nombre y por correo de la doctora, y lo que no existe da lista vacía', async () => {
     const porNombre = await repository.searchTenants({
       actor: ACTOR,
-      search: { query: 'Clínica', license: null, cursor: null, perPage: 25 },
+      search: { query: 'Clínica', cursor: null, perPage: 25 },
     });
     expect(porNombre.length).toBeGreaterThan(0);
 
@@ -820,13 +630,13 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
 
     const porCorreo = await repository.searchTenants({
       actor: ACTOR,
-      search: { query: unCorreo ?? '', license: null, cursor: null, perPage: 25 },
+      search: { query: unCorreo ?? '', cursor: null, perPage: 25 },
     });
     expect(porCorreo.map((r) => r.id)).toContain(porNombre[0]?.id);
 
     const nada = await repository.searchTenants({
       actor: ACTOR,
-      search: { query: 'no-existe-esta-consulta', license: null, cursor: null, perPage: 25 },
+      search: { query: 'no-existe-esta-consulta', cursor: null, perPage: 25 },
     });
     expect(nada).toEqual([]);
   });
@@ -834,7 +644,7 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
   it('el cursor no se salta ni repite: página a página sale el mismo conjunto', async () => {
     const todas = await repository.searchTenants({
       actor: ACTOR,
-      search: { query: null, license: null, cursor: null, perPage: 100 },
+      search: { query: null, cursor: null, perPage: 100 },
     });
     expect(todas.length).toBeGreaterThan(1);
 
@@ -844,7 +654,7 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
     for (let i = 0; i < todas.length + 2; i += 1) {
       const pagina: readonly { id: string; createdAt: Date }[] = await repository.searchTenants({
         actor: ACTOR,
-        search: { query: null, license: null, cursor, perPage: 1 },
+        search: { query: null, cursor, perPage: 1 },
       });
       const fila = pagina[0];
       if (fila === undefined) break;
@@ -856,32 +666,8 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
     expect(new Set(recorrido).size).toBe(recorrido.length);
   });
 
-  it('filtra por estado de licencia, y la que no tiene fila cuenta como `sin_enviar`', async () => {
-    const sinEnviar = await repository.searchTenants({
-      actor: ACTOR,
-      search: { query: null, license: 'sin_enviar', cursor: null, perPage: 100 },
-    });
-    expect(sinEnviar.every((r) => r.licenseStatus === 'sin_enviar')).toBe(true);
-  });
-});
-
-describe('GET /v1/platform/licenses · la bandeja contra la base', () => {
-  it('trae la matrícula y la clave de la credencial, y ordena lo más viejo arriba', async () => {
-    const bandeja = await repository.listLicenses({
-      actor: ACTOR,
-      inbox: { state: 'sin_enviar', cursor: null, perPage: 100 },
-    });
-
-    expect(bandeja.length).toBeGreaterThan(0);
-    // Ascendente: lo que lleva más esperando va primero.
-    const fechas = bandeja.map((r) => r.cursorAt.getTime());
-    expect([...fechas].sort((a, b) => a - b)).toEqual(fechas);
-
-    // Y la fila que sembró el alta con matrícula la trae.
-    const conMatricula = bandeja.find((r) => r.licenseNumber === 'MP-98765');
-    expect(conMatricula?.specialty).toBe('dermatologia');
-    expect(conMatricula?.practiceCountry).toBe('BO');
-    // Sin credencial subida: es lo que hace que el enlace salga nulo.
-    expect(conMatricula?.credentialKey).toBeNull();
-  });
+  // AQUÍ ESTABA «filtra por estado de licencia», con `?licencia=sin_enviar`. Y debajo, el
+  // describe de `GET /v1/platform/licenses`, la bandeja: traía la matrícula, la clave de la
+  // credencial y el orden ascendente por fecha de envío. Los dos se fueron con la revisión
+  // manual el 30 de octubre de 2026: no hay estados que filtrar ni bandeja que servir.
 });

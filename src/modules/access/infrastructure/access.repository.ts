@@ -351,7 +351,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
     accountRole: AccountRole,
   ): Promise<NextStepFacts> {
     const sinConsulta: NextStepFacts = {
-      licenseStatus: null,
+      licenseDeclared: false,
       firstDayDone: true,
       practitionerRole: null,
       permissions: null,
@@ -364,7 +364,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
     // varias, y la que se quiere es la de QUIEN PREGUNTA, que sale de
     // `medskin_current_account()` y nunca del cuerpo ni de la URL (OWASP A01).
     const { rows } = await c.query<{
-      status: string | null;
+      license_declared: boolean | null;
       first_day_practice_data: boolean;
       first_day_schedule: boolean;
       first_day_first_treatment: boolean;
@@ -372,7 +372,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
       practitioner_role: string | null;
       permissions: string[] | null;
     }>(
-      `select l.status,
+      `select l.license_number is not null as license_declared,
               p.first_day_practice_data, p.first_day_schedule,
               p.first_day_first_treatment, p.first_day_dismissed,
               pr.role as practitioner_role, pr.permissions
@@ -387,7 +387,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
     const row = rows[0];
     if (row === undefined) return sinConsulta;
     return {
-      licenseStatus: row.status,
+      licenseDeclared: row.license_declared ?? false,
       firstDayDone:
         row.first_day_dismissed ||
         (row.first_day_practice_data &&

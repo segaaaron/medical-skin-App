@@ -45,7 +45,7 @@ const ROTADO: RotatedRefresh = {
   permissions: null,
   accountStatus: 'activa',
   passwordIsTemporary: false,
-  licenseStatus: 'verificada',
+  licenseDeclared: true,
   firstDayDone: true,
   refreshExpiresAt: DOCE_HORAS,
   graced: false,
@@ -56,7 +56,7 @@ const PACIENTE: RotatedRefresh = {
   practiceId: null,
   accountRole: 'patient',
   practitionerRole: null,
-  licenseStatus: null,
+  licenseDeclared: false,
   refreshExpiresAt: TREINTA_DIAS,
 };
 
@@ -74,7 +74,7 @@ function noRotado(verdict: Exclude<RefreshVerdict, 'rotated'>): RotatedRefresh {
     permissions: null,
     accountStatus: null,
     passwordIsTemporary: false,
-    licenseStatus: null,
+    licenseDeclared: false,
     firstDayDone: false,
     refreshExpiresAt: null,
     graced: false,
@@ -251,7 +251,7 @@ describe('POST /v1/session/refresh · el 200', () => {
   });
 
   it('`siguiente_paso` sale de los tres hechos que devuelve la base, no de una regla nueva', async () => {
-    const licencia = armar({ verdict: { ...ROTADO, licenseStatus: 'sin_enviar' } });
+    const licencia = armar({ verdict: { ...ROTADO, licenseDeclared: false } });
     expect((await licencia.caso.run({ refresco: 'r' })).siguiente_paso).toBe('licencia');
 
     const primerDia = armar({ verdict: { ...ROTADO, firstDayDone: false } });

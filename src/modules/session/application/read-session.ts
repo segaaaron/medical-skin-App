@@ -90,7 +90,7 @@ export class ReadSession {
       rol: caller.role,
       alcance: caller.scope,
       region: caller.region,
-      siguiente_paso: this.nextStep(caller, snapshot.licenseStatus, snapshot.firstDayDone),
+      siguiente_paso: this.nextStep(caller, snapshot.licenseDeclared, snapshot.firstDayDone),
       consulta:
         snapshot.practice === null
           ? null
@@ -108,17 +108,17 @@ export class ReadSession {
 
   /**
    * El MISMO campo y la misma lista que `POST /v1/access`, y por eso la misma función: «la
-   * app lo lee en cada arranque, no solo al entrar», así que una licencia aprobada con la
-   * app cerrada mueve a la doctora de `primer_dia` sin que ella haga nada.
+   * app lo lee en cada arranque, no solo al entrar», así que la matrícula declarada desde
+   * otro teléfono mueve a la doctora de `licencia` sin que haga nada en este.
    *
    * «La contraseña sigue siendo la temporal» se lee del ALCANCE y no de la credencial: el
    * alcance restringido ES esa situación, y leer `credential` otra vez sería una consulta
    * más en la llamada que tiene presupuesto de 3 s.
    */
-  private nextStep(caller: Caller, licenseStatus: string | null, firstDayDone: boolean): NextStep {
+  private nextStep(caller: Caller, licenseDeclared: boolean, firstDayDone: boolean): NextStep {
     return resolveNextStep(caller.role, {
       passwordIsTemporary: caller.scope === 'contrasena_temporal',
-      licenseStatus,
+      licenseDeclared,
       firstDayDone,
     });
   }

@@ -2,7 +2,8 @@
 //
 // Lo que se fija aquí:
 //   · NO HAY UN SOLO CAMPO DE PACIENTE en la respuesta, y `incidencias` nace vacía;
-//   · `verificada_en` solo cuando está verificada: con un rechazo sería una fecha que miente;
+//   · `licencia` son los TRES DATOS DECLARADOS y su fecha, sin `estado` ni `verificada_en`:
+//     MedSkin no verifica licencias (migración 0072);
 //   · un `id` sin consulta es `404` y una consulta sin dueña es 500 con su causa.
 
 import { describe, expect, it } from 'vitest';
@@ -27,7 +28,12 @@ const FICHA: TenantFile = {
   activePatients: 148,
   region: 'latam',
   createdOn: '2026-03-14',
-  license: { practiceCountry: 'BO', specialty: 'dermatologia', licenseNumber: 'MP-48921', status: 'verificada', decidedAt: new Date('2026-03-15T14:02:00Z') },
+  license: {
+    practiceCountry: 'BO',
+    specialty: 'dermatologia',
+    licenseNumber: 'MP-48921',
+    declaredAt: new Date('2026-03-15T14:02:00Z'),
+  },
   appVersions: { ios: '2.4.1', android: '2.4.0' },
   owner: {
     accountId: '22222222-2222-4222-8222-222222222222',
@@ -62,11 +68,10 @@ describe('GET /v1/platform/tenants/{id}', () => {
       region_etiqueta: 'Bolivia · bo-1',
       alta_en: '2026-03-14',
       licencia: {
-        estado: 'verificada',
-        verificada_en: '2026-03-15T14:02:00.000Z',
         pais_ejercicio: 'BO',
         especialidad: 'dermatologia',
         matricula: 'MP-48921',
+        declarada_en: '2026-03-15T14:02:00.000Z',
       },
       versiones_app: { ios: '2.4.1', android: '2.4.0' },
       doctora: {
@@ -84,31 +89,26 @@ describe('GET /v1/platform/tenants/{id}', () => {
     expect(pedido).toEqual([{ practiceId: PRACTICE, subject: ACTOR.subject }]);
   });
 
-  it('`verificada_en` es nula en todo lo que no está verificado', async () => {
-    for (const estado of ['sin_enviar', 'en_revision', 'rechazada']) {
-      const { caso } = armar({
-        ...FICHA,
-        // Un rechazo TIENE `decided_at`, y aun así `verificada_en` va nula: un campo que se
-        // llama así diciendo cuándo se rechazó sería falso.
-        license: {
-          status: estado,
-          decidedAt: new Date('2026-03-15T14:02:00Z'),
-          practiceCountry: 'BO',
-          specialty: 'dermatologia',
-          licenseNumber: 'MP-48921',
-        },
-      });
-      const respuesta = await caso.run(PRACTICE, ACTOR);
-      // Los tres datos viajan aunque la licencia esté rechazada: quien decidió tiene que
-      // poder volver a ver qué fue lo que rechazó.
-      expect(respuesta.licencia).toEqual({
-        estado,
-        verificada_en: null,
-        pais_ejercicio: 'BO',
-        especialidad: 'dermatologia',
-        matricula: 'MP-48921',
-      });
-    }
+  it('una consulta que no declaró nada devuelve los cuatro nulos, que también es una respuesta', async () => {
+    // No «sin_enviar» ni ningún otro estado inventado: no hay estado. Soporte ve cuatro
+    // casillas vacías, que es exactamente lo que hay.
+    const { caso } = armar({
+      ...FICHA,
+      license: {
+        practiceCountry: null,
+        specialty: null,
+        licenseNumber: null,
+        declaredAt: null,
+      },
+    });
+
+    const respuesta = await caso.run(PRACTICE, ACTOR);
+    expect(respuesta.licencia).toEqual({
+      pais_ejercicio: null,
+      especialidad: null,
+      matricula: null,
+      declarada_en: null,
+    });
   });
 
   it('una consulta sin sesiones vivas devuelve las dos versiones nulas, que también es una respuesta', async () => {

@@ -449,25 +449,23 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:consultas:crear',
     failurePhrase: FAILURE_PHRASES.createTenant,
   },
-  // Las dos lecturas de LISTA, con el permiso que ya existe: no se toca el token, ni el
-  // guardia, ni la lista cerrada de permisos. Son las primeras de consola que devuelven más
-  // de una consulta, y lo que las acota es el subconjunto de campos, no un permiso nuevo.
+  // LA lectura de LISTA, con el permiso que ya existe: no se toca el token, ni el guardia, ni
+  // la lista cerrada de permisos. Es la única de consola que devuelve más de una consulta, y
+  // lo que la acota es el subconjunto de campos, no un permiso nuevo.
+  //
+  // Aquí estaba también `GET /v1/platform/licenses`, la bandeja de revisión, y debajo
+  // `POST /v1/platform/tenants/:id/license/decision` con su permiso
+  // `plataforma:licencias:decidir`. Las dos se fueron con la revisión manual el 30 de octubre
+  // de 2026, y el permiso con ellas: un permiso vivo que ninguna ruta pide es el que alguien
+  // reutiliza en seis meses.
   'GET /v1/platform/tenants': {
     platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.searchTenants,
-  },
-  'GET /v1/platform/licenses': {
-    platformPermission: 'plataforma:consultas:leer',
-    failurePhrase: FAILURE_PHRASES.listLicenses,
   },
 
   'GET /v1/platform/tenants/:id': {
     platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.readTenant,
-  },
-  'POST /v1/platform/tenants/:id/license/decision': {
-    platformPermission: 'plataforma:licencias:decidir',
-    failurePhrase: FAILURE_PHRASES.decideLicense,
   },
   'POST /v1/platform/accounts/:account_id/access/resend': {
     platformPermission: 'plataforma:acceso:reenviar',

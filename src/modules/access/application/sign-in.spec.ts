@@ -125,7 +125,7 @@ function armar(opciones: {
       pasos.push('sesion:abrir');
       return Promise.resolve({
         sessionId: SESION,
-        licenseStatus: 'aprobada',
+        licenseDeclared: true,
         firstDayDone: true,
         practitionerRole: 'doctor' as const,
         permissions: null,
@@ -133,7 +133,7 @@ function armar(opciones: {
     },
     nextStepFacts: () =>
       Promise.resolve({
-        licenseStatus: 'aprobada',
+        licenseDeclared: true,
         firstDayDone: true,
         practitionerRole: 'doctor' as const,
         permissions: null,

@@ -1,4 +1,10 @@
-// El repositorio de los TRES endpoints de consola de `consultas.md`.
+// El repositorio de los endpoints de consola de `consultas.md`: el alta, la ficha y la
+// búsqueda.
+//
+// TENÍA DOS MÁS HASTA HOY: `decide()`, la decisión de la licencia revisada a mano, y
+// `listLicenses()`, la bandeja de lo que esperaba. Se fueron el 30 de octubre de 2026 con la
+// revisión manual, que el dueño descartó: MedSkin no es una asociación médica ni un inspector
+// de salud, así que no verifica licencias y no hay nada que decidir ni bandeja que servir.
 //
 // `app_platform` y `withTenantContext()`, como todo lo demás. El contexto que se fija es
 // `medskin.account_id` = el `sub` del token de plataforma, y eso **no crea ninguna fila en
@@ -30,22 +36,17 @@ import type {
   Admission,
   AdmissionVerdict,
   CreatedTenant,
-  DecidedLicense,
-  Decision,
-  DecisionResult,
   IdempotencyRecord,
-  LicenseDecisionPort,
   NewOwner,
   NewPractice,
   PlatformActor,
   Served,
   TenantAdmissionPort,
-  LicenseRow,
   TenantFile,
   TenantFilePort,
   TenantRow,
 } from '../domain/platform-ports';
-import type { ConsoleSearch, LicenseInbox } from '../domain/console-search';
+import type { ConsoleSearch } from '../domain/console-search';
 import type { ConsoleLicenseDraft } from '../domain/rules';
 
 type StatsRow = {
@@ -62,11 +63,10 @@ type FileRow = {
   region: string;
   created_on: string;
   owner_account_id: string | null;
-  license_status: string | null;
-  decided_at: Date | null;
   practice_country: string | null;
   specialty: string | null;
   license_number: string | null;
+  license_declared_at: Date | null;
 };
 
 type OwnerRow = {
@@ -88,17 +88,7 @@ class AdmissionRejected extends Error {
   }
 }
 
-/** Lo mismo para la decisión: los tres casos que la base distingue deshacen la transacción. */
-class DecisionRejected extends Error {
-  constructor(readonly outcome: 'no_license' | 'not_submitted' | 'already_decided') {
-    super(`la decisión no pasó: ${outcome}`);
-    this.name = 'DecisionRejected';
-  }
-}
-
-export class PlatformRepository
-  implements TenantAdmissionPort, TenantFilePort, LicenseDecisionPort
-{
+export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
   constructor(
     private readonly pool: Pool,
     /** La zona del despliegue: `alta_en` es una fecha de calendario, no un instante. */
@@ -152,7 +142,7 @@ export class PlatformRepository
         if (practice === undefined) throw new Error('el INSERT de practice no devolvió fila');
 
         // La cuenta de la dueña, su credencial temporal, su fila de `practitioner`, el
-        // vínculo `practice.owner_account_id` y LA FILA DE `license` en `sin_enviar`: las
+        // vínculo `practice.owner_account_id` y LA FILA DE `license` vacía: las
         // cinco piezas del mismo acto, dentro de la función (0015). El correo va `citext`:
         // con `text` la comparación se vuelve sensible a mayúsculas en silencio.
         const { rows: admitted } = await c.query<{ verdict: string; account_id: string | null }>(
@@ -180,14 +170,15 @@ export class PlatformRepository
         // función que ya usan la semilla y las pruebas: la fila existe desde la línea de
         // arriba, así que esto la completa.
         //
-        // `status` NO se toca: la licencia sigue en `sin_enviar`. Sin la credencial escaneada
-        // y sin las dos aceptaciones no hay nada que revisar, y una fila en `en_revision` sin
-        // documento es una bandeja que miente.
+        // `declared_at` SÍ se pone, y es lo que esta escritura promete: lo que la consola
+        // anotó en el alta es una declaración del doctor —se la dio por teléfono o en el
+        // formulario— y tiene su fecha. Sin ella, la ficha diría que no declaró nada mientras
+        // enseña su matrícula.
         if (p.license !== null) {
           await c.query(
             `update license
                 set practice_country = $2, specialty = $3, license_number = $4,
-                    updated_at = now()
+                    declared_at = now(), updated_at = now()
               where practice_id = $1`,
             [practice.id, p.license.practiceCountry, p.license.specialty, p.license.licenseNumber],
           );
@@ -236,8 +227,8 @@ export class PlatformRepository
         `select p.id, p.name, p.plan, p.patient_limit, p.region,
                 (p.created_at at time zone $2)::date::text as created_on,
                 p.owner_account_id,
-                l.status as license_status, l.decided_at,
-                l.practice_country, l.specialty, l.license_number
+                l.practice_country, l.specialty, l.license_number,
+                l.declared_at as license_declared_at
            from practice p
            left join license l on l.practice_id = p.id
           where p.id = $1`,
@@ -264,13 +255,13 @@ export class PlatformRepository
         region: row.region,
         createdOn: row.created_on,
         license: {
-          // Sin fila de licencia la ficha dice `sin_enviar`: desde la 0015 nace con la
-          // consulta, y para las de antes el relleno de esa migración la puso.
-          status: row.license_status ?? 'sin_enviar',
-          decidedAt: row.decided_at,
           practiceCountry: row.practice_country,
           specialty: row.specialty,
           licenseNumber: row.license_number,
+          // Nulo mientras nadie haya declarado nada —`updated_at` no serviría: es `NOT NULL
+          // DEFAULT now()`— y también si la consulta no tiene fila de licencia, que es por lo
+          // que el `left join` se queda.
+          declaredAt: row.license_declared_at,
         },
         appVersions: {
           ios: numbers?.app_version_ios ?? null,
@@ -312,127 +303,6 @@ export class PlatformRepository
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/platform/tenants/{id}/license/decision
-  // -------------------------------------------------------------------------------------
-
-  async decide<T>(p: {
-    actor: PlatformActor;
-    practiceId: string;
-    decision: Decision;
-    idempotency: IdempotencyRecord;
-    respond: (decided: DecidedLicense) => T;
-  }): Promise<DecisionResult<T>> {
-    try {
-      const served = await withTenantContext(this.pool, contextOf(p.actor), async (c) => {
-        // «La misma decisión dos veces no manda dos avisos»: con su clave, el reintento
-        // devuelve el 200 de la primera en vez del `409` de «ya se decidió». Y eso valía
-        // para el reintento pero NO para dos decisiones simultáneas: el `FOR UPDATE` de
-        // abajo serializa la licencia, no la clave, así que la perdedora recibía
-        // `already_decided`. Lo que serializa la clave es su clave primaria, y se reclama
-        // aquí, antes de mirar la licencia.
-        const replay = await claim<T>(c, claimOf(p.actor, p.idempotency, FAILURE_PHRASES.decideLicense));
-        if (replay !== null) return { replayed: true, ...replay };
-
-        // `FOR UPDATE` para que dos personas de soporte decidiendo a la vez no se pisen: la
-        // segunda espera y encuentra el estado ya movido.
-        const { rows: current } = await c.query<{ status: string; patient_limit: number }>(
-          `select l.status, p.patient_limit
-             from license l
-             join practice p on p.id = l.practice_id
-            where l.practice_id = $1
-              for update of l`,
-          [p.practiceId],
-        );
-        const license = current[0];
-        // Sin fila: o la consulta no existe, o no tiene licencia. Los dos son el mismo 404 y
-        // no se distinguen, que además es lo que el contrato escribe.
-        if (license === undefined) throw new DecisionRejected('no_license');
-        if (license.status === 'sin_enviar') throw new DecisionRejected('not_submitted');
-        if (license.status !== 'en_revision') throw new DecisionRejected('already_decided');
-
-        const { rows: decided } = await c.query<{ status: string; decided_at: Date }>(
-          // El `AND status = 'en_revision'` ES la validación de la transición, y se queda
-          // aunque el `SELECT ... FOR UPDATE` ya lo haya visto: es lo que hace que cero filas
-          // signifique «ya se decidió» sin depender del orden de dos sentencias.
-          `update license
-              set status = $2, decided_at = now(), rejection_reason = $3,
-                  reviewed_by = $4, updated_at = now()
-            where practice_id = $1 and status = 'en_revision'
-            returning status, decided_at`,
-          [p.practiceId, p.decision.status, p.decision.rejectionReason, p.actor.subject],
-        );
-        const row = decided[0];
-        if (row === undefined) throw new DecisionRejected('already_decided');
-
-        // «La decisión va a `access_audit` con quién la tomó.» `actor_account_id` es el `sub`
-        // del token y `actor_label` su nombre legible: la tabla no tiene clave foránea hacia
-        // esa persona —no vive en esta región— y es deliberado. En `data` va la decisión y
-        // NUNCA el motivo del rechazo: `access_audit` lo lee soporte entero y el motivo ya
-        // vive en su columna, bajo la política de la licencia.
-        await c.query(
-          `insert into access_audit (practice_id, actor_account_id, actor_label, action,
-                                     subject_type, data, region)
-           values ($1, $2, $3, 'license.decision', 'license',
-                   jsonb_build_object('decision', $4::text), $5)`,
-          [p.practiceId, p.actor.subject, p.actor.label, p.decision.status, p.actor.region],
-        );
-
-        // Y SE LE AVISA, en la misma transacción que la decisión. Hasta hoy la doctora pasaba
-        // de «en revisión» a «activa» —o a «rechazada»— sin que nadie se lo dijera: en una
-        // aprobación es una espera de más, y en un rechazo hay algo que corregir y nadie lo
-        // contó. Los dos canales, porque esto es seguridad de la cuenta y no se apaga.
-        //
-        // El aviso NO lleva el motivo del rechazo: eso vive en su columna, bajo la política de
-        // la licencia, y la doctora lo lee al abrir la app. Un motivo en una pantalla de
-        // bloqueo es la misma clase de fuga que un dato clínico.
-        const subject = row.status === 'verificada' ? 'licencia_aprobada' : 'licencia_rechazada';
-        for (const channel of ['push', 'correo'] as const) {
-          await c.query(
-            `select medskin_notify_owner($1, 'seguridad', $2, $3,
-                                         jsonb_build_object('estado', $4::text),
-                                         $5)`,
-            [
-              p.practiceId,
-              channel,
-              subject,
-              row.status,
-              `licencia:${p.practiceId}:${row.status}:${channel}`,
-            ],
-          );
-        }
-
-        const { rows: stats } = await c.query<StatsRow>(
-          'select patient_count from medskin_platform_practice_stats($1)',
-          [p.practiceId],
-        );
-
-        const response = p.respond({
-          status: row.status,
-          decidedAt: row.decided_at,
-          activePatients: Number(stats[0]?.patient_count ?? 0),
-          patientLimit: license.patient_limit,
-        });
-        const outcome: Served<T> = { replayed: false, status: 200, response };
-        // Dentro de la transacción: aquí no hay nada después del `COMMIT`. Y tampoco hay
-        // `release()`: los tres veredictos que no deciden lanzan y lo deshacen todo.
-        await complete(c, {
-          record: p.idempotency,
-          accountId: p.actor.subject,
-          status: outcome.status,
-          response: outcome.response,
-        });
-        return outcome;
-      });
-
-      return { outcome: 'decided', served };
-    } catch (failure) {
-      // Deshecha: «La licencia sigue en revisión: puedes volver a intentarlo» es verdad.
-      if (failure instanceof DecisionRejected) return { outcome: failure.outcome, served: null };
-      throw failure;
-    }
-  }
-
-  // -------------------------------------------------------------------------------------
   // GET /v1/platform/tenants · buscar
   //
   // `q` busca en el nombre de la consulta Y en el correo de la dueña: quien busca teclea
@@ -448,24 +318,23 @@ export class PlatformRepository
   }): Promise<readonly TenantRow[]> {
     return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
       const { rows } = await c.query<TenantSearchRow>(
+        // Ya no se une a `license`: el `?licencia=` filtraba por los cuatro estados de la
+        // revisión y la columna `licencia` del renglón los devolvía. Un `JOIN` que no aporta
+        // ninguna columna es una tabla más en el plan por nada.
         `select p.id, p.name, p.region, p.plan, p.created_at,
                 (p.created_at at time zone $1)::date::text as created_on,
-                coalesce(l.status, 'sin_enviar') as license_status,
                 a.email
            from practice p
-           left join license l on l.practice_id = p.id
            left join account a on a.id = p.owner_account_id
           where ($2::text is null
                  or p.name ilike '%' || $2 || '%'
                  or a.email ilike '%' || $2 || '%')
-            and ($3::text is null or coalesce(l.status, 'sin_enviar') = $3)
-            and ($4::timestamptz is null or (p.created_at, p.id) < ($4, $5::uuid))
+            and ($3::timestamptz is null or (p.created_at, p.id) < ($3, $4::uuid))
           order by p.created_at desc, p.id desc
-          limit $6`,
+          limit $5`,
         [
           this.timeZone,
           p.search.query,
-          p.search.license,
           p.search.cursor?.at ?? null,
           p.search.cursor?.id ?? null,
           // Una de más: si viene, hay página siguiente. Contar aparte sería una segunda
@@ -480,60 +349,12 @@ export class PlatformRepository
         region: row.region,
         createdOn: row.created_on,
         plan: row.plan,
-        licenseStatus: row.license_status,
         ownerEmail: row.email,
         createdAt: row.created_at,
       }));
     });
   }
 
-  // -------------------------------------------------------------------------------------
-  // GET /v1/platform/licenses · la bandeja
-  //
-  // Orden ASCENDENTE por fecha de envío: lo que lleva más esperando va arriba. Una bandeja al
-  // revés es una bandeja donde lo viejo no se revisa nunca.
-  //
-  // `coalesce(submitted_at, created_at)` para el orden y el cursor: una licencia en
-  // `sin_enviar` no tiene fecha de envío, y sin el `coalesce` las nulas se irían juntas a un
-  // extremo y el cursor no podría atravesarlas.
-  // -------------------------------------------------------------------------------------
-  async listLicenses(p: {
-    actor: PlatformActor;
-    inbox: LicenseInbox;
-  }): Promise<readonly LicenseRow[]> {
-    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
-      const { rows } = await c.query<LicenseInboxRow>(
-        `select l.practice_id, p.name as practice_name,
-                l.status, l.submitted_at, l.response_estimated_at,
-                l.specialty, l.license_number, l.practice_country, l.credential_key,
-                coalesce(l.submitted_at, l.created_at) as cursor_at,
-                a.email
-           from license l
-           join practice p on p.id = l.practice_id
-           left join account a on a.id = p.owner_account_id
-          where l.status = $1
-            and ($2::timestamptz is null
-                 or (coalesce(l.submitted_at, l.created_at), l.practice_id) > ($2, $3::uuid))
-          order by coalesce(l.submitted_at, l.created_at) asc, l.practice_id asc
-          limit $4`,
-        [p.inbox.state, p.inbox.cursor?.at ?? null, p.inbox.cursor?.id ?? null, p.inbox.perPage + 1],
-      );
-
-      return rows.map((row) => ({
-        practiceId: row.practice_id,
-        practiceName: row.practice_name,
-        ownerEmail: row.email,
-        status: row.status,
-        submittedAt: row.submitted_at,
-        responseEstimatedAt: row.response_estimated_at,
-        specialty: row.specialty,
-        licenseNumber: row.license_number,
-        practiceCountry: row.practice_country,
-        credentialKey: row.credential_key,
-        cursorAt: row.cursor_at,
-      }));
-    });
-  }
 }
 
 type TenantSearchRow = {
@@ -543,21 +364,6 @@ type TenantSearchRow = {
   plan: string;
   created_at: Date;
   created_on: string;
-  license_status: string;
-  email: string | null;
-};
-
-type LicenseInboxRow = {
-  practice_id: string;
-  practice_name: string;
-  status: string;
-  submitted_at: Date | null;
-  response_estimated_at: Date | null;
-  specialty: string | null;
-  license_number: string | null;
-  practice_country: string | null;
-  credential_key: string | null;
-  cursor_at: Date;
   email: string | null;
 };
 

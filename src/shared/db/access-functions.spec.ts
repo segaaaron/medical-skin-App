@@ -110,19 +110,13 @@ async function seed() {
       [t.practitioner, t.practice, t.account],
     );
     await owner.query('update practice set owner_account_id = $1 where id = $2', [t.account, t.practice]);
-    // La licencia de A está llena y lista para enviarse; la de B, a medias, que es el
-    // caso del «Guardar y salir» de `Licencia.dc.html` · 1.
+    // A tiene su matrícula declarada; B no, que es el caso del «Guardar y salir» de
+    // `Licencia.dc.html` · 1. Sin `status`, sin credencial y sin las dos aceptaciones: se
+    // fueron con la revisión manual (migración 0072).
     await owner.query(
-      `insert into license (id, practice_id, status, practice_country, specialty, license_number,
-                            credential_key, declaration_accepted, terms_accepted)
-       values ($1, $2, 'sin_enviar', 'BO', 'medicina_estetica', $3, $4, $5, $5)`,
-      [
-        t.license,
-        t.practice,
-        licenseComplete ? '48921' : null,
-        licenseComplete ? 'lic/x.pdf' : null,
-        licenseComplete,
-      ],
+      `insert into license (id, practice_id, practice_country, specialty, license_number)
+       values ($1, $2, 'BO', 'medicina_estetica', $3)`,
+      [t.license, t.practice, licenseComplete ? '48921' : null],
     );
     await owner.query(
       `insert into session (id, account_id, practice_id, scope, device_id, device, os,
@@ -329,7 +323,9 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
         `select * from medskin_session_refresh($1, $2, $3, $4)`,
         ['z'.repeat(64), 'y'.repeat(64), 30 * 24 * 3600, 12 * 3600],
       ),
-      // Lo que no es suyo: guardar una contraseña, crear una paciente, mover una licencia.
+      // Lo que no es suyo: guardar una contraseña y crear una paciente. «Mover una licencia»
+      // estaba aquí, con `medskin_license_to_review()`: la función se borró con la revisión
+      // manual (0072) y no hay nada que negar.
       password: await canRun(ctxAnonymous, 'select * from medskin_set_final_password($1, $2, null)', [
         NEW_HASH,
         'temporal',
@@ -339,7 +335,6 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
         `select * from medskin_create_patient_account($1, $2, $3, null, $4, now() + '72 hours'::interval)`,
         [NEW_EMAIL, 'Valeria', 'Antelo', HASH],
       ),
-      license: await canRun(ctxAnonymous, `select * from medskin_license_to_review(now() + '2 days'::interval)`),
       // Y la de verificar credenciales NO la puede llamar la doctora: si pudiera, tendría
       // el oráculo del padrón de otra clínica que `app_anonymous` existe para cerrar.
       credential_as_practitioner: await canRun(ctxPractitionerA, 'select * from medskin_access_credential($1)', [
@@ -359,7 +354,6 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       refresh: 'ejecuta',
       password: 'permiso denegado',
       create_patient: 'permiso denegado',
-      license: 'permiso denegado',
       credential_as_practitioner: 'permiso denegado',
       credential_as_platform: 'permiso denegado',
       owner_as_practitioner: 'permiso denegado',
@@ -650,84 +644,82 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
   });
 });
 
-describe('license.status · lo mueve la función, no un grant', () => {
-  const toReview = (ctx: TenantContext) =>
-    read<{ verdict: string; status: string | null; submitted_at: string | null }>(
-      app,
-      ctx,
-      `select * from medskin_license_to_review(now() + '2 days'::interval)`,
-    );
+describe('license · lo que la doctora puede escribir de su propia fila', () => {
+  // ESTE DESCRIBE ERA «license.status · lo mueve la función, no un grant», y probaba la mitad
+  // de base de la revisión manual: que la doctora no tenía `UPDATE` sobre `status` —ni
+  // colándolo entre las columnas que sí podía escribir—, que
+  // `medskin_license_to_review()` validaba la transición, exigía ser la dueña y dejaba su fila
+  // de bitácora, y que un segundo envío era `already_in_review`.
+  //
+  // Nada de eso existe desde el 30 de octubre de 2026 (migración 0072): no hay `status`, no
+  // hay función y no hay transición. Lo que SÍ sigue siendo verdad y por eso se queda probado:
+  // el `GRANT` de columna acota lo que escribe, y su política la acota a SU consulta.
 
-  it('la doctora no mueve el estado por UPDATE directo, ni el suyo ni el de nadie', async () => {
-    await expect(
-      read(app, ctxPractitionerA, `update license set status = 'verificada' where practice_id = $1`, [A.practice]),
-    ).rejects.toMatchObject({ code: '42501' });
-    // Ni colándolo entre las columnas que sí puede escribir.
-    await expect(
-      read(
-        app,
-        ctxPractitionerA,
-        `update license set license_number = '1', status = 'en_revision' where practice_id = $1`,
-        [A.practice],
-      ),
-    ).rejects.toMatchObject({ code: '42501' });
-
-    // Las columnas del formulario sí, que es lo que ya estaba concedido.
+  it('escribe las tres columnas declaradas de SU fila, y ninguna otra columna', async () => {
     const touched = await read(
       app,
       ctxPractitionerA,
-      `update license set license_number = '48921' where practice_id = $1`,
+      `update license
+          set license_number = '48921', specialty = 'dermatologia', practice_country = 'AR',
+              declared_at = now()
+        where practice_id = $1`,
       [A.practice],
     );
     expect(touched).toEqual([]);
+
+    // `created_at` no está en su `GRANT UPDATE` y nunca lo estuvo: un privilegio de columna se
+    // comprueba ANTES que la política, así que esto es `42501` y no cero filas.
+    await expect(
+      read(app, ctxPractitionerA, `update license set created_at = now() where practice_id = $1`, [
+        A.practice,
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
   });
 
-  it('la función valida la transición, exige ser la dueña y deja la fila de auditoría', async () => {
-    // Recepción tiene el mismo `practice_id` y no es la dueña: no la mueve.
-    expect((await toReview(ctxTeamA))[0]?.verdict).toBe('not_owner');
+  it('LA POLÍTICA NO COMPRUEBA QUIÉN ES LA DUEÑA, y por eso la guarda vive en el `WHERE`', async () => {
+    // Esto es lo que antes hacía `medskin_license_to_review()` devolviendo `not_owner`, y es
+    // el hecho que hay que tener delante al leer `tenants.repository.ts`: alguien del equipo
+    // que NO es la dueña tiene el mismo rol de base y la misma política, así que su `UPDATE`
+    // sobre la fila de SU consulta entra sin una queja.
+    //
+    // Lo único que lo para es el `exists` contra `practice.owner_account_id` que el
+    // repositorio escribe en el mismo `UPDATE`. Si alguien lo quita «porque la política ya
+    // acota», esta prueba sigue verde y la frontera desaparece en silencio — que es
+    // exactamente por lo que está escrita aquí y no solo allí.
+    const delEquipo = await read(
+      app,
+      ctxTeamA,
+      `update license set license_number = '99999' where practice_id = $1`,
+      [A.practice],
+    );
+    expect(delEquipo).toEqual([]);
 
-    // La dueña de A, con la licencia llena: `sin_enviar` → `en_revision`.
-    const [first] = await toReview(ctxPractitionerA);
-    expect({ verdict: first?.verdict, status: first?.status }).toEqual({
-      verdict: 'submitted',
-      status: 'en_revision',
-    });
-    expect(first?.submitted_at).not.toBeNull();
-
-    // Segunda llamada: ya hay un caso abierto (409 licencia_en_revision).
-    expect((await toReview(ctxPractitionerA))[0]?.verdict).toBe('already_in_review');
-
-    // La de B está a medias: no se envía una licencia sin matrícula ni credencial.
-    expect((await toReview(ctxPractitionerB))[0]?.verdict).toBe('incomplete');
-
-    // La bitácora quedó, con quién, qué, sobre qué y de qué consulta.
-    const audit = await read<{
-      action: string;
-      actor: string;
-      label: string;
-      subject: string;
-      data: unknown;
-    }>(
+    const [fila] = await read<{ license_number: string }>(
       app,
       ctxPractitionerA,
-      `select action, actor_account_id as actor, actor_label as label, subject_id as subject, data
-         from access_audit where action = 'license.to_review'`,
+      'select license_number from license',
     );
-    expect(audit).toEqual([
-      {
-        action: 'license.to_review',
-        actor: A.account,
-        label: 'Andrea Paz',
-        subject: A.license,
-        data: { previous_status: 'sin_enviar' },
-      },
-    ]);
+    expect(fila).toEqual({ license_number: '99999' });
+  });
 
-    // Y la licencia de B no se movió: la función toma la consulta del contexto, no de un
-    // argumento, así que no hay nada que apuntar a otra consulta.
-    const [licenseB] = await read(app, ctxPractitionerB, 'select status from license');
-    expect(licenseB).toEqual({ status: 'sin_enviar' });
-    // Y A sigue sin ver la de B.
+  it('no toca la fila de OTRA consulta, y no la ve', async () => {
+    // Cero filas y no un error: el acotado es su política, que compara `practice_id` con
+    // `medskin_current_practice()`. Escribirlo a mano con el uuid de B no abre nada.
+    const ajena = await read(
+      app,
+      ctxPractitionerA,
+      `update license set license_number = '00000' where practice_id = $1`,
+      [B.practice],
+    );
+    expect(ajena).toEqual([]);
+
+    const [licenseB] = await read(
+      app,
+      ctxPractitionerB,
+      'select license_number from license',
+    );
+    expect(licenseB).toEqual({ license_number: null });
+
     expect(
       await whatItSees(app, ctxPractitionerA, 'select id from license where practice_id = $1', [B.practice]),
     ).toBe('0 filas');

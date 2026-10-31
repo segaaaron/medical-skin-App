@@ -88,7 +88,7 @@ async function seedPractice(t: { practice: string; doctora: string; correoDoctor
      values ($1, $2, 'latam', 'BO', 'America/La_Paz', 'BOB', 'consultorio', 300)`,
     [t.practice, name],
   );
-  await owner.query(`insert into license (practice_id, status) values ($1, 'verificada')`, [
+  await owner.query(`insert into license (practice_id, license_number) values ($1, '48921')`, [
     t.practice,
   ]);
   await owner.query(
@@ -199,7 +199,7 @@ describe('la lectura de la sesión', () => {
     expect(snapshot?.revokedAt).toBeNull();
     expect(snapshot?.refreshExpiresAt?.toISOString()).toBe(REFRESCO_CADUCA);
     expect(snapshot?.practice).toEqual({ id: MIA.practice, name: 'Clínica Paz' });
-    expect(snapshot?.licenseStatus).toBe('verificada');
+    expect(snapshot?.licenseDeclared).toBe(true);
     // Las tres tareas nacen sin hacer y la lista sin cerrar: `siguiente_paso` es
     // `primer_dia`, y eso lo decide el caso de uso con este dato.
     expect(snapshot?.firstDayDone).toBe(false);
@@ -224,7 +224,7 @@ describe('la lectura de la sesión', () => {
     const snapshot = await repo.read(comoPaciente(MIA.sesionPaciente));
 
     expect(snapshot?.practice).toBeNull();
-    expect(snapshot?.licenseStatus).toBeNull();
+    expect(snapshot?.licenseDeclared).toBe(false);
     expect(snapshot?.permissions).toBeNull();
     expect(snapshot?.accountStatus).toBe('activa');
   });
@@ -314,7 +314,7 @@ describe('la rotación del refresco', () => {
     expect(rotated.permissions).toBeNull();
     expect(rotated.accountStatus).toBe('activa');
     expect(rotated.passwordIsTemporary).toBe(false);
-    expect(rotated.licenseStatus).toBe('verificada');
+    expect(rotated.licenseDeclared).toBe(true);
     expect(rotated.firstDayDone).toBe(false);
     // La caducidad la calcula la FUNCIÓN con el rol delante (0020): a una doctora le toca
     // el hueco de 12 h, no el de 30 días de la paciente.
@@ -372,7 +372,7 @@ describe('la rotación del refresco', () => {
     expect(rotated.verdict).toBe('rotated');
     expect(rotated.accountRole).toBe('patient');
     expect(rotated.practitionerRole).toBeNull();
-    expect(rotated.licenseStatus).toBeNull();
+    expect(rotated.licenseDeclared).toBe(false);
     // Sin consulta no hay primer día que terminar.
     expect(rotated.firstDayDone).toBe(true);
     expect(horasHasta(rotated.refreshExpiresAt)).toBe(30 * 24);

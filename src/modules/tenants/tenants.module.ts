@@ -1,5 +1,10 @@
 // El cableado de las consultas · los CINCO endpoints de `consultas.md`: los dos de la
-// doctora —leer su consulta y mandar su licencia— y los tres de la consola interna.
+// doctora —leer su consulta y declarar su matrícula— y los tres de la consola interna —el
+// alta, la búsqueda y la ficha—.
+//
+// ERAN SIETE HASTA HOY: también estaban `POST /v1/platform/tenants/:id/license/decision` y
+// `GET /v1/platform/licenses`, que se fueron con la revisión manual de licencias (migración
+// 0072). Con ellos se fueron `DecideLicense`, `ListLicenses` y `PlatformLicensesController`.
 //
 // Dos controladores y no uno, porque son dos puertas distintas: `TenantsController` entra con
 // un token de sesión y su alcance, y `PlatformTenantsController` con el token de plataforma,
@@ -19,7 +24,6 @@ import { SmtpMail } from '../../shared/mail/mailer';
 import { Argon2Passwords } from '../../shared/security/passwords';
 import { CONFIG, POOL } from '../../shared/shared.module';
 import { CreateTenant } from './application/create-tenant';
-import { DecideLicense } from './application/decide-license';
 import { ReadOwnPractice } from './application/read-own-practice';
 import { ReadTenant } from './application/read-tenant';
 import { SubmitLicense } from './application/submit-license';
@@ -27,13 +31,12 @@ import { AdmissionFailures } from './infrastructure/admission-failures';
 import { PlatformRepository } from './infrastructure/platform.repository';
 import { TenantsRepository } from './infrastructure/tenants.repository';
 import { WelcomeMail } from './infrastructure/welcome-mail';
-import { ListLicenses, SearchTenants } from './application/console-reads';
-import { PlatformLicensesController } from './platform-licenses.controller';
+import { SearchTenants } from './application/console-reads';
 import { PlatformTenantsController } from './platform-tenants.controller';
 import { TenantsController } from './tenants.controller';
 
 @Module({
-  controllers: [TenantsController, PlatformTenantsController, PlatformLicensesController],
+  controllers: [TenantsController, PlatformTenantsController],
   providers: [
     {
       provide: TenantsRepository,
@@ -47,12 +50,11 @@ import { TenantsController } from './tenants.controller';
     },
     {
       provide: SubmitLicense,
-      // La zona del despliegue, que es con la que se cuentan las «24 h hábiles». No sale de
-      // la fila de la consulta porque un despliegue es una región (§7.4) y porque el mismo
-      // criterio ya cerró `region_etiqueta` y el plazo de conservación (decisiones 6 y 8).
-      useFactory: (repo: TenantsRepository, clock: SystemClock, cfg: Config) =>
-        new SubmitLicense(repo, clock, cfg.ZONA_HORARIA),
-      inject: [TenantsRepository, SystemClock, CONFIG],
+      // Solo el repositorio. Llevaba además el reloj y la zona del despliegue para calcular
+      // las «24 h hábiles» de `respuesta_estimada_en`: no hay plazo que prometer porque no hay
+      // nadie revisando, y la hora de la declaración la pone la base en el mismo `UPDATE`.
+      useFactory: (repo: TenantsRepository) => new SubmitLicense(repo),
+      inject: [TenantsRepository],
     },
 
     // -----------------------------------------------------------------------------------
@@ -61,30 +63,12 @@ import { TenantsController } from './tenants.controller';
     // el mismo motivo va junto.
     // -----------------------------------------------------------------------------------
     {
-      // Las dos lecturas de lista. `SearchTenants` solo necesita la etiqueta de la región
-      // —la misma que la ficha— y `ListLicenses` el almacenamiento, para firmar el enlace de
-      // cinco minutos a la credencial en cada lectura.
+      // La única lectura de lista. `SearchTenants` solo necesita la etiqueta de la región, la
+      // misma que la ficha.
       provide: SearchTenants,
       useFactory: (repo: PlatformRepository, cfg: Config) =>
         new SearchTenants(repo, cfg.REGION_ETIQUETA),
       inject: [PlatformRepository, CONFIG],
-    },
-    {
-      provide: ListLicenses,
-      useFactory: (repo: PlatformRepository, cfg: Config, clock: SystemClock) =>
-        new ListLicenses(
-          repo,
-          {
-            endpoint: cfg.S3_ENDPOINT,
-            region: cfg.S3_REGION,
-            bucket: cfg.S3_BUCKET,
-            accessKey: cfg.S3_ACCESS_KEY,
-            secretKey: cfg.S3_SECRET_KEY,
-            forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
-          },
-          clock,
-        ),
-      inject: [PlatformRepository, CONFIG, SystemClock],
     },
     {
       provide: PlatformRepository,
@@ -128,11 +112,6 @@ import { TenantsController } from './tenants.controller';
       useFactory: (repo: PlatformRepository, cfg: Config) =>
         new ReadTenant(repo, cfg.REGION_ETIQUETA),
       inject: [PlatformRepository, CONFIG],
-    },
-    {
-      provide: DecideLicense,
-      useFactory: (repo: PlatformRepository) => new DecideLicense(repo),
-      inject: [PlatformRepository],
     },
   ],
 })

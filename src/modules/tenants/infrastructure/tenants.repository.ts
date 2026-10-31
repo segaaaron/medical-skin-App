@@ -41,11 +41,18 @@ import type {
   OwnPracticePort,
 } from '../domain/ports';
 
-/** «Más de 5 envíos en 24 h» (`consultas.md` · 429 `demasiados_envios`). */
+/** «Más de 5 guardados en 24 h» (`consultas.md` · 429 `demasiados_envios`). */
 export const SUBMISSIONS_PER_DAY = 5;
 
-/** La acción con la que `medskin_license_to_review()` firma cada envío en la bitácora. */
-const SUBMIT_ACTION = 'license.to_review';
+/**
+ * La acción con la que cada declaración firma en la bitácora. Era `license.to_review` cuando
+ * esto mandaba la licencia a revisión; ahora dice lo que de verdad pasó.
+ *
+ * **Es el registro que sostiene «responde quien lo declaró»**, que es la razón entera por la
+ * que MedSkin puede guardar una matrícula sin verificarla: sin esta fila, guardaría el dato sin
+ * poder decir quién lo puso ni cuándo.
+ */
+const SUBMIT_ACTION = 'license.declared';
 
 type PracticeRow = {
   id: string;
@@ -64,18 +71,10 @@ type PracticeRow = {
   first_day_schedule: boolean;
   first_day_first_treatment: boolean;
   first_day_dismissed: boolean;
-  license_status: string;
-  submitted_at: Date | null;
-  response_estimated_at: Date | null;
-  rejection_reason: string | null;
-};
-
-/** Las cuatro columnas de `medskin_license_to_review()` (migración 0002), en su orden. */
-type SubmissionRow = {
-  verdict: string;
-  status: string | null;
-  submitted_at: Date | null;
-  response_estimated_at: Date | null;
+  license_country: string | null;
+  license_specialty: string | null;
+  license_number: string | null;
+  license_declared_at: Date | null;
 };
 
 export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort {
@@ -94,18 +93,18 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
                 p.plan, p.patient_limit, to_char(p.plan_renews_on, 'YYYY-MM-DD') as plan_renews_on,
                 p.first_day_practice_data, p.first_day_schedule,
                 p.first_day_first_treatment, p.first_day_dismissed,
-                l.status as license_status, l.submitted_at, l.response_estimated_at,
-                l.rejection_reason
+                l.practice_country as license_country, l.specialty as license_specialty,
+                l.license_number, l.declared_at as license_declared_at
            from practice p
            join license l on l.practice_id = p.id
           where p.id = medskin_current_practice()
           limit 1`,
       );
       const row = rows[0];
-      // Sin fila no hay consulta legible para este contexto, o le falta la licencia que la
-      // 0015 garantiza. El `join` y no un `left join` a propósito: una consulta sin su
-      // licencia no se puede pintar —`licencia.estado` manda la pantalla entera— y servirla
-      // con nulos sería inventar un estado. Quien llama lo convierte en 500 con su causa.
+      // Sin fila no hay consulta legible para este contexto, o le falta la fila de `license`
+      // que la 0015 garantiza. El `join` y no un `left join` a propósito: esa fila nace con la
+      // consulta, así que su ausencia es una inconsistencia del servidor y no un caso normal
+      // —servirla con nulos la escondería—. Quien llama lo convierte en 500 con su causa.
       if (row === undefined) return null;
 
       return { ...snapshot(row), activePatients: await this.countActivePatients(c) };
@@ -131,7 +130,14 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
   }
 
   // -------------------------------------------------------------------------------------
-  // POST /v1/tenants/mine/license · una transacción, tres pasos y en este orden.
+  // POST /v1/tenants/mine/license · una transacción, cuatro pasos y en este orden.
+  //
+  // TENÍA UN PASO MÁS Y UNA FUNCIÓN DE BASE: `medskin_license_to_review()` movía el estado a
+  // `en_revision`, comprobaba la transición y dejaba su fila de bitácora. Se fue con la
+  // revisión manual (migración 0072) y lo que hacía está aquí, en SQL que se lee de una vez:
+  // el doctor ya tiene `GRANT UPDATE (practice_country, specialty, license_number,
+  // updated_at)` sobre `license` y su política lo acota a su consulta, así que la
+  // `SECURITY DEFINER` solo existía por el grant de `status`, que ya no hay.
   // -------------------------------------------------------------------------------------
 
   async submit(p: {
@@ -140,9 +146,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       practiceCountry: string;
       specialty: string;
       licenseNumber: string;
-      credentialKey: string;
     };
-    responseEstimatedAt: Date;
     idempotency: IdempotencyRecord;
     respond: (submission: Submission) => RememberedResponse;
   }): Promise<{ submission: Submission; replay: { status: number; response: unknown } | null }> {
@@ -150,23 +154,25 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       // 0 · RECLAMAR LA CLAVE, ANTES DE ESCRIBIR NADA. En `idempotency_key` y en ESTA
       // transacción: la fila y lo que describe se escriben juntas o no se escribe ninguna.
       // Antes vivía en Redis y se escribía después del `COMMIT`, así que un parpadeo entre
-      // las dos devolvía un 500 cuya frase era falsa —el caso ya estaba abierto— y el
-      // reintento recibía `409 licencia_en_revision`. Y va DELANTE porque la clave primaria
-      // es lo que serializa dos envíos idénticos a la vez.
+      // las dos devolvía un 500 cuya frase era falsa. Y va DELANTE porque la clave primaria
+      // es lo que serializa dos peticiones idénticas a la vez.
       const replay = await claim<unknown>(c, {
         record: p.idempotency,
         accountId: p.owner.accountId,
         practiceId: p.owner.practiceId,
         unfinished: FAILURE_PHRASES.submitLicense,
       });
-      if (replay !== null) return { submission: empty('already_in_review'), replay };
+      if (replay !== null) return { submission: empty('saved'), replay };
 
       // 1 · EL LÍMITE PRIMERO, y dentro de la transacción: si se pasa, nada se escribió y
-      // «espera a que la revisemos» es verdad. Se cuenta sobre `access_audit` y no sobre
+      // «vuelve a intentarlo mañana» es verdad. Se cuenta sobre `access_audit` y no sobre
       // Redis (decisión 39): el dato ya existe con su índice y un contador aparte para un
       // acto que ocurre cinco veces al año es un segundo estado que puede desacordarse con
       // la bitácora. Sin nombrar la consulta: lo pone la política, y así la consulta entra
       // por `access_audit_practice_idx (practice_id, occurred_at DESC)`.
+      //
+      // SE QUEDÓ A PROPÓSITO al quitar la revisión: es un límite de escritura en un borde
+      // autenticado, y quitarlo habría sido cobrar esta corrección en seguridad.
       const { rows: counted } = await c.query<{ sent: string }>(
         `select count(*) as sent
            from access_audit
@@ -178,48 +184,60 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
         return { submission: empty('too_many'), replay: null };
       }
 
-      // 2 · Las seis columnas del formulario bajo SU política, que solo deja escribir
-      // mientras el estado es `sin_enviar` o `rechazada`: el acotado no está en este `where`
-      // y es correcto que no esté. Cero filas aquí NO se interpreta —no falla y no es un
-      // error del contrato—: lo que dice qué pasó es el veredicto de la función, que
-      // distingue `already_in_review` de `already_verified`.
-      await c.query(
-        `update license
+      // 2 · LAS TRES COLUMNAS, Y LA GUARDA DE DUEÑA EN EL MISMO `WHERE`.
+      //
+      // El `exists` contra `practice.owner_account_id` es lo que antes comprobaba la función,
+      // y se compara con `medskin_current_account()` —el contexto de la transacción— y no con
+      // nada que venga del cuerpo ni de la URL: no hay cuenta que forjar (OWASP A01). El
+      // doctor tiene `SELECT (owner_account_id)` sobre `practice` desde la 0002, así que esto
+      // corre con su propio rol y bajo su propia política.
+      //
+      // CERO FILAS AQUÍ SÍ SE INTERPRETA, y es el cambio: antes el veredicto lo daba la
+      // función y este `update` no se miraba. Ahora cero filas es `not_owner` —la fila de
+      // `license` existe siempre (0015) y la política ya no mira ningún estado, así que lo
+      // único que puede tocar cero filas es que quien llama no sea la dueña—.
+      const { rows: saved } = await c.query<{ declared_at: Date }>(
+        `update license l
             set practice_country = $2, specialty = $3, license_number = $4,
-                credential_key = $5, declaration_accepted = true, terms_accepted = true,
-                updated_at = now()
-          where practice_id = $1`,
-        [
-          p.owner.practiceId,
-          p.form.practiceCountry,
-          p.form.specialty,
-          p.form.licenseNumber,
-          p.form.credentialKey,
-        ],
+                declared_at = now(), updated_at = now()
+          where l.practice_id = $1
+            and exists (select 1 from practice p
+                         where p.id = l.practice_id
+                           and p.owner_account_id = medskin_current_account())
+        returning l.declared_at`,
+        [p.owner.practiceId, p.form.practiceCountry, p.form.specialty, p.form.licenseNumber],
       );
-
-      // 3 · La transición. No recibe ni la cuenta ni la consulta —las toma del contexto, así
-      // que no hay nada que forjar— y comprueba que quien llama es la dueña.
-      const { rows } = await c.query<SubmissionRow>('select * from medskin_license_to_review($1)', [
-        p.responseEstimatedAt,
-      ]);
-      const row = rows[0];
+      const row = saved[0];
       if (row === undefined) {
         await release(c, { record: p.idempotency, accountId: p.owner.accountId });
-        return { submission: empty('invalid_transition'), replay: null };
+        return { submission: empty('not_owner'), replay: null };
       }
 
-      const submission: Submission = {
-        verdict: row.verdict as SubmissionVerdict,
-        status: row.status,
-        submittedAt: row.submitted_at,
-        responseEstimatedAt: row.response_estimated_at,
-      };
+      // 3 · LA BITÁCORA, en la misma transacción que la escritura. `actor_label` es el nombre
+      // del doctor, leído de `practitioner` por la pareja (consulta, cuenta), y es nulo si no
+      // tiene fila ahí: una bitácora sin nombre sigue sirviendo, y caerse por una etiqueta
+      // dejaría la declaración sin guardar.
+      //
+      // En `data` NO va la matrícula: ya vive en su columna bajo la política de la licencia, y
+      // `access_audit` lo lee soporte entero. Va lo que la columna no dice, que es desde dónde
+      // se declaró.
+      await c.query(
+        `insert into access_audit (practice_id, actor_account_id, actor_label, action,
+                                   subject_type, data, region)
+         select $1, $2,
+                (select d.first_name || ' ' || d.last_name from practitioner d
+                  where d.practice_id = $1 and d.account_id = $2),
+                $3, 'license', '{"via":"app"}'::jsonb, p.region
+           from practice p where p.id = $1`,
+        [p.owner.practiceId, p.owner.accountId, SUBMIT_ACTION],
+      );
+
+      const submission: Submission = { verdict: 'saved', declaredAt: row.declared_at };
 
       // 4 · La respuesta de la clave, en esta misma transacción: aquí no hay nada después del
       // `COMMIT` que pueda cambiarla. Solo si hay respuesta que repetir —lo decide quien sabe
       // su forma—; si no, la reserva se suelta y el reintento vuelve a intentarlo de verdad,
-      // que es lo que un `403`, un `409` o un `429` necesitan.
+      // que es lo que un `403` o un `429` necesitan.
       const remembered = p.respond(submission);
       if (remembered === null) {
         await release(c, { record: p.idempotency, accountId: p.owner.accountId });
@@ -240,7 +258,8 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
 /**
  * `app_practitioner` con los dos contextos. Doctora y equipo son el mismo rol de base: un
  * privilegio de Postgres es por rol y no por endpoint (§1.9 del napkin), y lo que sostiene
- * la frontera de «solo la dueña» es que la función no recibe la cuenta.
+ * la frontera de «solo la dueña» es el `WHERE` del `UPDATE` contra `practice.owner_account_id`,
+ * comparado con `medskin_current_account()` — del contexto, no del cuerpo.
  */
 function contextOf(owner: PracticeOwner): TenantContext {
   return {
@@ -251,7 +270,7 @@ function contextOf(owner: PracticeOwner): TenantContext {
 }
 
 function empty(verdict: SubmissionVerdict): Submission {
-  return { verdict, status: null, submittedAt: null, responseEstimatedAt: null };
+  return { verdict, declaredAt: null };
 }
 
 function snapshot(row: PracticeRow): Omit<PracticeSnapshot, 'activePatients'> {
@@ -269,10 +288,12 @@ function snapshot(row: PracticeRow): Omit<PracticeSnapshot, 'activePatients'> {
     patientLimit: row.patient_limit,
     planRenewsOn: row.plan_renews_on,
     license: {
-      status: row.license_status,
-      submittedAt: row.submitted_at,
-      responseEstimatedAt: row.response_estimated_at,
-      rejectionReason: row.rejection_reason,
+      practiceCountry: row.license_country,
+      specialty: row.license_specialty,
+      licenseNumber: row.license_number,
+      // Nulo mientras no haya declarado nada, que es lo que `updated_at` no puede decir: es
+      // `NOT NULL DEFAULT now()` y tendría la fecha del alta de la consulta.
+      declaredAt: row.license_declared_at,
     },
     firstDay: {
       practiceData: row.first_day_practice_data,

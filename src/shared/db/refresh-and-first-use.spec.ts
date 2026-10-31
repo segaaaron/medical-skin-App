@@ -4,7 +4,7 @@
 //          que ya estrenó su temporal conserva la recuperación por correo cuando el
 //          reenvío se queda a medias (H-12) o cuando el correo se pierde.
 //   0018 · `medskin_session_refresh` devuelve lo que el 200 de `POST /v1/session/refresh`
-//          promete —`practitioner_role`, `license_status`, `first_day_done`,
+//          promete —`practitioner_role`, `license_declared`, `first_day_done`,
 //          `password_is_temporary`— y resuelve la gracia de 20 s en la fila.
 //   0020 · acuñar una temporal nueva revoca las sesiones de esa cuenta —la llave contra la
 //          que estaban autenticadas ya no existe— y el refresco calcula su caducidad con el
@@ -257,7 +257,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     permissions: string[] | null;
     account_status: string | null;
     password_is_temporary: boolean | null;
-    license_status: string | null;
+    license_declared: boolean | null;
     first_day_done: boolean | null;
     graced: boolean;
     refresh_expires_at: Date | null;
@@ -272,7 +272,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     read<Rotation>(
       ctxAnonymous,
       `select verdict, role, practitioner_role, permissions, account_status, password_is_temporary,
-              license_status, first_day_done, graced, refresh_expires_at
+              license_declared, first_day_done, graced, refresh_expires_at
          from medskin_session_refresh($1, $2, $3, $4)`,
       [oldHash, newHash, PATIENT_SECONDS, PRACTITIONER_SECONDS],
     );
@@ -287,7 +287,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     );
   });
 
-  it('la doctora recibe el rol de su consulta, el estado de su licencia y su primer día', async () => {
+  it('la doctora recibe el rol de su consulta, si declaró su matrícula y su primer día', async () => {
     const [rotated] = await refresh(DOCTOR.refresh, '1'.repeat(64));
     // La caducidad sale aparte: la mide el caso de la 0020, aquí solo tiene que venir.
     const { refresh_expires_at: expiry, ...facts } = rotated ?? {};
@@ -302,7 +302,10 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
       permissions: null,
       account_status: 'activa',
       password_is_temporary: false,
-      license_status: 'sin_enviar',
+      // «¿Declaró su matrícula?», y NO su estado: la revisión manual se fue con la 0072 y la
+      // función devuelve `license_number IS NOT NULL` (migración 0073). La semilla no declaró
+      // nada, así que `false`, y de ahí sale `siguiente_paso: 'licencia'`.
+      license_declared: false,
       first_day_done: false,
       graced: false,
     });
@@ -384,7 +387,10 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
       // Sigue con la temporal: entró con ella y no eligió la definitiva, que es el caso
       // que `siguiente_paso: contrasena_nueva` cubre.
       password_is_temporary: true,
-      license_status: null,
+      // Sin consulta no hay fila de licencia que mirar: el `LEFT JOIN` no trae nada y el
+      // campo es `false`. No manda a ninguna pantalla porque `role === 'patient'` sale antes
+      // en `resolveNextStep()`.
+      license_declared: false,
       first_day_done: true,
       graced: false,
     });

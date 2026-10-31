@@ -229,10 +229,14 @@ export interface AccountDeletionPort {
 // cualquiera— y que saca la consulta y la región del contexto.
 // ---------------------------------------------------------------------------------------
 
-/** Quién la refirió, su licencia, su plan y el duplicado: todo de la consulta del contexto. */
+/**
+ * Quién la refirió, su plan y el duplicado: todo de la consulta del contexto.
+ *
+ * **`license_unverified` ya no está** (30 oct 2026): era «tu licencia todavía no está
+ * verificada», y se fue con la revisión manual. MedSkin no verifica licencias.
+ */
 export type PatientRegistrationVerdict =
   | 'created'
-  | 'license_unverified'
   | 'plan_limit'
   | 'duplicate_email'
   | 'referrer_not_found'

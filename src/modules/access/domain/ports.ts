@@ -154,7 +154,8 @@ export type SessionOpening = {
  * sale del `practitioner.role`, no de `account.role` (`_convenciones.md`).
  */
 export type NextStepFacts = {
-  licenseStatus: string | null;
+  /** «¿Declaró su matrícula?». Era su `status`, que se fue con la revisión manual (0072). */
+  licenseDeclared: boolean;
   firstDayDone: boolean;
   /** Nulo para una paciente, y también para una cuenta `practitioner` sin fila activa. */
   practitionerRole: PractitionerRole | null;

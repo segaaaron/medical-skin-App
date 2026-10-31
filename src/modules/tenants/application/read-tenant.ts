@@ -24,17 +24,19 @@ export type TenantFileResponse = {
   region_etiqueta: string;
   alta_en: string;
   /**
-   * Los tres datos viajan junto al estado: antes, en cuanto alguien decidía, la matrícula y
-   * la especialidad desaparecían de la consola y quien aprobó no podía comprobar qué aprobó.
-   * Son nulos mientras nadie los haya puesto — ni la consola al dar de alta, ni ella al
-   * enviar su licencia.
+   * LO QUE EL DOCTOR DECLARÓ, y nada más. **Sin `estado` y sin `verificada_en`** desde el 30
+   * de octubre de 2026: MedSkin no revisa licencias, así que no hay estado que servir ni fecha
+   * de verificación que dar. Los cuatro son nulos mientras nadie los haya puesto — ni la
+   * consola al dar de alta, ni el doctor desde su app.
+   *
+   * Se queda en la ficha porque soporte lo necesita para un uso real: poder mirar qué declaró
+   * alguien cuando llama por teléfono. Que nadie lo apruebe no lo hace menos útil.
    */
   licencia: {
-    estado: string;
-    verificada_en: string | null;
     pais_ejercicio: string | null;
     especialidad: string | null;
     matricula: string | null;
+    declarada_en: string | null;
   };
   versiones_app: { ios: string | null; android: string | null };
   doctora: {
@@ -96,16 +98,10 @@ function view(
     region_etiqueta: regionLabel,
     alta_en: file.createdOn,
     licencia: {
-      estado: file.license.status,
-      // `verificada_en` solo cuando está verificada: con `rechazada` esa fecha es la del
-      // rechazo, y un campo que se llama así diciendo cuándo se rechazó sería falso.
-      verificada_en:
-        file.license.status === 'verificada'
-          ? (file.license.decidedAt?.toISOString() ?? null)
-          : null,
       pais_ejercicio: file.license.practiceCountry,
       especialidad: file.license.specialty,
       matricula: file.license.licenseNumber,
+      declarada_en: file.license.declaredAt?.toISOString() ?? null,
     },
     // «La versión de la sesión viva vista más recientemente, no la de la dueña» (decisión
     // 40): la pregunta de la pantalla es «qué versión están corriendo», y una sesión

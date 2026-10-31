@@ -117,7 +117,7 @@ export class ChoosePassword {
       refresco_caduca_en: refreshExpiresAt.toISOString(),
       siguiente_paso: resolveNextStep(caller.role, {
         passwordIsTemporary: false,
-        licenseStatus: facts.licenseStatus,
+        licenseDeclared: facts.licenseDeclared,
         firstDayDone: facts.firstDayDone,
       }),
       sesion_id: caller.sessionId,
@@ -205,7 +205,7 @@ export class ChoosePassword {
       refresco_caduca_en: refreshExpiresAt.toISOString(),
       siguiente_paso: resolveNextStep(role, {
         passwordIsTemporary: false,
-        licenseStatus: opened.licenseStatus,
+        licenseDeclared: opened.licenseDeclared,
         firstDayDone: opened.firstDayDone,
       }),
       sesion_id: opened.sessionId,

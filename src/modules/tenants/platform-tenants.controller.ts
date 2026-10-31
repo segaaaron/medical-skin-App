@@ -1,7 +1,8 @@
-// Solo HTTP · los TRES endpoints de consola de `consultas.md`.
+// Solo HTTP · los TRES endpoints de consola de `consultas.md`: el alta, la búsqueda y la
+// ficha.
 //
 // LAS RUTAS SON EXACTAMENTE LAS CLAVES DE `route-policy.ts` —`POST /v1/platform/tenants`,
-// `GET /v1/platform/tenants/:id`, `POST /v1/platform/tenants/:id/license/decision`—
+// `GET /v1/platform/tenants`, `GET /v1/platform/tenants/:id`—
 // porque la clave de esa tabla es la ruta tal y como la registra Fastify: cambiar la forma de
 // la ruta aquí es cambiar la clave, y una ruta sin política es un 500 que ninguna prueba de
 // unidad ve.
@@ -20,7 +21,6 @@ import type { RequestWithContext } from '../../shared/http/request-context';
 import type { PlatformCaller } from '../../shared/platform/platform-token';
 import { SearchTenants } from './application/console-reads';
 import { CreateTenant } from './application/create-tenant';
-import { DecideLicense } from './application/decide-license';
 import { ReadTenant } from './application/read-tenant';
 import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
 import { readConsoleSearch } from './domain/console-search';
@@ -46,7 +46,6 @@ export class PlatformTenantsController {
   constructor(
     @Inject(CreateTenant) private readonly createTenant: CreateTenant,
     @Inject(ReadTenant) private readonly readTenant: ReadTenant,
-    @Inject(DecideLicense) private readonly decideLicense: DecideLicense,
     @Inject(SearchTenants) private readonly searchTenants: SearchTenants,
   ) {}
 
@@ -82,17 +81,6 @@ export class PlatformTenantsController {
   async file(@Req() req: RequestWithContext, @Param('id') id: string) {
     if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
     return this.readTenant.run(id, actorOf(req));
-  }
-
-  @Post(':id/license/decision')
-  @HttpCode(200)
-  async decide(@Req() req: RequestWithContext, @Param('id') id: string): Promise<unknown> {
-    // Sin licencia que decidir: el mismo 404 que una consulta que no existe.
-    if (!UUID.test(id)) throw new ContractError('licencia_no_existe');
-
-    const body: unknown = req.body;
-    const served = await this.decideLicense.run(body, id, actorOf(req), keyOf(req, body));
-    return served.response;
   }
 }
 

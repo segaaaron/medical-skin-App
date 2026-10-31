@@ -31,7 +31,8 @@ export type SessionSnapshot = {
   refreshExpiresAt: Date | null;
   /** Nulo para una paciente: no es de ninguna consulta (§12.2.1). */
   practice: { id: string; name: string } | null;
-  licenseStatus: string | null;
+  /** «¿Declaró su matrícula?». Era su `status`, que se fue con la revisión manual (0072). */
+  licenseDeclared: boolean;
   firstDayDone: boolean;
   /**
    * `practitioner.permissions`, que admite nulo y nulo significa «los de su rol». La
@@ -76,7 +77,7 @@ export type RotatedRefresh = {
   permissions: readonly string[] | null;
   accountStatus: string | null;
   passwordIsTemporary: boolean;
-  licenseStatus: string | null;
+  licenseDeclared: boolean;
   firstDayDone: boolean;
   refreshExpiresAt: Date | null;
   /** Entró por la ventana de 20 s. No sale en la respuesta: se mide, no se cuenta al cliente. */

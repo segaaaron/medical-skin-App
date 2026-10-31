@@ -127,7 +127,7 @@ export class RefreshSession {
       // una sola. Si se escribiera otra vez aquí, se desincronizaría en la primera adición.
       siguiente_paso: resolveNextStep(role, {
         passwordIsTemporary: session.passwordIsTemporary,
-        licenseStatus: session.licenseStatus,
+        licenseDeclared: session.licenseDeclared,
         firstDayDone: session.firstDayDone,
       }),
     };

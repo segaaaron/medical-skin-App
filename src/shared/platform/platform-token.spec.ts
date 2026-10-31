@@ -336,12 +336,14 @@ async function denegar(
 const CONSOLA: Readonly<Record<string, PlatformPermission>> = {
   'POST /v1/platform/tenants': 'plataforma:consultas:crear',
   'GET /v1/platform/tenants/:id': 'plataforma:consultas:leer',
-  'POST /v1/platform/tenants/:id/license/decision': 'plataforma:licencias:decidir',
+  // Aquí estaba `POST /v1/platform/tenants/:id/license/decision` con
+  // `plataforma:licencias:decidir`. Las dos se fueron el 30 de octubre de 2026 con la
+  // revisión manual de licencias, la ruta y el permiso.
   'POST /v1/platform/accounts/:account_id/access/resend': 'plataforma:acceso:reenviar',
   'DELETE /v1/platform/accounts/:account_id/lock': 'plataforma:pausa:levantar',
 };
 
-describe('ScopeGuard · las cinco rutas de la consola', () => {
+describe('ScopeGuard · las rutas de la consola', () => {
   it('cada ruta abre con SU permiso y deja `platform`, sin `caller` ni `recovery`', async () => {
     for (const [clave, permiso] of Object.entries(CONSOLA)) {
       const [metodo, ruta] = clave.split(' ') as [string, string];

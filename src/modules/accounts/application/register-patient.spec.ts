@@ -488,17 +488,10 @@ describe('POST /v1/patients · lo que no entra', () => {
 });
 
 describe('POST /v1/patients · los veredictos de la base', () => {
-  it('la licencia sin verificar no da de alta a nadie', async () => {
-    const { caso } = armar({ registro: { ...CREADA, verdict: 'license_unverified' } });
-    const fallo = await errorDe(() => caso.run(CUERPO, DOCTORA, CLAVE));
-
-    expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
-      codigo: 'licencia_sin_verificar',
-      estado: 409,
-      mensaje:
-        'Todavía no puedes invitar pacientes: tu licencia está en revisión. Te avisamos en cuanto se apruebe.',
-    });
-  });
+  // AQUÍ ESTABA «la licencia sin verificar no da de alta a nadie», el `409
+  // licencia_sin_verificar`. Se fue el 30 de octubre de 2026 con la revisión manual: MedSkin
+  // no verifica licencias, así que una consulta invita pacientes desde el alta. Era el único
+  // sitio donde ese bloqueo se aplicaba de verdad.
 
   it('el límite del plan lleva el número del plan en la frase', async () => {
     const { caso } = armar({ registro: { ...CREADA, verdict: 'plan_limit', patientLimit: 300 } });

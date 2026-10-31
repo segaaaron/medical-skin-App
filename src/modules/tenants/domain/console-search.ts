@@ -1,24 +1,24 @@
-// LAS DOS LECTURAS DE LA CONSOLA QUE DEVUELVEN MÁS DE UNA FILA · `consultas.md`, 30 oct 2026.
+// LA LECTURA DE CONSOLA QUE DEVUELVE MÁS DE UNA FILA · `consultas.md`, 30 oct 2026.
 //
-// Buscar una consulta y mirar la bandeja de licencias. Las dos comparten tres decisiones, y
-// por eso comparten archivo:
+// Buscar una consulta cuando ya no se tiene su uuid. Tres decisiones:
 //
 //   1. CURSOR, NO NÚMERO DE PÁGINA. El padrón crece por el final: con `?pagina=2`, una
 //      consulta creada entre dos peticiones desplaza todo y se salta una fila. El cursor es
-//      `created_at|id` —o `submitted_at|practice_id`—, que no se mueve.
+//      `created_at|id`, que no se mueve.
 //   2. `cuantas` ES LO DE ESTA PÁGINA, NO EL TOTAL. Contar el padrón entero en cada búsqueda
 //      es un recuento que nadie mira y que crece con la tabla.
 //   3. SIN RESULTADOS ES UN 200 CON LISTA VACÍA. Un `404` aquí diría «ese correo no está en
 //      MedSkin», que es el oráculo que el acceso cierra — servido a quien tenga token de
 //      consola, pero servido igual.
 //
+// AQUÍ VIVÍA TAMBIÉN `readLicenseInbox()`, con los cuatro estados de `license.status` como
+// lista cerrada. Se fue con la revisión manual el 30 de octubre de 2026: MedSkin no verifica
+// licencias, así que no hay estados que filtrar ni bandeja que paginar. Lo que queda —el
+// cursor y `nextCursor()`— es de la búsqueda, y era de la búsqueda desde el principio.
+//
 // Sin NestJS, sin `pg` y sin Fastify: esto se prueba sin levantar nada.
 
 import { ContractError } from '../../../shared/contract/error-catalog';
-
-/** Los cuatro estados de `license.status`. Lista cerrada: lo que no está, no se filtra. */
-export const LICENSE_STATES = ['sin_enviar', 'en_revision', 'verificada', 'rechazada'] as const;
-export type LicenseState = (typeof LICENSE_STATES)[number];
 
 export const PAGE_DEFAULT = 25;
 export const PAGE_MAX = 100;
@@ -34,13 +34,6 @@ export type Cursor = { at: Date; id: string };
 
 export type ConsoleSearch = {
   query: string | null;
-  license: LicenseState | null;
-  cursor: Cursor | null;
-  perPage: number;
-};
-
-export type LicenseInbox = {
-  state: LicenseState;
   cursor: Cursor | null;
   perPage: number;
 };
@@ -50,7 +43,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * Todo lo que falla aquí es `400 cuerpo_no_valido`, que es el del transporte para «algo de lo
  * que mandaste no está bien». No se inventan códigos por parámetro: quien llama es una consola
- * interna y lo que necesita es saber que su petición está mal, no cuál de los cuatro.
+ * interna y lo que necesita es saber que su petición está mal, no cuál de los tres.
  */
 function invalid(): never {
   throw new ContractError('cuerpo_no_valido');
@@ -78,13 +71,6 @@ function readCursor(value: unknown): Cursor | null {
   return { at: when, id };
 }
 
-function readLicenseState(value: unknown, fallback: LicenseState | null): LicenseState | null {
-  if (value === undefined || value === null || value === '') return fallback;
-  const found = LICENSE_STATES.find((known) => known === value);
-  if (found === undefined) invalid();
-  return found;
-}
-
 export function readConsoleSearch(params: Record<string, unknown>): ConsoleSearch {
   const raw = params.q;
   let query: string | null = null;
@@ -99,17 +85,9 @@ export function readConsoleSearch(params: Record<string, unknown>): ConsoleSearc
 
   return {
     query,
-    license: readLicenseState(params.licencia, null),
     cursor: readCursor(params.cursor),
     perPage: readPerPage(params.por_pagina),
   };
-}
-
-export function readLicenseInbox(params: Record<string, unknown>): LicenseInbox {
-  // `en_revision` por omisión: eso ES la bandeja. Los otros tres se piden a propósito.
-  const state = readLicenseState(params.estado, 'en_revision');
-  if (state === null) invalid();
-  return { state, cursor: readCursor(params.cursor), perPage: readPerPage(params.por_pagina) };
 }
 
 /**

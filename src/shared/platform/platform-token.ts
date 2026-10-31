@@ -66,7 +66,11 @@ export const PLATFORM_TOKEN_LIFETIME_SECONDS = 15 * 60;
 export const PLATFORM_PERMISSIONS = [
   'plataforma:consultas:crear',
   'plataforma:consultas:leer',
-  'plataforma:licencias:decidir',
+  // Aquí estaba `plataforma:licencias:decidir`, y se fue con la revisión manual el 30 de
+  // octubre de 2026: MedSkin no verifica licencias, así que no hay decisión que autorizar.
+  // Se BORRA de la lista en vez de quedarse sin ruta que lo pida, porque esta lista es
+  // cerrada y lo que no está aquí no se puede firmar: un permiso concedido que nadie usa es
+  // el que alguien reutiliza en seis meses sin leer para qué era.
   'plataforma:acceso:reenviar',
   'plataforma:pausa:levantar',
   'plataforma:suplantar',

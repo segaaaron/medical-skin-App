@@ -99,7 +99,7 @@ export class ReadOwnAccount {
       // el orden lo decide la misma función que lo decide al entrar, y no una copia.
       siguiente_paso: resolveNextStep(rol, {
         passwordIsTemporary: profile.passwordIsTemporary,
-        licenseStatus: facts?.licenseStatus ?? null,
+        licenseDeclared: facts?.licenseDeclared ?? false,
         firstDayDone: facts?.firstDayDone ?? true,
       }),
       region: profile.region,

@@ -80,7 +80,7 @@ function armar(opciones: Opciones = {}) {
     nextStepFacts: () => {
       pasos.push('hechos');
       return Promise.resolve({
-        licenseStatus: 'verificada',
+        licenseDeclared: true,
         firstDayDone: true,
         practitionerRole: 'doctor',
         permissions: null,
@@ -149,7 +149,7 @@ describe('GET /v1/accounts/mine', () => {
 
   it('la licencia sin enviar manda a la doctora a su licencia', async () => {
     const { caso } = armar({
-      hechos: { practitionerRole: 'doctor', licenseStatus: 'sin_enviar' },
+      hechos: { practitionerRole: 'doctor', licenseDeclared: false },
     });
     expect((await caso.run({ ...EQUIPO, role: 'doctor' })).siguiente_paso).toBe('licencia');
   });

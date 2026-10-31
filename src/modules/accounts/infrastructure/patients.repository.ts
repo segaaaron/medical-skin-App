@@ -40,7 +40,6 @@ function contextFor(owner: AccountOwner): TenantContext {
 const AUDIT_ACTION = 'cuenta.acceso_pedido';
 
 type Preconditions = {
-  licenseStatus: string;
   patientLimit: number;
   patients: number;
   /** Las dos copias que `patient_link` guarda de la consulta para la app de la paciente. */
@@ -120,8 +119,13 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     },
   ): Promise<PatientRegistration> {
       const limits = await this.preconditions(c);
-      // Los tres veredictos que se deciden ANTES de crear nada, en el orden del contrato.
-      if (limits.licenseStatus !== 'verificada') return no('license_unverified');
+      // Los veredictos que se deciden ANTES de crear nada, en el orden del contrato.
+      //
+      // AQUÍ ESTABA LA GUARDA DE LA LICENCIA —`status !== 'verificada'` →
+      // `license_unverified`— y se fue el 30 de octubre de 2026 con la revisión manual: MedSkin
+      // no verifica licencias, así que una consulta puede invitar pacientes desde el alta. Era
+      // el único sitio donde el bloqueo se aplicaba de verdad; `puede.invitar_pacientes` solo
+      // lo pintaba.
       if (limits.patients >= limits.patientLimit) {
         return { ...no('plan_limit'), patientLimit: limits.patientLimit };
       }
@@ -247,34 +251,35 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
 
 
   /**
-   * La licencia, el plan y el recuento, de una sola lectura y las tres del CONTEXTO. El
-   * recuento es de las fichas activas: una archivada «sale de la lista» y no ocupa plan
-   * (anotado en la entrega; el contrato dice «pacientes >= limite_pacientes» y no cuáles).
+   * El plan y el recuento, de una sola lectura y los dos del CONTEXTO. El recuento es de las
+   * fichas activas: una archivada «sale de la lista» y no ocupa plan (anotado en la entrega;
+   * el contrato dice «pacientes >= limite_pacientes» y no cuáles).
+   *
+   * **Ya no se une a `license`**: esta consulta leía `l.status` para la guarda que se fue con
+   * la revisión manual, y un `JOIN` que no aporta ninguna columna es una tabla más en el plan
+   * por nada.
    */
   private async preconditions(c: PoolClient): Promise<Preconditions> {
     const { rows } = await c.query<{
-      license_status: string;
       patient_limit: number;
       patients: string;
       practice_name: string;
       city: string | null;
     }>(
-      `select l.status as license_status, p.patient_limit, p.name as practice_name, p.city,
+      `select p.patient_limit, p.name as practice_name, p.city,
               (select count(*) from patient a
                 where a.practice_id = p.id and a.status = 'activa') as patients
          from practice p
-         join license l on l.practice_id = p.id
         where p.id = medskin_current_practice()`,
     );
     const row = rows[0];
     if (row === undefined) {
       throw new ServiceFailure(
         FAILURE_PHRASES.createPatient,
-        new Error('la consulta del contexto no tiene consulta con licencia'),
+        new Error('la consulta del contexto no tiene fila que leer'),
       );
     }
     return {
-      licenseStatus: row.license_status,
       patientLimit: row.patient_limit,
       patients: Number(row.patients),
       practiceName: row.practice_name,

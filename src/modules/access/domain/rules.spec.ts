@@ -56,43 +56,46 @@ describe('resolvePermissions', () => {
 });
 
 describe('resolveNextStep · el servidor manda el paso', () => {
-  const nada = { passwordIsTemporary: false, licenseStatus: null, firstDayDone: true };
+  const nada = { passwordIsTemporary: false, licenseDeclared: true, firstDayDone: true };
 
   it('la contraseña temporal gana sobre todo lo demás', () => {
     expect(
       resolveNextStep('doctor', {
         passwordIsTemporary: true,
-        licenseStatus: 'sin_enviar',
+        licenseDeclared: false,
         firstDayDone: false,
       }),
     ).toBe('contrasena_nueva');
   });
 
-  it('la licencia sin enviar manda a `licencia`', () => {
+  it('sin matrícula declarada manda a `licencia`', () => {
     expect(
-      resolveNextStep('doctor', { ...nada, licenseStatus: 'sin_enviar', firstDayDone: false }),
+      resolveNextStep('doctor', { ...nada, licenseDeclared: false, firstDayDone: false }),
     ).toBe('licencia');
   });
 
-  it('con la licencia en revisión y el primer día a medias, va a `primer_dia`', () => {
+  it('CON LA MATRÍCULA DECLARADA y el primer día a medias, va a `primer_dia`', () => {
+    // Antes esto se probaba con `licenseStatus: 'en_revision'`: declarada y esperando a que
+    // alguien la aprobara. Ya no hay espera — declararla es el final del trámite —, así que
+    // el único paso que queda detrás es el primer día.
     expect(
-      resolveNextStep('doctor', { ...nada, licenseStatus: 'en_revision', firstDayDone: false }),
+      resolveNextStep('doctor', { ...nada, licenseDeclared: true, firstDayDone: false }),
     ).toBe('primer_dia');
   });
 
   it('todo en orden es `inicio`', () => {
-    expect(resolveNextStep('doctor', { ...nada, licenseStatus: 'aprobada' })).toBe('inicio');
+    expect(resolveNextStep('doctor', { ...nada, licenseDeclared: true })).toBe('inicio');
   });
 
   it('nunca devuelve `segundo_factor`: va apagado en esta entrega', () => {
     const pasos = (['doctor', 'doctor', 'doctor', 'patient'] as const).flatMap(
       (rol) =>
         [true, false].flatMap((temporal) =>
-          ['sin_enviar', 'en_revision', 'aprobada', null].flatMap((licencia) =>
+          [true, false].flatMap((licencia) =>
             [true, false].map((primerDia) =>
               resolveNextStep(rol, {
                 passwordIsTemporary: temporal,
-                licenseStatus: licencia,
+                licenseDeclared: licencia,
                 firstDayDone: primerDia,
               }),
             ),
@@ -104,7 +107,7 @@ describe('resolveNextStep · el servidor manda el paso', () => {
 
   it('una paciente con su contraseña definitiva va a `inicio` hasta el tramo 2', () => {
     // `vincular` y `ficha_medica` dependen de `patient_link`, que no existe todavía.
-    expect(resolveNextStep('patient', { ...nada, licenseStatus: 'sin_enviar' })).toBe('inicio');
+    expect(resolveNextStep('patient', { ...nada, licenseDeclared: false })).toBe('inicio');
   });
 });
 

@@ -5,11 +5,15 @@
 // esquema, que es quien migra; todo lo que se COMPRUEBA pasa por los roles de aplicación y
 // por `withTenantContext()`.
 //
-// Lo que NO se repite aquí porque ya está probado en otro archivo: que la doctora no mueve
-// `license.status` por `UPDATE` directo, que `medskin_license_to_review` valida la
-// transición y exige ser la dueña, que la consola lee cinco columnas de `session` y ninguna
-// más, y que la consulta A no lee las filas de `practice` ni de `license` del B. Eso es de
-// la 0002 y de la 0003, y sus pruebas siguen verdes.
+// Lo que NO se repite aquí porque ya está probado en otro archivo: lo que la doctora puede
+// escribir de su fila de `license` y lo que no, que la consola lee cinco columnas de `session`
+// y ninguna más, y que la consulta A no lee las filas de `practice` ni de `license` del B. Eso
+// es de la 0002 y de la 0003, y sus pruebas siguen verdes.
+//
+// LO QUE SE FUE DE AQUÍ con la revisión manual de licencias (migración 0072): el describe de
+// «la decisión de la licencia · la consola la mueve sin función», con su `UPDATE` acotado a
+// `en_revision`, su auditoría y el `CHECK` del rechazo sin motivo (0016). MedSkin no verifica
+// licencias, así que no hay decisión que mover ni rechazo que motivar.
 //
 // Identificadores en inglés, descripciones en español: norma del 27 de octubre.
 
@@ -88,10 +92,8 @@ beforeAll(async () => {
   // el endpoint. Una consulta insertada a mano por el dueño del esquema —esto— no pasa por
   // ninguno de los dos, y es la diferencia que la primera prueba de este archivo mide.
   await owner.query(
-    `insert into license (practice_id, status, practice_country, specialty, license_number, credential_key,
-                          declaration_accepted, terms_accepted, submitted_at, response_estimated_at)
-     values ($1, 'en_revision', 'BO', 'medicina_estetica', '48921', 'lic/b/4f2a.pdf', true, true,
-             now() - interval '1 day', now() + interval '1 day')`,
+    `insert into license (practice_id, practice_country, specialty, license_number, declared_at)
+     values ($1, 'BO', 'medicina_estetica', '48921', now() - interval '1 day')`,
     [B.practice],
   );
   // Tres fichas activas y una archivada: el recuento del plan es de tres, y eso es la
@@ -122,7 +124,7 @@ afterAll(async () => {
 });
 
 describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
-  it('la consola crea consulta, dueña y licencia en `sin_enviar`, y la doctora la envía sin que nadie inserte la fila', async () => {
+  it('la consola crea consulta, dueña y licencia VACÍA, y la doctora la declara sin que nadie inserte la fila', async () => {
     // Paso 1 y 2 de `POST /v1/platform/tenants`, tal cual los va a escribir el
     // endpoint: el `INSERT` de la consulta y la función del alta de la dueña.
     const created = await read<{ id: string }>(
@@ -142,32 +144,29 @@ describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
     expect(alta[0]?.verdict).toBe('created');
     const ownerAccount = alta[0]!.account_id;
 
-    // El 201 del contrato: `licencia: { estado: "sin_enviar" }`. Nadie la insertó.
-    const licencia = await read<{ status: string; submitted_at: string | null }>(
+    // La fila existe y está VACÍA: nadie la insertó, la crea la función del alta (0015). Y
+    // `declared_at` nulo, que es lo que `GET /v1/tenants/mine` sirve como
+    // `licencia.declarada_en` mientras no haya declarado nada.
+    const licencia = await read<{ license_number: string | null; declared_at: string | null }>(
       ctxPlatform,
-      'select status, submitted_at from license where practice_id = $1',
+      'select license_number, declared_at from license where practice_id = $1',
       [A.practice],
     );
-    expect(licencia).toEqual([{ status: 'sin_enviar', submitted_at: null }]);
+    expect(licencia).toEqual([{ license_number: null, declared_at: null }]);
 
-    // Y `POST /v1/tenants/mine/license` de esa dueña recién creada funciona de una:
-    // su `UPDATE` toca su fila, y la función la mueve a revisión.
+    // Y `POST /v1/tenants/mine/license` de esa dueña recién creada funciona de una: su
+    // `UPDATE` toca su fila, y ya no hay función detrás —`medskin_license_to_review()` se
+    // borró con la 0072—. Las tres columnas y la fecha, que es su `GRANT` entero.
     const ctxOwner: TenantContext = { role: 'app_practitioner', practiceId: A.practice, accountId: ownerAccount };
-    const filled = await read<{ id: string }>(
+    const filled = await read<{ declared_at: string }>(
       ctxOwner,
-      `update license set practice_country = 'BO', specialty = 'medicina_estetica', license_number = '48921',
-              credential_key = 'lic/a/4f2a.pdf', declaration_accepted = true, terms_accepted = true,
-              updated_at = now()
-        where practice_id = $1 returning id`,
+      `update license set practice_country = 'BO', specialty = 'medicina_estetica',
+              license_number = '48921', declared_at = now(), updated_at = now()
+        where practice_id = $1 returning declared_at`,
       [A.practice],
     );
     expect(filled).toHaveLength(1);
-
-    const sent = await read<{ verdict: string; status: string }>(
-      ctxOwner,
-      `select verdict, status from medskin_license_to_review(now() + interval '2 days')`,
-    );
-    expect(sent[0]).toMatchObject({ verdict: 'submitted', status: 'en_revision' });
+    expect(filled[0]?.declared_at).not.toBeNull();
   });
 
   it('la doctora no tiene `INSERT` sobre `license`: sin la fila del alta se quedaría sin enviar nada', async () => {
@@ -177,50 +176,6 @@ describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
     await expect(
       read(ctxPractitionerB, 'insert into license (practice_id) values ($1)', [B.practice]),
     ).rejects.toThrow(/permission denied/i);
-  });
-});
-
-describe('la decisión de la licencia · la consola la mueve sin función (0015)', () => {
-  it('mueve `en_revision` a `verificada` una vez, deja su auditoría, y la segunda vez no mueve nada', async () => {
-    const decision = `update license set status = 'verificada', decided_at = now(), rejection_reason = null,
-                             reviewed_by = $2, updated_at = now()
-                        where practice_id = $1 and status = 'en_revision'
-                        returning status, decided_at`;
-
-    const first = await read<{ status: string; decided_at: string }>(ctxPlatform, decision, [
-      B.practice,
-      PLATFORM.account,
-    ]);
-    expect(first).toHaveLength(1);
-    expect(first[0]?.status).toBe('verificada');
-
-    const audit = await read<{ id: string }>(
-      ctxPlatform,
-      `insert into access_audit (practice_id, actor_account_id, actor_label, action, subject_type, data, region)
-       values ($1, $2, 'Soporte MedSkin', 'license.decision', 'license', '{"decision": "verificada"}'::jsonb, 'latam')
-       returning id`,
-      [B.practice, PLATFORM.account],
-    );
-    expect(audit).toHaveLength(1);
-
-    // La misma decisión dos veces no mueve nada: cero filas es el `409
-    // licencia_ya_decidida` del contrato, y no hace falta ninguna función para saberlo.
-    const second = await read(ctxPlatform, decision, [B.practice, PLATFORM.account]);
-    expect(second).toHaveLength(0);
-  });
-
-  it('un rechazo sin motivo no entra, y lo para la base y no el controlador (0016)', async () => {
-    // El `CHECK` de la 0000 dejaba pasar el motivo NULO —`false OR NULL` no es `false`—, y
-    // lo levantó esta prueba. La mitad que faltaba es `license_rejection_reason_present_ck`.
-    await owner.query(`update license set status = 'en_revision' where practice_id = $1`, [B.practice]);
-    await expect(
-      read(
-        ctxPlatform,
-        `update license set status = 'rechazada', decided_at = now(), updated_at = now()
-          where practice_id = $1 and status = 'en_revision'`,
-        [B.practice],
-      ),
-    ).rejects.toThrow(/license_rejection_reason_present_ck/);
   });
 });
 

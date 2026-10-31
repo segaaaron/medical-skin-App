@@ -185,7 +185,7 @@ export class SignIn {
       rol: role,
       siguiente_paso: resolveNextStep(role, {
         passwordIsTemporary: credential.isTemporary,
-        licenseStatus: opened.licenseStatus,
+        licenseDeclared: opened.licenseDeclared,
         firstDayDone: opened.firstDayDone,
       }),
       sesion_id: opened.sessionId,

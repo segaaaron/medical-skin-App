@@ -2,9 +2,9 @@
 // este archivo no importa NestJS, ni Fastify, ni Drizzle, ni `pg`: los casos de uso se
 // prueban sin levantar nada.
 //
-// Puertos pequeños y dos, no uno con cinco métodos: leer la consulta y mandar la licencia a
-// revisión no cambian por el mismo motivo, y el doble de prueba de cada caso de uso no
-// tiene que implementar lo que no llama.
+// Puertos pequeños y dos, no uno con cinco métodos: leer la consulta y guardar lo que el
+// doctor declara de su matrícula no cambian por el mismo motivo, y el doble de prueba de cada
+// caso de uso no tiene que implementar lo que no llama.
 
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 
@@ -44,12 +44,20 @@ export type PracticeSnapshot = {
   firstDay: FirstDaySnapshot;
 };
 
+/**
+ * LO QUE EL DOCTOR DECLARÓ, y los cuatro campos son nulos hasta que lo declara. No hay
+ * `status`, no hay `submittedAt`, no hay `rejectionReason`: MedSkin no revisa licencias
+ * (migración 0072), así que no hay estado que servir ni rechazo que explicar.
+ *
+ * `declaredAt` es `license.updated_at`. No hay columna propia porque en esa tabla solo se
+ * escriben las tres columnas declaradas: la última escritura ES la declaración, y una columna
+ * más que dijera lo mismo sería un segundo estado que puede desacordarse.
+ */
 export type LicenseSnapshot = {
-  /** `sin_enviar` | `en_revision` | `verificada` | `rechazada`. */
-  status: string;
-  submittedAt: Date | null;
-  responseEstimatedAt: Date | null;
-  rejectionReason: string | null;
+  practiceCountry: string | null;
+  specialty: string | null;
+  licenseNumber: string | null;
+  declaredAt: Date | null;
 };
 
 export type FirstDaySnapshot = {
@@ -69,38 +77,41 @@ export interface OwnPracticePort {
 }
 
 // ---------------------------------------------------------------------------------------
-// POST /v1/tenants/mine/license
+// POST /v1/tenants/mine/license · «el doctor declara su matrícula»
+//
+// LO QUE ESTE PUERTO ERA Y YA NO: `Submission` con ocho veredictos —`already_in_review`,
+// `already_verified`, `invalid_transition`, `incomplete`…— era la máquina de estados de la
+// revisión manual, y `medskin_license_to_review()` la que la movía. No queda nada de eso: es
+// un formulario, el último `POST` gana, y lo único que puede salir mal aparte de un fallo del
+// servidor es el cupo de cinco al día.
 // ---------------------------------------------------------------------------------------
 
-/** Las seis columnas del formulario, ya validadas. */
+/** Los tres campos del formulario, ya validados. */
 export type LicenseForm = {
   practiceCountry: string;
   specialty: string;
   licenseNumber: string;
-  credentialKey: string;
 };
 
 /**
- * Los veredictos de `medskin_license_to_review()` (migración 0002), más `too_many`, que es
- * el único que no sale de ella: el `429` de los 5 envíos en 24 h se cuenta sobre
- * `access_audit` —no sobre Redis (decisión 39)— y se cuenta DENTRO de la misma transacción,
- * así que viaja con los suyos.
+ * Tres, y ninguno más: la máquina de ocho veredictos de la revisión manual se fue entera
+ * (migración 0072).
+ *
+ * · `saved` · se escribió.
+ * · `too_many` · el `429` de los cinco guardados en 24 h. Se cuenta sobre `access_audit` —no
+ *   sobre Redis (decisión 39)— y DENTRO de la misma transacción, así que viaja con el
+ *   resultado.
+ * · `not_owner` · quien llama no es la dueña de esa consulta. **Lo dice la base**, porque es
+ *   lo único que lo sabe: el `WHERE` del `UPDATE` compara contra `practice.owner_account_id`
+ *   y cero filas es esto. El token no lleva «soy la dueña» y no se le va a añadir: sería un
+ *   dato de autorización viajando fuera de la base.
  */
-export type SubmissionVerdict =
-  | 'submitted'
-  | 'not_owner'
-  | 'already_in_review'
-  | 'already_verified'
-  | 'incomplete'
-  | 'invalid_transition'
-  | 'no_license'
-  | 'too_many';
+export type SubmissionVerdict = 'saved' | 'too_many' | 'not_owner';
 
 export type Submission = {
   verdict: SubmissionVerdict;
-  status: string | null;
-  submittedAt: Date | null;
-  responseEstimatedAt: Date | null;
+  /** La hora que quedó escrita. Nula solo en `too_many`, que no escribe nada. */
+  declaredAt: Date | null;
 };
 
 /** Lo que se guarda para repetir, o `null` si ese veredicto no se repite. */
@@ -108,29 +119,27 @@ export type RememberedResponse = { status: number; response: unknown } | null;
 
 export interface LicenseSubmissionPort {
   /**
-   * El `UPDATE` del formulario, el recuento del `429` y la llamada a la función, en UNA
-   * transacción. El estado NO se escribe desde aquí: la doctora no tiene `UPDATE` sobre
-   * `license.status` y es deliberado —la transición la valida la función, que además deja
-   * su fila de auditoría—.
-   *
-   * `responseEstimatedAt` lo calcula el llamador: los feriados de una región no son dato de
-   * esta base.
+   * El recuento del `429`, el `UPDATE` de las tres columnas y la fila de `access_audit`, en
+   * UNA transacción y **sin función de base**: el doctor ya tiene
+   * `GRANT UPDATE (practice_country, specialty, license_number, updated_at)` sobre `license` y
+   * su política de `UPDATE` lo acota a su consulta. La `SECURITY DEFINER` existía porque no
+   * tenía el grant de `status`; sin `status` sobra, y una menos es superficie menos.
    */
   submit(p: {
     owner: PracticeOwner;
     form: LicenseForm;
-    responseEstimatedAt: Date;
     /**
      * La clave de la petición, OBLIGATORIA. Se comprueba al abrir la transacción y se guarda
      * al cerrarla, en `idempotency_key` y no en Redis: una fila escrita después del `COMMIT`
      * no es idempotencia, porque un fallo entre las dos devuelve un 500 que miente y un
-     * reintento que vuelve a ejecutar.
+     * reintento que vuelve a ejecutar. Y aquí además protege el cupo: un reintento no gasta
+     * uno de los cinco del día.
      */
     idempotency: IdempotencyRecord;
     /**
      * La respuesta que hay que guardar, construida DENTRO de la transacción por quien sabe
-     * su forma. Devuelve `null` para los veredictos que no se repiten —un `409` o un `429` no
-     * son una respuesta que repetir, y el reintento tiene que poder volver a intentarlo—.
+     * su forma. Devuelve `null` para `too_many`: un `429` no es una respuesta que repetir, y
+     * el reintento tiene que poder volver a intentarlo de verdad.
      */
     respond: (submission: Submission) => RememberedResponse;
   }): Promise<{ submission: Submission; replay: { status: number; response: unknown } | null }>;

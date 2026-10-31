@@ -505,6 +505,20 @@
       "when": 1793404137271,
       "tag": "0071_el_telefono_de_la_doctora",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793404137272,
+      "tag": "0072_medskin_no_revisa_licencias",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793404137273,
+      "tag": "0073_el_refresco_no_mira_la_licencia",
+      "breakpoints": true
     }
   ]
 }

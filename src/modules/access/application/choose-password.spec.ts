@@ -102,7 +102,10 @@ function armar(opciones: {
       pasos.push('sesion:abrir');
       return Promise.resolve({
         sessionId: 'x',
-        licenseStatus: opciones.guardadoComo === undefined ? null : 'sin_enviar',
+        // `false` cuando hay consulta: es lo que manda a la doctora a `licencia`, el paso
+        // que esta prueba comprueba. Era `licenseStatus: 'sin_enviar'`, el mismo hecho con el
+        // nombre de la revisión que ya no existe.
+        licenseDeclared: opciones.guardadoComo === undefined,
         firstDayDone: true,
         practitionerRole:
           opciones.guardadoComo?.accountRole === 'doctor' ? ('doctor' as const) : null,
@@ -112,7 +115,7 @@ function armar(opciones: {
     nextStepFacts: () => {
       pasos.push('paso:estado');
       return Promise.resolve({
-        licenseStatus: 'sin_enviar',
+        licenseDeclared: false,
         firstDayDone: false,
         practitionerRole: null,
         permissions: null,

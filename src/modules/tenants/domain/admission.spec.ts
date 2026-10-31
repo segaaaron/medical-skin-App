@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ContractError } from '../../../shared/contract/error-catalog';
 import { readEmail } from '../../recovery/domain/code';
-import { PLAN_LIMITS, ownerWelcomeMailBody, readAdmission, readDecision } from './admission';
+import { PLAN_LIMITS, ownerWelcomeMailBody, readAdmission } from './admission';
 
 const ALTA = {
   nombre: 'Clínica Paz',
@@ -144,41 +144,6 @@ describe('el alta de una consulta · el cuerpo del contrato', () => {
 
   it('un cuerpo que no es un objeto no revienta: es un alta sin nombre', () => {
     expect(codigoDe(() => readAdmission(null, 'latam', readEmail))).toBe('nombre_vacio');
-  });
-});
-
-describe('la decisión de la licencia · el cuerpo de la consola', () => {
-  it('verificar no pide motivo, y el motivo que venga de más no viaja', () => {
-    expect(readDecision({ decision: 'verificada', motivo_rechazo: 'lo que sea' })).toEqual({
-      status: 'verificada',
-      rejectionReason: null,
-    });
-  });
-
-  it('rechazar EXIGE motivo, de 10 a 300: la doctora lo va a leer', () => {
-    expect(codigoDe(() => readDecision({ decision: 'rechazada' }))).toBe('motivo_rechazo_vacio');
-    expect(codigoDe(() => readDecision({ decision: 'rechazada', motivo_rechazo: 'corto' }))).toBe(
-      'motivo_rechazo_vacio',
-    );
-    // Y el nulo también, que es el caso que el `CHECK` de la 0000 dejaba pasar: `length(NULL)`
-    // es NULL y `false OR NULL` no es `false`. Lo cerró la 0016, y aquí no llega ni a la base.
-    expect(codigoDe(() => readDecision({ decision: 'rechazada', motivo_rechazo: null }))).toBe(
-      'motivo_rechazo_vacio',
-    );
-
-    expect(
-      readDecision({ decision: 'rechazada', motivo_rechazo: 'La credencial está vencida.' }),
-    ).toEqual({ status: 'rechazada', rejectionReason: 'La credencial está vencida.' });
-  });
-
-  it('`revisada_por` del cuerpo se ignora: lo pone el servidor desde el token', () => {
-    const decision = readDecision({ decision: 'verificada', revisada_por: 'usr_plt_otra_persona' });
-    expect(decision).toEqual({ status: 'verificada', rejectionReason: null });
-  });
-
-  it('una decisión que no es ninguna de las dos es `cuerpo_no_valido`', () => {
-    expect(codigoDe(() => readDecision({ decision: 'quizas' }))).toBe('cuerpo_no_valido');
-    expect(codigoDe(() => readDecision({}))).toBe('cuerpo_no_valido');
   });
 });
 

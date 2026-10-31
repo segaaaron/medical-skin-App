@@ -47,7 +47,7 @@ const CONSULTA_VIVA: SessionSnapshot = {
   revokedAt: null,
   refreshExpiresAt: REFRESCO_CADUCA,
   practice: { id: CONSULTA, name: 'Clínica Paz' },
-  licenseStatus: 'verificada',
+  licenseDeclared: true,
   firstDayDone: true,
   permissions: null,
 };
@@ -149,7 +149,7 @@ describe('GET /v1/session · el 200', () => {
     const { port, vistos } = puerto({
       ...CONSULTA_VIVA,
       practice: null,
-      licenseStatus: null,
+      licenseDeclared: false,
     });
 
     const vista = await new ReadSession(port).run(PACIENTE, CADUCA);
@@ -162,7 +162,7 @@ describe('GET /v1/session · el 200', () => {
   });
 
   it('la licencia sin enviar y la lista del primer día mueven `siguiente_paso` en cada arranque', async () => {
-    const { port: sinEnviar } = puerto({ ...CONSULTA_VIVA, licenseStatus: 'sin_enviar' });
+    const { port: sinEnviar } = puerto({ ...CONSULTA_VIVA, licenseDeclared: false });
     expect((await new ReadSession(sinEnviar).run(DOCTORA, CADUCA)).siguiente_paso).toBe('licencia');
 
     const { port: primerDia } = puerto({ ...CONSULTA_VIVA, firstDayDone: false });

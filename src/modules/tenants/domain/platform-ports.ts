@@ -1,11 +1,12 @@
-// Los puertos de los TRES endpoints de consola de `consultas.md`. Viven en el dominio y
-// este archivo no importa NestJS, ni Fastify, ni Drizzle, ni `pg`.
+// Los puertos de los endpoints de consola de `consultas.md` —el alta, la ficha y la
+// búsqueda—. Viven en el dominio y este archivo no importa NestJS, ni Fastify, ni Drizzle, ni
+// `pg`.
 //
 // Son puertos aparte de los de la doctora y no métodos más en los suyos: cambian por
 // motivos distintos —una pantalla interna de soporte contra la app de la consulta— y el
 // doble de prueba de cada caso de uso no tiene que implementar lo que no llama.
 
-import type { ConsoleSearch, LicenseInbox } from './console-search';
+import type { ConsoleSearch } from './console-search';
 import type { ConsoleLicenseDraft } from './rules';
 import type { Region } from '../../../shared/contract/session';
 
@@ -15,9 +16,8 @@ import type { Region } from '../../../shared/contract/session';
  * repetirlo aquí sería una segunda autorización que puede desacordarse con la primera.
  *
  * `subject` es un `uuid` y es lo que se fija en `medskin.account_id` —la política de
- * `idempotency_key` lo compara— y lo que viaja a `access_audit.actor_account_id` y a
- * `license.reviewed_by`. **No hay fila en `account` detrás**, y por eso esas columnas no
- * tienen clave foránea.
+ * `idempotency_key` lo compara— y lo que viaja a `access_audit.actor_account_id`. **No hay
+ * fila en `account` detrás**, y por eso esa columna no tiene clave foránea.
  *
  * `label` es el nombre legible y NO entra en ninguna comparación: solo en
  * `access_audit.actor_label`, que la bitácora exige por escrito.
@@ -142,16 +142,16 @@ export type TenantFile = {
   region: string;
   createdOn: string;
   /**
-   * Los tres datos de la licencia viajan con el estado desde el 30 de octubre de 2026: sin
-   * ellos, en cuanto alguien decidía, la matrícula y la especialidad DESAPARECÍAN de la
-   * consola y no había dónde volver a verlas. Quien aprobó no podía comprobar qué aprobó.
+   * LO QUE EL DOCTOR DECLARÓ, y nada más: sin `status`, porque nadie lo aprueba (0072).
+   * Soporte lo necesita para poder mirar qué declaró alguien cuando llama por teléfono, que
+   * es el único uso que esto tiene y es un uso real.
    */
   license: {
-    status: string;
-    decidedAt: Date | null;
     practiceCountry: string | null;
     specialty: string | null;
     licenseNumber: string | null;
+    /** `license.updated_at`. Nulo mientras no haya declarado nada. */
+    declaredAt: Date | null;
   };
   appVersions: { ios: string | null; android: string | null };
   /** Nulo solo si la consulta no tiene dueña, que el alta hace imposible. */
@@ -169,55 +169,6 @@ export interface TenantFilePort {
   read(p: { actor: PlatformActor; practiceId: string }): Promise<TenantFile | null>;
 }
 
-// ---------------------------------------------------------------------------------------
-// POST /v1/platform/tenants/{id}/license/decision
-// ---------------------------------------------------------------------------------------
-
-export type Decision = {
-  status: 'verificada' | 'rechazada';
-  /** Obligatorio con `rechazada`, de 10 a 300. La 0016 lo fuerza además con un `CHECK`. */
-  rejectionReason: string | null;
-};
-
-/**
- * Los cuatro resultados que la base distingue, y los cuatro están en el contrato desde el
- * 28 de octubre: sin fila → `404`, `sin_enviar` → `409 licencia_sin_enviar`, ya decidida →
- * `409 licencia_ya_decidida`, y `decided`.
- */
-export type DecisionOutcome = 'decided' | 'no_license' | 'not_submitted' | 'already_decided';
-
-export type DecidedLicense = {
-  status: string;
-  decidedAt: Date;
-  /** Para `puede`: el cupo del plan en el momento de la decisión. */
-  activePatients: number;
-  patientLimit: number;
-};
-
-export type DecisionResult<T> =
-  | { outcome: 'decided'; served: Served<T> }
-  | { outcome: Exclude<DecisionOutcome, 'decided'>; served: null };
-
-export interface LicenseDecisionPort {
-  /**
-   * `SELECT ... FOR UPDATE` → `UPDATE ... WHERE status = 'en_revision'` → la fila de
-   * `access_audit`, en UNA transacción y **sin función**: `app_platform` ya tiene `UPDATE`
-   * de tabla entera sobre `license` y su política lo admite. La función de la doctora existe
-   * porque ella NO tiene el grant de `status`; aquí es el caso contrario, y una
-   * `SECURITY DEFINER` sería una capa que hay que leer para entender un `UPDATE`.
-   *
-   * El `WHERE ... AND status = 'en_revision'` ES la validación de la transición: cero filas
-   * es el `409`.
-   */
-  decide<T>(p: {
-    actor: PlatformActor;
-    practiceId: string;
-    decision: Decision;
-    idempotency: IdempotencyRecord;
-    respond: (decided: DecidedLicense) => T;
-  }): Promise<DecisionResult<T>>;
-}
-
 /** El correo del alta. Puerto pequeño: lo que falla aquí no deshace el alta. */
 export interface WelcomeMailPort {
   sendOwnerWelcome(facts: {
@@ -231,12 +182,14 @@ export interface WelcomeMailPort {
 
 // ---------------------------------------------------------------------------------------
 // GET /v1/platform/tenants · buscar · `consultas.md`, 30 oct 2026
-// GET /v1/platform/licenses · la bandeja
 //
-// Las dos devuelven MÁS DE UNA fila, que es lo que las hace distintas de todo lo anterior de
-// consola: hasta hoy, un error de campo exponía la ficha que ya se estaba mirando; aquí
-// expondría el padrón. Por eso el renglón de la búsqueda es un subconjunto EXACTO de la
-// ficha, y una prueba lo fija comparando las claves.
+// Devuelve MÁS DE UNA fila, que es lo que la hace distinta de la ficha: un error de campo en
+// la ficha expone la consulta que ya se estaba mirando; aquí expondría el padrón. Por eso el
+// renglón es un subconjunto EXACTO de la ficha, y una prueba lo fija comparando las claves.
+//
+// **AQUÍ VIVÍA TAMBIÉN `GET /v1/platform/licenses`**, la bandeja de lo que esperaba revisión,
+// con su `LicenseRow` y su clave de credencial para firmar un enlace de cinco minutos. Se
+// escribió y se borró el mismo día: MedSkin no revisa licencias, así que no hay bandeja.
 // ---------------------------------------------------------------------------------------
 
 /** Un renglón de la búsqueda. Ni un campo que la ficha no tenga. */
@@ -246,7 +199,6 @@ export type TenantRow = {
   region: string;
   createdOn: string;
   plan: string;
-  licenseStatus: string;
   /**
    * SOLO EL CORREO, y es lo que la consola puede leer: `app_platform` tiene `SELECT` sobre
    * cinco columnas de `account` y NINGUNA sobre `practitioner`, que es donde vive el nombre.
@@ -258,31 +210,7 @@ export type TenantRow = {
   createdAt: Date;
 };
 
-/** Un renglón de la bandeja. La credencial va como CLAVE: el enlace lo firma el caso de uso. */
-export type LicenseRow = {
-  practiceId: string;
-  practiceName: string;
-  /**
-   * SOLO EL CORREO, y es lo que la consola puede leer: `app_platform` tiene `SELECT` sobre
-   * cinco columnas de `account` y NINGUNA sobre `practitioner`, que es donde vive el nombre.
-   * La ficha tampoco lo devuelve, por lo mismo. Prometerlo aquí habría sido prometer un campo
-   * que la base niega — lo cazó la prueba contra la base con «permission denied».
-   */
-  ownerEmail: string | null;
-  status: string;
-  submittedAt: Date | null;
-  responseEstimatedAt: Date | null;
-  specialty: string | null;
-  licenseNumber: string | null;
-  practiceCountry: string | null;
-  credentialKey: string | null;
-  /** Para el cursor. No sale en la respuesta. */
-  cursorAt: Date;
-};
-
 export interface ConsoleSearchPort {
   /** Devuelve `perPage + 1` filas: la de más es cómo se sabe que hay siguiente página. */
   searchTenants(p: { actor: PlatformActor; search: ConsoleSearch }): Promise<readonly TenantRow[]>;
-  listLicenses(p: { actor: PlatformActor; inbox: LicenseInbox }): Promise<readonly LicenseRow[]>;
 }
-

@@ -8,7 +8,7 @@
 import { readPhone } from '../../accounts/domain/patient-registration';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { Region } from '../../../shared/contract/session';
-import type { Decision, NewOwner, NewPractice } from './platform-ports';
+import type { NewOwner, NewPractice } from './platform-ports';
 import { isCountry , readConsoleLicenseDraft, type ConsoleLicenseDraft } from './rules';
 
 const REGIONS: readonly Region[] = ['eu', 'us', 'latam'];
@@ -37,8 +37,6 @@ const NAME_MAX = 120;
 const PERSON_NAME_MAX = 80;
 const INTERNAL_NOTE_MAX = 2000;
 const CURRENCY = /^[A-Z]{3}$/;
-const REJECTION_MIN = 10;
-const REJECTION_MAX = 300;
 
 export type AdmissionForm = {
   practice: Omit<NewPractice, 'patientLimit'> & { patientLimit: number };
@@ -154,30 +152,6 @@ function readOwner(input: unknown, readEmail: (value: unknown) => string): Admis
     // El campo es el del formulario de la consola, que es `doctora.correo` y no `correo`.
     throw new ContractError('correo_mal_escrito', undefined, undefined, 'doctora.correo');
   }
-}
-
-/**
- * La decisión de la licencia. `revisada_por` **se ignora si viene** (lo dice el contrato): lo
- * pone el servidor desde el token, y aceptarlo del cuerpo sería dejar que la consola firmara
- * una decisión con el nombre de otra persona (OWASP A01).
- *
- * Una `decision` que no es ninguna de las dos es `400 cuerpo_no_valido`: el contrato no le da
- * código propio y no se inventa uno. Anotado para `producto`.
- */
-export function readDecision(input: unknown): Decision {
-  const body = asObject(input);
-  const decision = body.decision;
-  if (decision !== 'verificada' && decision !== 'rechazada') {
-    throw new ContractError('cuerpo_no_valido');
-  }
-
-  if (decision === 'verificada') return { status: decision, rejectionReason: null };
-
-  const reason = text(body.motivo_rechazo, REJECTION_MAX);
-  if (reason === null || reason.length < REJECTION_MIN) {
-    throw new ContractError('motivo_rechazo_vacio');
-  }
-  return { status: decision, rejectionReason: reason };
 }
 
 /**

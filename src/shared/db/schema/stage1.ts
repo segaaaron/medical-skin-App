@@ -119,7 +119,20 @@ export const practice = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------
-// license · una por consulta. La revisión es a mano (consultas.md).
+// license · una por consulta. LO QUE EL DOCTOR DECLARA, Y NADA MÁS (migración 0072).
+//
+// MedSkin no revisa licencias: no es una asociación médica ni un inspector de salud. Se pide
+// el país de ejercicio, la especialidad y la matrícula, y se guardan tal como él las declara.
+// La 0072 borró la máquina de estados entera —`status`, las dos aceptaciones, la credencial
+// escaneada, las fechas de envío y de decisión, el motivo del rechazo y quién revisó— y con
+// ella la bandeja, el endpoint de decisión y el bloqueo de «no puedes invitar mientras
+// esperas». El motivo es de responsabilidad: si MedSkin verificara, MedSkin respondería.
+//
+// `declared_at` es NULA mientras no se haya declarado nada, y por eso existe en vez de reusar
+// `updated_at`: esta migración se escribió primero reusándolo, y la base lo tumbó al
+// aplicarla —`updated_at` es `NOT NULL DEFAULT now()`, así que una consulta que nunca declaró
+// nada tendría ahí la fecha de su alta y `declarada_en` mostraría una declaración que no
+// ocurrió—.
 // ---------------------------------------------------------------------------------------
 
 export const license = pgTable(
@@ -130,43 +143,20 @@ export const license = pgTable(
       .notNull()
       .references(() => practice.id, { onDelete: 'cascade' }),
 
-    status: text('status').notNull().default('sin_enviar'),
-
     practiceCountry: text('practice_country'),
     specialty: text('specialty'),
     licenseNumber: text('license_number'),
-    // Clave de objeto en el bucket de la región. Ni un byte por la API (§7.1).
-    credentialKey: text('credential_key'),
-    declarationAccepted: boolean('declaration_accepted').notNull().default(false),
-    termsAccepted: boolean('terms_accepted').notNull().default(false),
-
-    submittedAt: timestampTz('submitted_at'),
-    responseEstimatedAt: timestampTz('response_estimated_at'),
-    decidedAt: timestampTz('decided_at'),
-    rejectionReason: text('rejection_reason'),
-    // Cuenta de plataforma que decidió. Sin clave foránea: no vive en esta región.
-    reviewedBy: uuid('reviewed_by'),
+    declaredAt: timestampTz('declared_at'),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    // Una consulta, un caso. Un rechazo reabre esta misma fila: el histórico de quién
-    // decidió qué vive en `access_audit`, que no tiene claves foráneas (§12.2.8).
+    // Una consulta, una fila. El rastro de quién declaró qué y cuándo vive en
+    // `access_audit`, que no tiene claves foráneas (§12.2.8).
     uniqueIndex('license_practice_uq').on(t.practiceId),
-    // La cola de revisión de la consola cruza consultas a propósito, así que aquí el
-    // consulta NO va delante: la consulta es «qué hay en revisión, por antigüedad».
-    index('license_review_queue_idx').on(t.status, t.submittedAt),
-    check(
-      'license_status_ck',
-      sql`${t.status} in ('sin_enviar', 'en_revision', 'verificada', 'rechazada')`,
-    ),
-    // «400 motivo_rechazo_vacio»: un rechazo sin motivo no se puede guardar. La doctora
-    // lo va a leer (consultas.md · decision).
-    check(
-      'license_rejection_reason_ck',
-      sql`${t.status} <> 'rechazada' or length(${t.rejectionReason}) between 10 and 300`,
-    ),
+    // El único `CHECK` que sobrevive a la 0072: es la regla del dato declarado y la red de
+    // base del `400 matricula_vacia`, no un resto de la revisión.
     check(
       'license_number_ck',
       sql`${t.licenseNumber} is null or length(${t.licenseNumber}) between 3 and 40`,
@@ -179,7 +169,12 @@ export const license = pgTable(
 // ---------------------------------------------------------------------------------------
 
 export const practitioner = pgTable(
-  'doctor',
+  // `practitioner`, que es como se llama la tabla en la base. Dijo `'doctor'` entre
+  // `ccc95bf` y hoy: daño colateral del reemplazo masivo del cambio de roles a inglés, que
+  // cambió el VALOR `'practitioner'` de `account.role` y arrastró este nombre de tabla. No
+  // rompió nada porque los repositorios escriben SQL a mano, pero el esquema describía una
+  // tabla que no existe.
+  'practitioner',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     practiceId: uuid('practice_id')

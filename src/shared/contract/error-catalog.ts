@@ -194,7 +194,6 @@ export type ErrorCode =
   | 'referida_sin_quien'
   | 'referida_no_existe'
   | 'correo_duplicado_en_la_consulta'
-  | 'licencia_sin_verificar'
   | 'limite_del_plan'
   | 'demasiadas_altas'
   | 'alergias_sin_cuales'
@@ -208,15 +207,16 @@ export type ErrorCode =
   // GET /v1/tenants/mine · `consultas.md`
   | 'rol_no_corresponde'
   // POST /v1/tenants/mine/license · `consultas.md`
+  //
+  // SIETE CÓDIGOS MENOS desde el 30 de octubre de 2026, con la revisión manual que los
+  // justificaba: `declaracion_sin_aceptar`, `terminos_sin_aceptar`, `credencial_sin_subir`,
+  // `credencial_no_valida`, `licencia_en_revision`, `licencia_ya_verificada` y, del lado de
+  // pacientes, `licencia_sin_verificar`. No hay documento que validar, no hay aceptaciones que
+  // exigir y no hay estados entre los que no se pueda transitar: es un formulario y el último
+  // `POST` gana.
   | 'matricula_vacia'
   | 'pais_sin_cobertura'
   | 'especialidad_desconocida'
-  | 'declaracion_sin_aceptar'
-  | 'terminos_sin_aceptar'
-  | 'credencial_sin_subir'
-  | 'credencial_no_valida'
-  | 'licencia_en_revision'
-  | 'licencia_ya_verificada'
   | 'demasiados_envios'
   // los seis del transporte (_convenciones.md · «Los errores del transporte»)
   | 'ruta_no_existe'
@@ -237,15 +237,13 @@ export type ErrorCode =
   | 'token_de_plataforma_no_valido'
   | 'token_de_plataforma_caducado'
   | 'region_no_corresponde'
-  // Los tres endpoints de consola de `consultas.md`
+  // Los tres endpoints de consola de `consultas.md`. Los cuatro de la decisión de la
+  // licencia —`licencia_no_existe`, `licencia_ya_decidida`, `licencia_sin_enviar` y
+  // `motivo_rechazo_vacio`— se fueron con ella el 30 de octubre de 2026.
   | 'region_desconocida'
   | 'plan_desconocido'
   | 'correo_ya_tiene_cuenta'
   | 'consulta_no_existe'
-  | 'licencia_no_existe'
-  | 'licencia_ya_decidida'
-  | 'licencia_sin_enviar'
-  | 'motivo_rechazo_vacio'
   | 'fallo_de_servicio';
 
 type Entry = {
@@ -1073,12 +1071,6 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Ya tienes una paciente con este correo. Revisa antes de crear otra ficha.',
     field: 'correo',
   },
-  licencia_sin_verificar: {
-    status: 409,
-    message:
-      'Todavía no puedes invitar pacientes: tu licencia está en revisión. Te avisamos en cuanto se apruebe.',
-    field: null,
-  },
   // La frase lleva el número del plan y la pone quien lanza, con `patient_limit`.
   limite_del_plan: {
     status: 409,
@@ -1145,35 +1137,10 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Elige una especialidad de la lista.',
     field: 'especialidad',
   },
-  declaracion_sin_aceptar: {
-    status: 400,
-    message: 'Tienes que declarar que la credencial es tuya y está vigente.',
-    field: 'declaracion_aceptada',
-  },
-  terminos_sin_aceptar: {
-    status: 400,
-    message: 'Tienes que aceptar los términos y el tratamiento de datos.',
-    field: 'terminos_aceptados',
-  },
-  credencial_sin_subir: {
-    status: 400,
-    message: 'Falta la foto o el PDF de tu credencial.',
-    field: 'credencial_clave',
-  },
-  credencial_no_valida: {
-    status: 400,
-    message: 'Ese archivo no nos sirve. Tiene que ser JPG, PNG o PDF, y pesar menos de 10 MB.',
-    field: 'credencial_clave',
-  },
-  licencia_en_revision: {
-    status: 409,
-    message: 'Tu licencia ya está en revisión. Te avisamos en cuanto haya respuesta.',
-    field: null,
-  },
-  licencia_ya_verificada: { status: 409, message: 'Tu licencia ya está verificada.', field: null },
   demasiados_envios: {
     status: 429,
-    message: 'Ya enviaste tu licencia varias veces hoy. Espera a que la revisemos.',
+    // «Vuelve a intentarlo mañana» y no «espera a que la revisemos»: nadie la va a revisar.
+    message: 'Guardaste tu matrícula varias veces hoy. Vuelve a intentarlo mañana.',
     field: null,
   },
 
@@ -1290,10 +1257,10 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // estética. La regla de la respuesta idéntica protege a la paciente de un tercero, no a
   // la plataforma de sí misma.»
   //
-  // `409 licencia_sin_enviar` es el código del 28 de octubre: la base distingue TRES casos
-  // —sin fila, `sin_enviar`, ya decidida— y el contrato nombraba dos. Mandar `sin_enviar`
-  // al `licencia_ya_decidida` le diría a soporte que algo se decidió cuando no se decidió
-  // nada, y quien lee esa pantalla iría a buscar una decisión que no existe.
+  // AQUÍ HABÍA CUATRO CÓDIGOS MÁS —`licencia_no_existe`, `licencia_ya_decidida`,
+  // `licencia_sin_enviar` y `motivo_rechazo_vacio`— y se fueron el 30 de octubre de 2026 con
+  // la decisión de la licencia: MedSkin no verifica licencias, así que no hay nada que
+  // decidir y ningún rechazo que motivar.
   // ---------------------------------------------------------------------------------
   region_desconocida: { status: 400, message: 'Esa región no existe todavía.', field: 'region' },
   plan_desconocido: { status: 400, message: 'Ese plan no existe.', field: 'plan' },
@@ -1303,22 +1270,6 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: 'doctora.correo',
   },
   consulta_no_existe: { status: 404, message: 'No encontramos esa consulta.', field: null },
-  licencia_no_existe: {
-    status: 404,
-    message: 'Esa consulta no tiene ninguna licencia en revisión.',
-    field: null,
-  },
-  licencia_ya_decidida: { status: 409, message: 'Esta licencia ya se decidió.', field: null },
-  licencia_sin_enviar: {
-    status: 409,
-    message: 'Esa consulta todavía no mandó su licencia. No hay nada que decidir.',
-    field: null,
-  },
-  motivo_rechazo_vacio: {
-    status: 400,
-    message: 'Escribe el motivo del rechazo: la doctora lo va a leer.',
-    field: 'motivo_rechazo',
-  },
 };
 
 /** El cuerpo exacto de _convenciones.md. Nada más y nada menos. */
@@ -1647,7 +1598,7 @@ export const FAILURE_PHRASES = {
   readOwnPractice:
     'No pudimos cargar tu consulta. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
   submitLicense:
-    'No pudimos enviar tu licencia. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
+    'No pudimos guardar tu matrícula. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
 
   /**
    * La frase del 500 cuando el fallo ocurre ANTES de saber a qué ruta iba
@@ -1657,15 +1608,13 @@ export const FAILURE_PHRASES = {
     'No pudimos completar lo que pediste. El servidor no respondió: puedes volver a intentarlo.',
 
   // ---------------------------------------------------------------------------------
-  // Los cinco de la consola interna, literales de `consultas.md` y de `cuentas.md` ·
+  // Los de la consola interna, literales de `consultas.md` y de `cuentas.md` ·
   // «Consola interna». Viven aquí y no en el módulo porque la tabla de rutas las necesita
   // ANTES de que exista el controlador: una ruta sin su frase es un 500 sin segunda frase.
   // ---------------------------------------------------------------------------------
   createTenant:
     'No pudimos crear la consulta. El servidor no respondió. No se creó nada: puedes volver a intentarlo.',
   readTenant: 'No pudimos cargar la consulta. El servidor no respondió: puedes volver a intentarlo.',
-  decideLicense:
-    'No pudimos guardar la decisión. El servidor no respondió. La licencia sigue en revisión: puedes volver a intentarlo.',
   resendPlatformAccess:
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
   liftAccessPause:
@@ -1679,11 +1628,9 @@ export const FAILURE_PHRASES = {
   platformSignIn:
     'No pudimos entrar. El servidor no respondió: puedes volver a intentarlo.',
 
-  /** `consultas.md` · las dos lecturas de lista de la consola, 30 de octubre de 2026. */
+  /** `consultas.md` · la lectura de lista de la consola, 30 de octubre de 2026. */
   searchTenants:
     'No pudimos buscar consultas. El servidor no respondió: puedes volver a intentarlo.',
-  listLicenses:
-    'No pudimos cargar las licencias pendientes. El servidor no respondió: puedes volver a intentarlo.',
 } as const;
 
 /**

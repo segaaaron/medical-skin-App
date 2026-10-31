@@ -82,14 +82,9 @@ export const SUBJECTS: Readonly<Record<string, { title: string; body: string }>>
     body: 'Abre MedSkin para verlo. Puede necesitar respuesta hoy.',
   },
   mensaje: { title: 'Tienes un mensaje', body: 'Abre MedSkin para leerlo.' },
-  licencia_aprobada: {
-    title: 'Tu consulta ya está activa',
-    body: 'Entra a MedSkin para empezar.',
-  },
-  licencia_rechazada: {
-    title: 'Revisamos tu licencia',
-    body: 'Entra a MedSkin para ver qué falta.',
-  },
+  // Aquí estaban `licencia_aprobada` y `licencia_rechazada`, los dos avisos de la decisión
+  // de la licencia. Se fueron el 30 de octubre de 2026 con la revisión manual: MedSkin no
+  // verifica licencias, así que no hay aprobación ni rechazo que avisar.
   seguridad: {
     title: 'Movimiento en tu cuenta',
     body: 'Si no fuiste tú, cambia tu contraseña.',

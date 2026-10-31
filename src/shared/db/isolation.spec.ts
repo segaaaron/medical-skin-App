@@ -76,7 +76,7 @@ async function seed() {
        values ($1, $2, 'latam', 'BO', 'America/La_Paz', 'BOB', 'consultorio', 300, 'nota de la consola')`,
       [t.practice, name],
     );
-    await owner.query(`insert into license (id, practice_id, status) values ($1, $2, 'sin_enviar')`, [
+    await owner.query(`insert into license (id, practice_id) values ($1, $2)`, [
       t.license,
       t.practice,
     ]);
@@ -115,7 +115,7 @@ async function seed() {
     );
     await owner.query(
       `insert into access_audit (practice_id, actor_account_id, actor_label, action)
-       values ($1, $2, 'Andrea Paz', 'license.to_review')`,
+       values ($1, $2, 'Andrea Paz', 'license.declared')`,
       [t.practice, t.account],
     );
     // La ficha de la paciente en esta consulta, y sus antecedentes. Dos fichas distintas

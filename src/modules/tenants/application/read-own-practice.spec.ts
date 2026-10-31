@@ -1,7 +1,9 @@
-// `GET /v1/tenants/mine` · lo que el contrato promete de `PrimerDia` y de `Licencia` · 2.
+// `GET /v1/tenants/mine` · lo que el contrato promete de `PrimerDia` y de `Licencia`.
 //
 // Lo que se fija aquí:
-//   · `puede` se DERIVA del estado de la licencia y viaja resuelto, porque la app lo lee;
+//   · `puede` viaja RESUELTO porque la app lo lee, y lo único que lo cierra es el cupo del
+//     plan: la licencia salió de ahí con la revisión manual (migración 0072);
+//   · `licencia` son los tres datos declarados y su fecha, sin estado ni motivo de rechazo;
 //   · `pacientes` es el recuento de fichas `activa` que trae el puerto, el mismo que usa la
 //     consola: el caso de uso no lo vuelve a calcular ni lo filtra;
 //   · una paciente recibe `403 rol_no_corresponde` ANTES de que se abra una transacción;
@@ -48,10 +50,10 @@ const CONSULTA: PracticeSnapshot = {
   planRenewsOn: '2026-11-14',
   activePatients: 148,
   license: {
-    status: 'en_revision',
-    submittedAt: new Date('2026-10-26T22:24:00Z'),
-    responseEstimatedAt: new Date('2026-10-28T22:24:00Z'),
-    rejectionReason: null,
+    practiceCountry: 'BO',
+    specialty: 'dermatologia',
+    licenseNumber: 'MP-48921',
+    declaredAt: new Date('2026-10-26T22:24:00Z'),
   },
   firstDay: { practiceData: false, schedule: false, firstTreatment: false, dismissed: false },
 };
@@ -89,14 +91,14 @@ describe('GET /v1/tenants/mine', () => {
         renueva_en: '2026-11-14',
       },
       licencia: {
-        estado: 'en_revision',
-        enviada_en: '2026-10-26T22:24:00.000Z',
-        respuesta_estimada_en: '2026-10-28T22:24:00.000Z',
-        motivo_rechazo: null,
+        pais_ejercicio: 'BO',
+        especialidad: 'dermatologia',
+        matricula: 'MP-48921',
+        declarada_en: '2026-10-26T22:24:00.000Z',
       },
       puede: {
-        invitar_pacientes: false,
-        registrar_sesiones: false,
+        invitar_pacientes: true,
+        registrar_sesiones: true,
         armar_catalogo: true,
         definir_horarios: true,
       },
@@ -113,10 +115,18 @@ describe('GET /v1/tenants/mine', () => {
     expect(pedido).toEqual([{ accountId: DOCTORA.accountId, practiceId: DOCTORA.practiceId }]);
   });
 
-  it('con la licencia verificada abre invitar y registrar, y es lo único que cambia', async () => {
+  it('SIN MATRÍCULA DECLARADA `puede` no cambia: la licencia ya no abre ni cierra nada', async () => {
+    // Esta prueba es la corrección entera en una línea. Antes, una consulta sin licencia
+    // verificada recibía `invitar_pacientes: false` y `registrar_sesiones: false`; ahora los
+    // cuatro nulos de la licencia no mueven ni un valor de `puede`.
     const { caso } = armar({
       ...CONSULTA,
-      license: { ...CONSULTA.license, status: 'verificada', responseEstimatedAt: null },
+      license: {
+        practiceCountry: null,
+        specialty: null,
+        licenseNumber: null,
+        declaredAt: null,
+      },
     });
 
     const respuesta = await caso.run(DOCTORA);
@@ -126,16 +136,19 @@ describe('GET /v1/tenants/mine', () => {
       armar_catalogo: true,
       definir_horarios: true,
     });
-    expect(respuesta.licencia.estado).toBe('verificada');
-    expect(respuesta.licencia.respuesta_estimada_en).toBeNull();
+    expect(respuesta.licencia).toEqual({
+      pais_ejercicio: null,
+      especialidad: null,
+      matricula: null,
+      declarada_en: null,
+    });
   });
 
-  it('con el plan en su tope no puede invitar, aunque la licencia esté verificada', async () => {
+  it('con el plan en su tope no puede invitar, y es LA ÚNICA condición que queda', async () => {
     const { caso } = armar({
       ...CONSULTA,
       activePatients: 300,
       patientLimit: 300,
-      license: { ...CONSULTA.license, status: 'verificada' },
     });
 
     const respuesta = await caso.run(DOCTORA);
@@ -145,22 +158,6 @@ describe('GET /v1/tenants/mine', () => {
     expect(respuesta.puede.registrar_sesiones).toBe(true);
     // Y el número que lo justifica viaja en la misma respuesta: «300 de 300».
     expect(respuesta.plan).toMatchObject({ pacientes: 300, limite_pacientes: 300 });
-  });
-
-  it('un rechazo viaja con su motivo: la doctora lo va a leer', async () => {
-    const { caso } = armar({
-      ...CONSULTA,
-      license: {
-        status: 'rechazada',
-        submittedAt: new Date('2026-10-26T22:24:00Z'),
-        responseEstimatedAt: null,
-        rejectionReason: 'La credencial está vencida: manda la vigente.',
-      },
-    });
-
-    const respuesta = await caso.run(DOCTORA);
-    expect(respuesta.licencia.motivo_rechazo).toBe('La credencial está vencida: manda la vigente.');
-    expect(respuesta.puede.invitar_pacientes).toBe(false);
   });
 
   it('la lista del primer día desaparece cuando ella la cerró, no cuando están las tres hechas', async () => {

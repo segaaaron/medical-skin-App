@@ -1,6 +1,13 @@
-// Las reglas de `consultas.md` que no son una consulta: qué puede la consulta con su
-// licencia, si la lista del primer día se dibuja, cómo se lee el formulario de la licencia y
-// cuándo se promete la respuesta. Sin NestJS, sin Fastify y sin `pg`.
+// Las reglas de `consultas.md` que no son una consulta: qué puede la consulta, cómo se lee lo
+// que el doctor declara de su matrícula y la etiqueta del plan. Sin NestJS, sin Fastify y sin
+// `pg`.
+//
+// LO QUE ESTE ARCHIVO TENÍA Y YA NO, Y ES LA MITAD DE SU TAMAÑO (30 de octubre de 2026):
+// `capabilities()` mirando el estado de la licencia, `readLicenseForm()` con la credencial y
+// las dos aceptaciones, `isOwnCredentialKey()` y `estimatedResponseAt()` con su cálculo de
+// «24 h hábiles». Se fueron con la revisión manual, que el dueño descartó: MedSkin no verifica
+// licencias porque no es una asociación médica. No hay estado, no hay documento que validar y
+// no hay plazo que prometer, porque no hay nadie esperando al otro lado.
 
 import { ContractError } from '../../../shared/contract/error-catalog';
 
@@ -32,29 +39,30 @@ export type Capabilities = {
 };
 
 /**
- * `puede` · «La app **no** deduce el candado del estado de la licencia: lo lee. Así, el día
- * que una condición nueva bloquee invitar, no hay que tocar las dos apps.» Por eso esta
- * función existe en el servidor y la tabla de verdad es esta y no la de ninguna pantalla.
- * Y ese «día que una condición nueva bloquee invitar» ya llegó: es el cupo del plan.
+ * `puede` · «La app **no** deduce el candado: lo lee. Así, el día que una condición nueva
+ * bloquee invitar, no hay que tocar las dos apps.» Por eso esta función existe en el servidor
+ * y la tabla de verdad es esta y no la de ninguna pantalla.
  *
- * `hasRoom` es «quedan cupos en el plan», y entra porque **un campo que se llama `puede`
- * tiene que decir la verdad** (decisión del 28 de octubre): una consulta en su tope con
+ * **LA LICENCIA YA NO ENTRA AQUÍ** (30 de octubre de 2026). Esto miraba
+ * `licenseStatus === 'verificada'` y cerraba `invitar_pacientes` y `registrar_sesiones`
+ * mientras alguien revisaba. No hay revisión: MedSkin no verifica licencias, así que una
+ * consulta puede invitar y registrar desde el alta.
+ *
+ * QUEDA UNA SOLA CONDICIÓN, y es la que hace que valga la pena que `puede` siga existiendo:
+ * `hasRoom`, «quedan cupos en el plan». Entra porque **un campo que se llama `puede` tiene
+ * que decir la verdad** (decisión del 28 de octubre): una consulta en su tope con
  * `invitar_pacientes: true` deja que la doctora escriba el alta entera y la pierda contra un
- * `409`. Con el candado puesto antes, la pantalla lo dice primero. El `409
- * licencia_sin_verificar` y el del cupo de `pacientes.md` se quedan donde están: son la red
- * por si el cupo se agota entre la pantalla y el envío.
+ * `409`. Con el candado puesto antes, la pantalla lo dice primero. El `409` del cupo de
+ * `pacientes.md` se queda: es la red por si el cupo se agota entre la pantalla y el envío.
  *
  * `registrar_sesiones` NO depende del cupo: registrar un tratamiento es sobre una ficha que
- * ya existe y no consume ninguno.
- *
- * Los dos de arranque están en `true` desde el alta y enviar la licencia no desbloquea nada:
- * «la espera no bloquea el arranque» (`PrimerDia.dc.html` · 1).
+ * ya existe y no consume ninguno. Con la licencia fuera, es constante — y se queda como clave
+ * porque quitarla obligaría a tocar las dos apps para no ganar nada.
  */
-export function capabilities(licenseStatus: string, hasRoom: boolean): Capabilities {
-  const verified = licenseStatus === 'verificada';
+export function capabilities(hasRoom: boolean): Capabilities {
   return {
-    invitar_pacientes: verified && hasRoom,
-    registrar_sesiones: verified,
+    invitar_pacientes: hasRoom,
+    registrar_sesiones: true,
     armar_catalogo: true,
     definir_horarios: true,
   };
@@ -75,9 +83,10 @@ export function hasRoomForPatients(activePatients: number, patientLimit: number)
  * sola rechazaría a doctoras reales el primer día.
  *
  * Es lista cerrada a propósito —denegar por defecto es lo que hace cumplible «Elige una
- * especialidad de la lista»—: este campo lo lee a mano quien revisa, y un valor libre
- * convierte un desplegable en un comentario. La misma lista está en `consultas.md`, que es
- * de donde la app saca su desplegable: se edita allí y se copia aquí.
+ * especialidad de la lista»—, y lo sigue siendo aunque nadie revise: lo que la lista cerrada
+ * compra ahora es que el dato se pueda agrupar y contar, que con texto libre no se puede. La
+ * misma lista está en `consultas.md`, que es de donde la app saca su desplegable: se edita
+ * allí y se copia aquí.
  */
 export const SPECIALTIES: readonly string[] = [
   'medicina_estetica',
@@ -86,9 +95,6 @@ export const SPECIALTIES: readonly string[] = [
   'medicina_general',
 ];
 
-/** `credencial_clave` es la clave de un objeto, no una URL, y estas son las que admite. */
-const CREDENTIAL_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.pdf'];
-const CREDENTIAL_KEY_MAX_LENGTH = 200;
 const LICENSE_NUMBER_MAX_LENGTH = 40;
 const LICENSE_NUMBER_MIN_LENGTH = 3;
 
@@ -100,13 +106,12 @@ const COUNTRY_SHAPE = /^[A-Z]{2}$/;
 const COUNTRY_NAMES = new Intl.DisplayNames(['es'], { type: 'region' });
 
 /**
- * LA COBERTURA POR PAÍS NO ESTÁ DECIDIDA en ningún contrato, así que lo que esto comprueba
- * hoy es que el código sea un país: el `400 pais_sin_cobertura` existe y es alcanzable, y la
- * lista de los países donde MedSkin opera es pregunta para `producto`. Se eligió no
- * inventarla —ni acotarla al país de la consulta— porque una doctora de una clínica de Santa
- * Cruz puede tener su matrícula de Argentina, y bloquearla sería negarle el producto por una
- * regla que nadie escribió. La revisión es a mano: un país sin cobertura lo rechaza la
- * persona que revisa, con su motivo.
+ * Lo único que se comprueba del país es QUE SEA UN PAÍS, y eso es todo lo que queda por
+ * comprobar: antes el `400 pais_sin_cobertura` se apoyaba en que «un país sin cobertura lo
+ * rechaza a mano quien revisa, con su motivo», y ya no hay nadie revisando. No se acota al
+ * país de la consulta a propósito: una clínica de Santa Cruz puede tener una doctora con
+ * matrícula argentina, y bloquearla sería negarle el producto por una regla que nadie
+ * escribió.
  *
  * Lo usan los dos lados: el `pais_ejercicio` de la licencia y el `pais` del alta de una
  * consulta. El código de error es distinto porque las tablas de los dos contratos lo son
@@ -120,53 +125,34 @@ export type LicenseFormInput = {
   pais_ejercicio?: unknown;
   especialidad?: unknown;
   matricula?: unknown;
-  credencial_clave?: unknown;
-  declaracion_aceptada?: unknown;
-  terminos_aceptados?: unknown;
-};
-
-export type ReadLicenseForm = {
-  practiceCountry: string;
-  specialty: string;
-  licenseNumber: string;
-  credentialKey: string;
 };
 
 /**
- * El orden de las comprobaciones es el de la tabla de errores del contrato, y es el orden
- * que ve la doctora: primero su matrícula, que es el campo que la pantalla pide arriba.
+ * LO QUE EL DOCTOR DECLARA DE SU MATRÍCULA. Tres campos, y el orden de las comprobaciones es
+ * el de la tabla de errores del contrato, que es el orden que ve él: primero la matrícula, que
+ * es el campo que la pantalla pide arriba.
  *
- * `practiceId` entra para acotar la clave del objeto AL INQUILINO DEL TOKEN: la clave la
- * escribe el cliente, y una clave `lic/<otra consulta>/…` haría que quien revisa abriera por
- * enlace firmado el documento de identidad de otra doctora (OWASP A01). No se comprueba
- * contra la URL que mandó nadie: se compara con la consulta del token.
+ * **Y ya no hay un cuarto ni un quinto.** `credencial_clave` —la clave del documento de
+ * identidad profesional escaneado—, `declaracion_aceptada` y `terminos_aceptados` se fueron
+ * con la revisión. Guardar la foto del documento de identidad de alguien sin que nadie la mire
+ * es quedarse con todo el riesgo de custodiarla y ninguno de sus beneficios; y la declaración
+ * era «esta credencial es mía y está vigente», una afirmación sobre un documento que ya no se
+ * pide. El consentimiento al tratamiento de datos **no se pierde con esto**: no vivía aquí,
+ * vive en `consent` y en el alta de la cuenta, que es donde la persona lo da.
+ *
+ * `practiceId` ya no entra: existía para acotar la clave del objeto al inquilino del token
+ * (OWASP A01), y sin clave de objeto no hay nada del cliente que apunte a otra consulta. Lo
+ * que escribe esto son tres campos de texto sobre la fila de SU consulta, que es lo que su
+ * política de `UPDATE` y su `GRANT` de tres columnas ya acotan en la base.
  */
-/**
- * LOS TRES DATOS DE LA LICENCIA QUE PUEDE RECOGER LA CONSOLA · decidido por el dueño el 30 de
- * octubre de 2026.
- *
- * El formulario del alta pregunta lo mismo que la app le preguntará después a la doctora, así
- * que se recoge una vez y viaja prellenado. Lo que NO entra aquí, y es la línea que no se
- * cruza: la credencial escaneada y las dos aceptaciones legales. Un número de matrícula es un
- * DATO —lo teclea quien sea— y una aceptación es un ACTO de ella; que soporte marque «acepto
- * los términos» en su nombre es firmar por otra persona.
- *
- * Por eso esto no deja la licencia `en_revision`: la fila se queda en `sin_enviar`, con los
- * tres campos puestos, y la bandeja de revisión no la ve. Lo que la manda a revisar sigue
- * siendo `POST /v1/tenants/mine/license`, con `readLicenseForm()` entero.
- *
- * Mismas validaciones que allí, a propósito: si la consola admitiera una especialidad que la
- * app rechaza, la doctora encontraría su formulario prellenado con algo que no puede guardar.
- */
-export type ConsoleLicenseDraft = {
+export type LicenseDeclaration = {
   practiceCountry: string;
   specialty: string;
   licenseNumber: string;
 };
 
-export function readConsoleLicenseDraft(input: unknown): ConsoleLicenseDraft | null {
-  if (input === undefined || input === null) return null;
-  const body: LicenseFormInput = typeof input === 'object' ? input : {};
+export function readLicenseDeclaration(input: unknown): LicenseDeclaration {
+  const body: LicenseFormInput = typeof input === 'object' && input !== null ? input : {};
 
   const licenseNumber = text(body.matricula, LICENSE_NUMBER_MAX_LENGTH);
   if (licenseNumber === null || licenseNumber.length < LICENSE_NUMBER_MIN_LENGTH) {
@@ -184,88 +170,24 @@ export function readConsoleLicenseDraft(input: unknown): ConsoleLicenseDraft | n
   return { practiceCountry: country, specialty, licenseNumber };
 }
 
-export function readLicenseForm(input: unknown, practiceId: string): ReadLicenseForm {
-  const body: LicenseFormInput = typeof input === 'object' && input !== null ? input : {};
-
-  const licenseNumber = text(body.matricula, LICENSE_NUMBER_MAX_LENGTH);
-  if (licenseNumber === null || licenseNumber.length < LICENSE_NUMBER_MIN_LENGTH) {
-    throw new ContractError('matricula_vacia');
-  }
-
-  const country = text(body.pais_ejercicio, 2);
-  if (country === null || !isCountry(country)) throw new ContractError('pais_sin_cobertura');
-
-  const specialty = text(body.especialidad, 60);
-  if (specialty === null || !SPECIALTIES.includes(specialty)) {
-    throw new ContractError('especialidad_desconocida');
-  }
-
-  // Los dos consentimientos ANTES de la credencial, como la tabla del contrato: son lo que
-  // la pantalla pide al final y lo que no se puede dar por supuesto. `=== true` y no
-  // «verdadero»: un `"true"` de texto o un `1` no son una declaración.
-  if (body.declaracion_aceptada !== true) throw new ContractError('declaracion_sin_aceptar');
-  if (body.terminos_aceptados !== true) throw new ContractError('terminos_sin_aceptar');
-
-  const credentialKey = text(body.credencial_clave, CREDENTIAL_KEY_MAX_LENGTH);
-  if (credentialKey === null) throw new ContractError('credencial_sin_subir');
-  if (!isOwnCredentialKey(credentialKey, practiceId)) {
-    throw new ContractError('credencial_no_valida');
-  }
-
-  return { practiceCountry: country, specialty, licenseNumber, credentialKey };
-}
-
 /**
- * Lo que se puede comprobar de la clave SIN el almacén: que es del prefijo de este
- * consulta, que no sale de él con un `..` y que su extensión es de las tres del contrato.
+ * LO MISMO, PERO OPCIONAL: es el alta de la consola, donde los tres datos son un bloque que
+ * se puede dejar en blanco. El formulario del alta pregunta lo mismo que la app le preguntará
+ * después al doctor, así que se recoge una vez y viaja prellenado.
  *
- * **Que el objeto exista, su tipo real y sus 10 MB NO se comprueban aquí** y es un límite de
- * alcance dicho en la entrega: la subida por URL firmada es del tramo 6 (§7.1) y en este
- * tramo no hay puerto de archivos al que preguntar. El mismo `400 credencial_no_valida`
- * queda para cuando lo haya.
+ * Mismas validaciones, y por eso es la misma función: si la consola admitiera una especialidad
+ * que la app rechaza, el doctor encontraría su formulario prellenado con algo que no puede
+ * guardar.
  */
-export function isOwnCredentialKey(key: string, practiceId: string): boolean {
-  if (key.includes('..') || key.includes('//') || key.includes('\\')) return false;
-  if (!key.startsWith(`lic/${practiceId}/`)) return false;
-  const lower = key.toLowerCase();
-  return CREDENTIAL_EXTENSIONS.some((extension) => lower.endsWith(extension));
+export type ConsoleLicenseDraft = LicenseDeclaration;
+
+export function readConsoleLicenseDraft(input: unknown): ConsoleLicenseDraft | null {
+  if (input === undefined || input === null) return null;
+  return readLicenseDeclaration(input);
 }
 
 function text(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().slice(0, maxLength);
   return trimmed === '' ? null : trimmed;
-}
-
-// ---------------------------------------------------------------------------------------
-// `respuesta_estimada_en`
-// ---------------------------------------------------------------------------------------
-
-const RESPONSE_HOURS = 24;
-const HOUR_MS = 60 * 60 * 1000;
-
-/**
- * «Hasta 24 h hábiles» (`Licencia.dc.html` · 2), y lo calcula el servidor «para que la app
- * no tenga que saber qué día es feriado en Bolivia».
- *
- * Lo que está implementado son las 24 h corridas empujadas fuera del fin de semana, en la
- * zona del despliegue: **hábiles** excluye sábado y domingo, que es lo único que se puede
- * saber sin un calendario. **Los feriados no se descuentan porque no existe ese calendario
- * en ningún sitio** —ni tabla, ni configuración, ni contrato—: es pregunta para `producto` y
- * está dicho en la entrega. La promesa queda corta en un feriado, nunca larga.
- */
-export function estimatedResponseAt(now: Date, timeZone: string): Date {
-  let moment = new Date(now.getTime() + RESPONSE_HOURS * HOUR_MS);
-  // Tope de dos empujes: un fin de semana es como mucho dos días.
-  for (let pushed = 0; pushed < 2 && isWeekend(moment, timeZone); pushed += 1) {
-    moment = new Date(moment.getTime() + 24 * HOUR_MS);
-  }
-  return moment;
-}
-
-function isWeekend(moment: Date, timeZone: string): boolean {
-  // `en-US` y no `es-BO`: lo que se compara es un día de la semana, y el inglés corto es
-  // estable. El idioma de la frase que ve la doctora lo pone el reloj del borde.
-  const day = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(moment);
-  return day === 'Sat' || day === 'Sun';
 }

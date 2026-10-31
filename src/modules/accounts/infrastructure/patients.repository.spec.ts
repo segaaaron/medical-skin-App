@@ -141,8 +141,13 @@ const CUERPO = {
   },
 };
 
-async function licencia(status: string): Promise<void> {
-  await owner.query('update license set status = $2 where id = $1', [LICENCIA, status]);
+/**
+ * El cupo del plan de ESTA consulta. Sustituye a `licencia(status)`, que movía el estado de la
+ * revisión manual para probar los veredictos que no crean nada: ese bloqueo se fue el 30 de
+ * octubre de 2026 —MedSkin no verifica licencias— y el cupo es el veredicto que queda.
+ */
+async function cupo(limite: number): Promise<void> {
+  await owner.query('update practice set patient_limit = $2 where id = $1', [CONSULTA, limite]);
 }
 
 async function limpiarFichas(): Promise<void> {
@@ -180,7 +185,7 @@ async function sembrarConsulta(
     [practice, `Clínica ${nombre}`],
   );
   await owner.query(
-    `insert into license (id, practice_id, status) values ($1, $2, 'verificada')`,
+    `insert into license (id, practice_id, license_number) values ($1, $2, '48921')`,
     [license, practice],
   );
   await owner.query(
@@ -229,7 +234,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await limpiarFichas();
-  await licencia('verificada');
+  await cupo(300);
 });
 
 type Ficha = {
@@ -413,17 +418,22 @@ describe('el alta escribe las tres filas de la consulta, y nada más', () => {
 });
 
 describe('lo que la base decide, y el otra consulta', () => {
-  it('con la licencia sin verificar no se crea ni la ficha ni la cuenta', async () => {
-    await licencia('en_revision');
+  it('con el cupo del plan agotado no se crea ni la ficha ni la cuenta', async () => {
+    // ERA «con la licencia sin verificar», el `409 licencia_sin_verificar`: se fue el 30 de
+    // octubre de 2026 con la revisión manual. Lo que esta prueba vigila de verdad sigue vivo
+    // —que un veredicto que no crea no deje una cuenta suelta— y el cupo es el veredicto que
+    // queda para comprobarlo.
+    await cupo(0);
     const fallo = await caso().run(CUERPO, DOCTORA, clave(CUERPO)).catch((e: unknown) => e);
 
-    expect((fallo as ContractError).code).toBe('licencia_sin_verificar');
+    expect((fallo as ContractError).code).toBe('limite_del_plan');
     expect(await fichaDe(CORREO_PACIENTE)).toBeUndefined();
     // Y la cuenta tampoco: el 409 se decide ANTES de llamar a la función del alta.
     const { rows } = await owner.query('select 1 from account where email = $1::citext', [
       CORREO_PACIENTE,
     ]);
     expect(rows).toHaveLength(0);
+    await cupo(300);
   });
 
   it('el límite del plan cuenta las fichas de ESTA consulta y nada más', async () => {
@@ -683,20 +693,23 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
   });
 
   it('un veredicto que no crea SUELTA la clave, y el reintento vuelve a intentarlo', async () => {
-    await licencia('en_revision');
+    // El veredicto es el del cupo y no el de la licencia: el `licencia_sin_verificar` que
+    // servía de vehículo se fue con la revisión manual. Lo que se prueba es el mecanismo de la
+    // reserva, que no cambió.
+    await cupo(0);
     const misma = clave(CUERPO);
 
     const primero = await caso().run(CUERPO, DOCTORA, misma).catch((e: unknown) => e);
-    expect((primero as ContractError).code).toBe('licencia_sin_verificar');
+    expect((primero as ContractError).code).toBe('limite_del_plan');
 
-    // Sin soltar la reserva, la doctora no podría reintentar con la misma clave cuando le
-    // aprueben la licencia: recibiría el 500 de la reserva sin cerrar para siempre.
+    // Sin soltar la reserva, la doctora no podría reintentar con la misma clave cuando amplíe
+    // su plan: recibiría el 500 de la reserva sin cerrar para siempre.
     const { rows } = await owner.query('select 1 from idempotency_key where key = $1', [
       misma.key,
     ]);
     expect(rows).toHaveLength(0);
 
-    await licencia('verificada');
+    await cupo(300);
     const creada = await caso().run(CUERPO, DOCTORA, misma);
     expect(creada.paciente_id).toBeTruthy();
   });

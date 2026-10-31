@@ -39,7 +39,7 @@ type RefreshRow = {
   permissions: string[] | null;
   account_status: string | null;
   password_is_temporary: boolean | null;
-  license_status: string | null;
+  license_declared: boolean | null;
   first_day_done: boolean | null;
   refresh_expires_at: Date | null;
   graced: boolean | null;
@@ -48,7 +48,7 @@ type RefreshRow = {
 type PracticeRow = {
   id: string;
   name: string;
-  license_status: string | null;
+  license_declared: boolean | null;
   first_day_practice_data: boolean;
   first_day_schedule: boolean;
   first_day_first_treatment: boolean;
@@ -98,7 +98,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
         revokedAt: row.revoked_at,
         refreshExpiresAt: row.refresh_expires_at,
         practice: practice === null ? null : { id: practice.id, name: practice.name },
-        licenseStatus: practice?.license_status ?? null,
+        licenseDeclared: practice?.license_declared ?? false,
         firstDayDone: practice === null ? true : firstDayDone(practice),
         permissions: practice?.permissions ?? null,
       };
@@ -114,7 +114,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
    */
   private async readPractice(c: PoolClient): Promise<PracticeRow | null> {
     const { rows } = await c.query<PracticeRow>(
-      `select p.id, p.name, l.status as license_status,
+      `select p.id, p.name, l.license_number is not null as license_declared,
               p.first_day_practice_data, p.first_day_schedule,
               p.first_day_first_treatment, p.first_day_dismissed,
               pr.permissions
@@ -192,7 +192,7 @@ function toRotatedRefresh(row: RefreshRow): RotatedRefresh {
     permissions: row.permissions,
     accountStatus: row.account_status,
     passwordIsTemporary: row.password_is_temporary ?? false,
-    licenseStatus: row.license_status,
+    licenseDeclared: row.license_declared ?? false,
     firstDayDone: row.first_day_done ?? false,
     refreshExpiresAt: row.refresh_expires_at,
     graced: row.graced ?? false,

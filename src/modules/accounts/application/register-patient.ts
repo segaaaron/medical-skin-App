@@ -189,14 +189,16 @@ export class RegisterPatient {
   }
 
   /**
-   * Los tres `409` y el `404` de la base, en el orden en que los devuelve. Cada uno sale
-   * de la consulta del contexto: ni la licencia, ni el plan, ni el duplicado, ni quien la
-   * refirió se preguntan con un identificador que venga del cliente.
+   * Los `409` y el `404` de la base, en el orden en que los devuelve. Cada uno sale de la
+   * consulta del contexto: ni el plan, ni el duplicado, ni quien la refirió se preguntan con un
+   * identificador que venga del cliente.
+   *
+   * **`license_unverified` ya no está**: era el `409 licencia_sin_verificar` de «tu licencia
+   * todavía no está verificada», y se fue el 30 de octubre de 2026 con la revisión manual.
+   * MedSkin no verifica licencias, así que una consulta invita pacientes desde el alta.
    */
   private checkVerdict(created: PatientRegistration): void {
     switch (created.verdict) {
-      case 'license_unverified':
-        throw new ContractError('licencia_sin_verificar');
       case 'plan_limit':
         throw new ContractError('limite_del_plan', undefined, this.planPhrase(created.patientLimit));
       case 'duplicate_email':

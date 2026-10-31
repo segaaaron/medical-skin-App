@@ -128,7 +128,7 @@ async function seedPractice(t: { practice: string; owner: string; ownerEmail: st
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [t.owner, t.practice]);
   await owner.query(
-    `insert into license (practice_id, status) values ($1, 'verificada')`,
+    `insert into license (practice_id, license_number) values ($1, '48921')`,
     [t.practice],
   );
 }
