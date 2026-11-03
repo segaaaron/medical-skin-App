@@ -663,9 +663,13 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
     );
     const patient = made[0]!.id;
     const { rows: cita } = await owner.query<{ id: string }>(
+      // FRANJA FIJA Y PROPIA. Antes era `now() - interval '2 hours'`, y el 3 de noviembre de
+      // 2026 esa resta cayó encima de la franja fija de otra prueba de este mismo archivo
+      // (2026-11-03T15:00Z): `appointment_no_overlap` la rechazó y la prueba falló por el
+      // calendario, no por el código. Un reloj real dentro de una prueba es una bomba con fecha.
       `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
                                 status, price_cents, attended)
-       values ($1, $2, $3, now() - interval '2 hours', now() - interval '1 hour', 'atendida',
+       values ($1, $2, $3, '2026-11-01T15:00:00Z', '2026-11-01T15:40:00Z', 'atendida',
                192000, true)
        returning id`,
       [P.practice, patient, treatment],
@@ -749,9 +753,10 @@ describe('el consentimiento que abre la nota, y quién lo firma', () => {
     );
     const patient = made[0]!.id;
     const { rows: cita } = await owner.query<{ id: string }>(
+      // Lo mismo que la de arriba, en otro día libre: ninguna de las dos se mueve nunca más.
       `insert into appointment (practice_id, patient_id, treatment_id, starts_at, ends_at,
                                 status, price_cents, attended)
-       values ($1, $2, $3, now() - interval '4 hours', now() - interval '3 hours', 'atendida',
+       values ($1, $2, $3, '2026-11-02T15:00:00Z', '2026-11-02T15:40:00Z', 'atendida',
                192000, true)
        returning id`,
       [P.practice, patient, treatment],
