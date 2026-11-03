@@ -76,9 +76,15 @@ describe('el límite de refrescos', () => {
     const segunda = await counters.peek(`sesion:refrescos:${SESION}`);
 
     // La segunda no renueva: si lo hiciera, el límite no caducaría nunca.
-    const falta = (c: { expiresAt: Date | null }) => (c.expiresAt?.getTime() ?? 0) - Date.now();
-    expect(falta(segunda)).toBeLessThanOrEqual(falta(primera));
-    expect(falta(primera)).toBeGreaterThan(59 * 60 * 1000);
+    //
+    // Se comparan los DOS VENCIMIENTOS entre ellos, no lo que falta para cada uno medido con
+    // `Date.now()`: así estaba antes, y cada llamada leía el reloj en un instante distinto, así
+    // que un milisegundo entre las dos hacía que a la primera «le faltara menos» y la prueba
+    // fallaba sola —`expected 3599984 to be less than or equal to 3599983`—. Lo que se quiere
+    // fijar no necesita reloj: el vencimiento no se movió.
+    const vence = (c: { expiresAt: Date | null }) => c.expiresAt?.getTime() ?? 0;
+    expect(vence(segunda)).toBeLessThanOrEqual(vence(primera));
+    expect(vence(primera) - Date.now()).toBeGreaterThan(59 * 60 * 1000);
   });
 
   it('la gracia se mide aparte y no gasta el límite del cliente dos veces', async () => {
