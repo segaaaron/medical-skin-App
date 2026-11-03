@@ -22,6 +22,7 @@ import type { Region } from '../contract/session';
 import { FailureLog, type FailureContext } from '../failures/service-failure';
 import type { PlatformCaller } from '../platform/platform-token';
 import { metaOf } from './envelope.interceptor';
+import { esperaDeRitmo } from './rate-limit';
 import { registeredRoute, type RequestWithContext } from './request-context';
 import { policyFor } from './route-policy';
 
@@ -67,10 +68,22 @@ export class ErrorFilter implements ExceptionFilter {
     const status = statusOf(thrown);
     const code = status === null ? undefined : TRANSPORT_CODE_BY_STATUS[status];
     if (status !== null && code !== undefined && status < 500) {
+      // LOS SEGUNDOS DEL 429, cuando los hay. Sin ellos la frase «espera unos segundos» le
+      // pedía a la app que adivinara, y una app que adivina reintenta pronto y vuelve a
+      // chocar. `rate-limit.ts` los pone en lo lanzado; los demás errores del transporte no
+      // traen ninguno y siguen saliendo sin `datos`.
+      const datos = esperaDeRitmo(thrown);
       this.reply(
         res,
         status,
-        { error: { codigo: code, mensaje: CATALOG[code].message, campo: null } },
+        {
+          error: {
+            codigo: code,
+            mensaje: CATALOG[code].message,
+            campo: null,
+            ...(datos === null ? {} : { datos }),
+          },
+        },
         req,
       );
       return;

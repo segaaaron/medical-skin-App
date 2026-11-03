@@ -137,6 +137,38 @@ const esquema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   CORREO_REMITENTE: z.string().email(),
 
+  // QUIÉN PUEDE DECIR CUÁL ES LA IP DEL CLIENTE · 2 de noviembre de 2026.
+  //
+  // El adaptador tenía `trustProxy: true`, que significa «confía en toda la cadena de
+  // `X-Forwarded-For`». Y esa cadena la escribe el cliente: comprobado con `inject` contra
+  // Fastify 5.12.7, con la cabecera `1.2.3.4, 10.0.0.9` el servidor lee `1.2.3.4`. Con eso
+  // se saltaban los dos límites por IP —el ritmo del borde y los 20 fallos de acceso en 15
+  // minutos de `access-pause.ts`— mandando una cabecera distinta cada vez.
+  //
+  // Lo que se confía ahora son REDES, no «todos». `@fastify/proxy-addr` recorre la cadena de
+  // derecha a izquierda saltando lo que está en esta lista y se queda con la primera
+  // dirección que no está: como el salto que el proxy añade es el único que el cliente no
+  // puede escribir, lo que sale es la IP real. Rellenar la cabecera con direcciones privadas
+  // no sirve de nada, porque son las de la IZQUIERDA y no se leen.
+  //
+  // El valor por omisión son los rangos privados y el bucle local, que es lo que cubre
+  // Docker, Swarm y un proxy en la misma máquina. **En producción hay que fijar la subred
+  // exacta por la que entra Traefik**: una red privada de más en la lista no es una fuga
+  // —ningún cliente de internet llega con una IP privada— pero cuanto más corta, mejor.
+  // Y `true` no es un valor admitido a propósito: esa es la configuración que se arregló.
+  PROXY_DE_CONFIANZA: z
+    .string()
+    .default('127.0.0.1/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0),
+    )
+    .refine((lista) => lista.length > 0, {
+      message: 'PROXY_DE_CONFIANZA no puede quedar vacía: sin ella no se resuelve ninguna IP',
+    }),
+
   // CORS cerrado por defecto: una lista vacía no abre ningún origen (OWASP A05).
   CORS_ORIGENES: z
     .string()

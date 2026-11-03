@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { pushSendersOf } from './modules/notifications/notifications.module';
 import { config } from './shared/config/config';
 import { countRetentionDebt, retentionLine } from './shared/db/retention-alarm';
+import { OPCIONES_DE_RITMO } from './shared/http/rate-limit';
 import { assertDecoyParity } from './shared/security/decoy-parity';
 import { POOL } from './shared/shared.module';
 
@@ -21,8 +22,15 @@ async function start() {
     AppModule,
     // trustProxy: el borde resuelve la región y reenvía; sin esto la IP real se pierde
     // y el límite de ritmo contaría todas las peticiones como una sola.
+    //
+    // Y VA CON LA LISTA DE REDES, NUNCA CON `true` (2 de noviembre de 2026). Con `true`,
+    // `req.ip` era el valor que el cliente escribía en `X-Forwarded-For` —medido con
+    // `inject`: la cabecera `1.2.3.4, 10.0.0.9` daba `1.2.3.4`— y una cabecera distinta en
+    // cada petición daba un cubo de ritmo nuevo y saltaba también los 20 fallos de acceso
+    // por IP. La razón completa está en `config.ts` · `PROXY_DE_CONFIANZA`.
+    //
     // Ningún byte de imagen pasa por la API, así que el cuerpo nunca necesita ser grande.
-    new FastifyAdapter({ trustProxy: true, bodyLimit: 1 * 1024 * 1024 }),
+    new FastifyAdapter({ trustProxy: cfg.PROXY_DE_CONFIANZA, bodyLimit: 1 * 1024 * 1024 }),
     // Sin stack traces al cliente: el filtro global es el único que contesta errores.
     { bufferLogs: true },
   );
@@ -56,12 +64,26 @@ async function start() {
       'X-MedSkin-Modelo',
       'X-MedSkin-Sistema',
     ],
+    // LAS QUE EL CLIENTE PUEDE LEER, y sin esto no podía leer ninguna (2 de noviembre de
+    // 2026). `X-Request-Id` va en TODA respuesta de error y es lo único que une un «me dio
+    // error» con su fila en `service_failure`; una app nativa lo ve igual, pero el
+    // dashboard es un cliente de navegador y ahí el navegador se lo esconde al JavaScript
+    // si no está aquí. Las tres de ritmo, por lo mismo: sirven para frenar antes de chocar.
+    exposedHeaders: [
+      'X-Request-Id',
+      'RateLimit-Limit',
+      'RateLimit-Remaining',
+      'RateLimit-Reset',
+      'Retry-After',
+    ],
   });
 
-  // Límite de ritmo por IP, la primera capa. El de acceso, recuperación y reenvío es el de
-  // los contadores de Redis, que cuenta por correo y sobrevive a un cambio de IP: este de
+  // Límite de ritmo del borde, la primera capa: por IP real sin sesión y por DISPOSITIVO
+  // con sesión. Los números, la razón de los dos cubos y lo que este límite NO frena están
+  // en `shared/http/rate-limit.ts`. El de acceso, recuperación y reenvío sigue siendo el de
+  // los contadores de Postgres, que cuenta por correo y sobrevive a un cambio de IP: este de
   // aquí es contra el ruido, no contra el ataque dirigido (`diseño` · OWASP A04).
-  await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+  await app.register(rateLimit, OPCIONES_DE_RITMO);
 
   // Sin esto NO corre ningún `onApplicationShutdown`: ni el de `SharedModule` —que cierra
   // el pool y Redis— ni el de `RecoveryModule`, que cierra el trabajador de BullMQ y su
