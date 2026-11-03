@@ -166,7 +166,7 @@ describe('POST /v1/accounts/{account_id}/access · la temporal en claro', () => 
 
     expect(bloque.via).toBe('whatsapp');
     expect(bloque.enviado).toBe(false);
-    expect(bloque.contrasena_temporal).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    expect(bloque.contrasena_temporal).toMatch(/^\d{6}$/);
     expect(bloque.caduca_en_texto).toBe('Caduca el viernes 30 a las 18:24');
     // 72 h exactas: «no se negocia por canal».
     expect(bloque.caduca_en).toBe(new Date(AHORA.getTime() + 72 * 3_600_000).toISOString());
@@ -199,7 +199,7 @@ describe('POST /v1/accounts/{account_id}/access · la temporal en claro', () => 
     // parte, y lo que la doctora recibe es `enviado: true` de verdad.
     expect(bloque.enviado).toBe(true);
     expect(mandados[0]?.patientEmail).toBe('valeria.antelo@gmail.com');
-    expect(mandados[0]?.temporaryPassword).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    expect(mandados[0]?.temporaryPassword).toMatch(/^\d{6}$/);
   });
 
   it('el texto del WhatsApp no dice ni un dato clínico', async () => {

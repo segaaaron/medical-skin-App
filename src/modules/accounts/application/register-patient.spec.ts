@@ -203,7 +203,7 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
     // MedSkin no tiene número y no manda mensajes por ella.
     expect(acceso.enviado).toBe(false);
     // Sin la temporal no hay mensaje que mandar: es el costo de no tener número.
-    expect(acceso.contrasena_temporal).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    expect(acceso.contrasena_temporal).toMatch(/^\d{6}$/);
     expect(acceso.caduca_en).toBe(EN_72H.toISOString());
     expect(acceso.caduca_en_texto).toBe('Caduca el sábado 31 a las 18:24');
 
@@ -238,7 +238,7 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
 
     // La contraseña en claro solo existe en el mensaje, que es la otra mitad del invariante.
     expect(enviados[0]?.patientEmail).toBe('valeria.antelo@gmail.com');
-    expect(enviados[0]?.temporaryPassword).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    expect(enviados[0]?.temporaryPassword).toMatch(/^\d{6}$/);
     expect(pasos).toEqual(['limite', 'argon2:hashear', 'base', 'correo', 'clave:cerrar']);
   });
 

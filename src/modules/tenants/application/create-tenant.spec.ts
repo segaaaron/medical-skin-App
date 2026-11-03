@@ -129,8 +129,9 @@ describe('POST /v1/platform/tenants', () => {
         contrasena_temporal_caduca_en: '2026-10-30T13:12:00.000Z',
       },
     });
-    // La forma del contrato, `tejado-lila-07`: se dicta por teléfono.
-    expect(respuesta.doctora.contrasena_temporal).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    // La forma del contrato desde el 3 de noviembre de 2026: SEIS DÍGITOS, como el código de
+    // recuperación. Se dicta por teléfono igual de bien y se teclea en el teclado numérico.
+    expect(respuesta.doctora.contrasena_temporal).toMatch(/^\d{6}$/);
     // Lo que viaja a la base es el HASH de esa misma contraseña, nunca la contraseña.
     expect(hasheadas).toEqual([respuesta.doctora.contrasena_temporal]);
     // Y el correo del alta sale en el mismo acto, con la temporal dentro.
@@ -177,7 +178,7 @@ describe('POST /v1/platform/tenants', () => {
     // contraseña del 201, que puede leer y dictar.
     const served = await caso.run(CUERPO, ACTOR, CLAVE, TRACE);
     expect(served.status).toBe(201);
-    expect(served.response.doctora.contrasena_temporal).toMatch(/^[a-z]+-[a-z]+-\d{2}$/);
+    expect(served.response.doctora.contrasena_temporal).toMatch(/^\d{6}$/);
 
     // Y la fila del fallo va con la cuenta y la consulta recién creadas, más la traza.
     expect(registrados).toEqual([

@@ -32,7 +32,7 @@ const PATIENT = {
 };
 
 /** Contraseñas de desarrollo. Pasan las reglas: 8 o más y no están en la lista de usadas. */
-const TEMP_PRACTITIONER = 'tejado-lila-07';
+const TEMP_PRACTITIONER = '418203';
 const TEMP_PATIENT = 'ventana-turquesa-42';
 
 async function seed(): Promise<void> {
