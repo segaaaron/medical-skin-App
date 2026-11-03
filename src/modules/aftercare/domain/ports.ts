@@ -1,5 +1,6 @@
 // Lo que los cuidados necesitan de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { Paginado } from '../../../shared/contract/pagination';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 
 export type AftercareCaller = {
@@ -38,7 +39,11 @@ export type Preferences = {
 };
 
 export interface AftercarePort {
-  plans(caller: AftercareCaller, patientId: string | null): Promise<readonly CarePlanRow[]>;
+  plans(
+    caller: AftercareCaller,
+    patientId: string | null,
+    asked: Paginado,
+  ): Promise<{ rows: readonly CarePlanRow[]; total: number }>;
   markStep(
     caller: AftercareCaller,
     stepId: string,

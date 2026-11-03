@@ -2,6 +2,7 @@
 // Dominio puro: se prueba sin base y sin HTTP.
 
 import { ContractError, type ErrorCode } from '../../../shared/contract/error-catalog';
+import { readPaginado } from '../../../shared/contract/pagination';
 import type {
   LinkStatus,
   PatientQuery,
@@ -31,14 +32,11 @@ export function readPatientQuery(raw: Record<string, unknown>): PatientQuery {
   const search = readSearch(raw.busca);
   const status = readEnum<PatientStatusFilter>(raw.estado, STATUSES, 'activa', 'estado_no_valido');
   const link = raw.vinculo === undefined ? null : readEnum<LinkStatus>(raw.vinculo, LINKS, null, 'vinculo_no_valido');
+  // Las dos claves de la página las lee `shared/contract/pagination.ts`, que es el mismo lector
+  // de todas las listas: lo que esta función decide son los filtros de ESTE recurso.
+  const { page, perPage } = readPaginado(raw, PER_PAGE_DEFAULT, PER_PAGE_MAX);
 
-  return {
-    search,
-    status,
-    link,
-    page: readPositive(raw.pagina, 1),
-    perPage: Math.min(readPositive(raw.por_pagina, PER_PAGE_DEFAULT), PER_PAGE_MAX),
-  };
+  return { search, status, link, page, perPage };
 }
 
 function readSearch(value: unknown): string | null {
@@ -65,13 +63,6 @@ function readEnum<T extends string>(
   const found = allowed.find((known) => known === value);
   if (found === undefined) throw new ContractError(code);
   return found;
-}
-
-/** Una página o un tamaño que no es un entero positivo vale lo que vale por omisión. */
-function readPositive(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) return fallback;
-  return parsed;
 }
 
 /**

@@ -1,5 +1,6 @@
 // Lo que el expediente necesita de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { Paginado } from '../../../shared/contract/pagination';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type {
   AdverseEventDraft,
@@ -112,7 +113,10 @@ export type LotRow = {
 };
 
 export interface LotPort {
-  list(caller: ClinicalCaller): Promise<readonly LotRow[]>;
+  list(
+    caller: ClinicalCaller,
+    asked: Paginado,
+  ): Promise<{ rows: readonly LotRow[]; total: number }>;
   create(
     caller: ClinicalCaller,
     draft: LotDraft,

@@ -208,6 +208,34 @@ describe('el catálogo de la doctora', () => {
     ).rejects.toMatchObject({ code: 'tratamiento_no_existe' });
   });
 
+  it('la lista tiene TOPE, y `cuantas` dice cuántas hay de verdad', async () => {
+    // Dos tratamientos y una página de uno: lo que viaja es uno, y el total sigue siendo dos.
+    // Sin esto, un `GET` sin parámetros arrastraba la tabla entera, que es lo que esta prueba
+    // impide que vuelva.
+    const page = (await catalog.list(doctor(MINE.practice, MINE.doctor), { por_pagina: '1' })) as {
+      cuantas: number;
+      pagina: number;
+      por_pagina: number;
+      tratamientos: { id: string }[];
+    };
+    expect(page.tratamientos).toHaveLength(1);
+    expect(page).toMatchObject({ cuantas: 2, pagina: 1, por_pagina: 1 });
+
+    // La segunda página trae el otro, y ninguno se repite.
+    const segunda = (await catalog.list(doctor(MINE.practice, MINE.doctor), {
+      pagina: '2',
+      por_pagina: '1',
+    })) as { cuantas: number; tratamientos: { id: string }[] };
+    expect(segunda.cuantas).toBe(2);
+    expect(segunda.tratamientos[0]?.id).not.toBe(page.tratamientos[0]?.id);
+
+    // Y el tope del recurso gana sobre lo que pida el cliente: 200 es el máximo, no 9000.
+    const todo = (await catalog.list(doctor(MINE.practice, MINE.doctor), {
+      por_pagina: '9000',
+    })) as { por_pagina: number };
+    expect(todo.por_pagina).toBe(200);
+  });
+
   it('el protocolo va y vuelve con su reloj, y el semáforo con sus días', async () => {
     const saved = (await catalog.saveProtocol(
       toxin,

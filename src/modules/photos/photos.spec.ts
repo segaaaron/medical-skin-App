@@ -336,6 +336,51 @@ describe('quién ve qué', () => {
     expect(Number(rows[0]?.n)).toBeGreaterThan(0);
   });
 
+  it('paginar NO pierde ni repite filas, aunque empaten en la hora', async () => {
+    // TRES FOTOS CON EL MISMO `taken_at` Y EL MISMO `created_at`: el empate que de verdad pasa
+    // cuando una tanda se sube de una sesión. Sin el desempate por identificador, dos páginas
+    // de una pueden traer la misma fila dos veces y dejarse otra fuera para siempre —y eso en
+    // una galería clínica es una foto que la doctora no ve nunca.
+    const { rows: puestas } = await owner.query<{ id: string }>(
+      `insert into photo (practice_id, patient_id, view, status, uploaded_by, declared_type,
+                          declared_bytes, taken_at, created_at, master_format)
+       select $1, $2, 'frente', 'lista', 'doctor', 'image/jpeg', 120000,
+              '2026-10-01T10:00:00Z', '2026-10-01T10:00:00Z', 'jpeg'
+         from generate_series(1, 6)
+       returning id`,
+      [P.practice, P.patient],
+    );
+    const empatan = new Set(puestas.map((r) => r.id));
+
+    const pagina = async (n: number) =>
+      (await photos.list({ patient_id: P.patient, pagina: String(n), por_pagina: '1' },
+        staff(P.doctor))) as { cuantas: number; fotos: { id: string }[] };
+
+    const primera = await pagina(1);
+    const total = primera.cuantas;
+    expect(total).toBeGreaterThanOrEqual(6);
+
+    const vistas: string[] = [];
+    for (let n = 1; n <= total; n += 1) {
+      const p = await pagina(n);
+      expect(p.fotos).toHaveLength(1);
+      vistas.push(p.fotos[0]!.id);
+    }
+
+    // Ninguna repetida: condición necesaria, pero NO suficiente —con pocas filas la base
+    // devuelve el orden físico y sale bien por casualidad—. Por eso debajo se afirma el orden.
+    expect(new Set(vistas).size).toBe(total);
+
+    // LO QUE DE VERDAD FIJA EL ARREGLO: entre las seis que empatan en `taken_at` y en
+    // `created_at`, el orden servido tiene que ser el del identificador, ascendente. Sin el
+    // desempate sale el orden FÍSICO de la tabla, y como los identificadores son aleatorios,
+    // que coincida con el ascendente es uno entre 720. Esa es la diferencia entre un orden
+    // definido y uno que depende de lo que la base tenga a mano ese día.
+    const empatadas = vistas.filter((id) => empatan.has(id));
+    expect(empatadas).toHaveLength(6);
+    expect(empatadas).toEqual([...empatadas].sort());
+  });
+
   it('la maestra la abre la doctora y nadie más', async () => {
     const { rows } = await owner.query<{ id: string }>(
       `select id from photo where practice_id = $1 and status = 'lista' limit 1`,

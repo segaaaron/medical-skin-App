@@ -1,5 +1,6 @@
 // Los siete endpoints de las fotos. Ninguno toca un byte de imagen.
 
+import { paginaDe, readPaginado } from '../../../shared/contract/pagination';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { SignedUrl } from '../../../shared/storage/signed-url';
 import type { Caller } from '../../access/application/caller';
@@ -79,15 +80,20 @@ export class Photos {
       permission: 'historia:leer',
     });
 
-    const rows = await this.photos.list(asking, {
+    // 40 por omisión, 100 de tope: una cuadrícula de miniaturas enseña decenas, no miles, y
+    // cada fila de más son dos firmas y su hueco en la respuesta.
+    const asked = readPaginado(query, 40, 100);
+    const page = await this.photos.list(asking, {
       patientId,
       sessionId: text(query.session_id ?? query.sesion_id),
       view: text(query.view ?? query.vista),
       now: this.clock.now(),
+      asked,
     });
 
     return {
-      fotos: rows.map((row) => ({
+      ...paginaDe(asked, page.total),
+      fotos: page.rows.map((row) => ({
         id: row.id,
         vista: row.view,
         tomada_en: row.takenAt?.toISOString() ?? null,

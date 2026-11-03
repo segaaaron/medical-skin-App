@@ -8,6 +8,7 @@
 
 import type { Pool } from 'pg';
 
+import { type Paginado, totalDe } from '../../../shared/contract/pagination';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -18,22 +19,40 @@ function contextOf(caller: ClinicalCaller): TenantContext {
   return { role: 'app_practitioner', practiceId: caller.practiceId, accountId: caller.accountId };
 }
 
-const LOT_SELECT = `
+// En dos piezas: la lista paginada mete su `count(*) over ()` DENTRO de las columnas, y pegarlo
+// detrás del `from` es un error de sintaxis.
+const LOT_COLUMNS = `
   select l.id, l.product_id, l.code, to_char(l.expires_on, 'YYYY-MM-DD') as expires_on, l.units, l.units_left,
-         l.cost_cents, p.name as product_name
+         l.cost_cents, p.name as product_name`;
+
+const LOT_FROM = `
     from product_lot l join product p on p.id = l.product_id`;
+
+const LOT_SELECT = `${LOT_COLUMNS}${LOT_FROM}`;
 
 export class LotsRepository implements LotPort {
   constructor(private readonly pool: Pool) {}
 
-  async list(caller: ClinicalCaller): Promise<readonly LotRow[]> {
+  async list(
+    caller: ClinicalCaller,
+    asked: Paginado,
+  ): Promise<{ rows: readonly LotRow[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // Por vencimiento ascendente: lo que primero caduca es lo primero que hay que mirar. Un
-      // lote agotado sigue en la lista —«su historia es lo que importa»—.
-      const { rows } = await c.query<Record<string, unknown>>(
-        `${LOT_SELECT} order by l.expires_on, l.code`,
+      // lote agotado sigue en la lista —«su historia es lo que importa»—, y por eso esta lista
+      // CRECE con cada compra y nunca se encoge: lleva tope desde el 3 de noviembre de 2026.
+      //
+      // El desempate es `l.id` y hace falta: el código único lo es por producto
+      // (`product_lot_code_uq` es `(practice_id, product_id, upper(btrim(code)))`), así que dos
+      // productos distintos pueden traer el mismo código con el mismo vencimiento.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
+        `${LOT_COLUMNS}, count(*) over () ::text as total
+         ${LOT_FROM}
+          order by l.expires_on, l.code, l.id
+          limit $1 offset $2`,
+        [asked.perPage, asked.offset],
       );
-      return rows.map(mapLot);
+      return { rows: rows.map(mapLot), total: totalDe(rows) };
     });
   }
 
@@ -150,13 +169,18 @@ export class LotsRepository implements LotPort {
       // Cada nombre servido es una apertura de historial, y queda. «Obligar a abrir catorce
       // fichas es un error de diseño con consecuencia sanitaria», pero la apertura se registra
       // igual: lo que cambia es el número de toques, no la trazabilidad.
-      for (const row of rows) {
+      // UNA sentencia para todas las aperturas (3 de noviembre de 2026), igual que el informe
+      // de ausencias: una por fila eran tantos viajes por PgBouncer como pacientes tocados por
+      // el lote, con la transacción abierta. `distinct` porque una paciente con dos sesiones del
+      // mismo lote sale dos veces en la lista y es UNA ficha abierta.
+      if (rows.length > 0) {
         await c.query(
           `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                      subject_id, data)
-           values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'patient', $2,
-                   jsonb_build_object('motivo', 'retiro_de_lote'))`,
-          [caller.accountId, row.patient_id],
+           select medskin_current_practice(), $1, 'paciente.ficha_abierta', 'patient', ficha,
+                  jsonb_build_object('motivo', 'retiro_de_lote')
+             from unnest($2::uuid[]) as ficha`,
+          [caller.accountId, [...new Set(rows.map((row) => row.patient_id))]],
         );
       }
 

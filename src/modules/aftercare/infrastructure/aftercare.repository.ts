@@ -7,6 +7,7 @@
 import type { Pool, PoolClient } from 'pg';
 
 import { FAILURE_PHRASES, ServiceFailure } from '../../../shared/contract/error-catalog';
+import { type Paginado, totalDe } from '../../../shared/contract/pagination';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -26,21 +27,32 @@ function contextOf(caller: AftercareCaller): TenantContext {
 export class AftercareRepository implements AftercarePort {
   constructor(private readonly pool: Pool) {}
 
-  async plans(caller: AftercareCaller, patientId: string | null): Promise<readonly CarePlanRow[]> {
+  async plans(
+    caller: AftercareCaller,
+    patientId: string | null,
+    asked: Paginado,
+  ): Promise<{ rows: readonly CarePlanRow[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows } = await c.query<Record<string, unknown>>(
+      // Un plan por sesión: esta lista crece con cada tratamiento de cada paciente y no para
+      // nunca. Los pasos de cada plan siguen saliendo AGREGADOS en la misma consulta, así que
+      // paginar los planes no multiplica consultas.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
         `select p.id, p.practice_name, p.treatment_name, p.session_at,
                 coalesce((select jsonb_agg(jsonb_build_object(
                             'id', s.id, 'appearsAt', s.appears_at, 'text', s.text,
                             'doneAt', coalesce(s.done_reported_at, s.done_at))
                             order by s.appears_at)
-                            from care_step s where s.plan_id = p.id), '[]'::jsonb) as steps
+                            from care_step s where s.plan_id = p.id), '[]'::jsonb) as steps,
+                count(*) over () ::text as total
            from care_plan p
           where ($1::uuid is null or p.patient_id = $1)
-          order by p.session_at desc`,
-        [patientId],
+          -- El orden acaba en el identificador: dos planes de la MISMA sesion empatan en
+          -- session_at, y un empate con limit/offset reparte mal las paginas.
+          order by p.session_at desc, p.id
+          limit $2 offset $3`,
+        [patientId, asked.perPage, asked.offset],
       );
-      return rows.map(mapPlan);
+      return { rows: rows.map(mapPlan), total: totalDe(rows) };
     });
   }
 

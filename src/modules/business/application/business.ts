@@ -1,6 +1,7 @@
 // Los once endpoints del negocio. Los márgenes y los informes son SOLO de la dueña: «es el
 // número que dice cuánto gana la consulta».
 
+import { paginaDe, readPaginado } from '../../../shared/contract/pagination';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
@@ -42,12 +43,19 @@ export class Business {
 
   async payments(query: Record<string, unknown>, caller: Caller): Promise<unknown> {
     const asking = this.reader(caller, 'cobros:registrar');
-    const rows = await this.business.payments(asking, {
+    // 50 y 200: la pantalla de caja es una tabla con fechas, y la paciente ve sus propios
+    // cobros, que son pocos.
+    const asked = readPaginado(query, 50, 200);
+    const page = await this.business.payments(asking, {
       patientId: asking.isPatient ? null : text(query.patient_id ?? query.paciente_id),
       from: text(query.desde),
       to: text(query.hasta),
+      asked,
     });
-    return { cobros: rows.map((row) => paymentView(row, asking.isPatient)) };
+    return {
+      ...paginaDe(asked, page.total),
+      cobros: page.rows.map((row) => paymentView(row, asking.isPatient)),
+    };
   }
 
   async voidPayment(paymentId: string, input: unknown, caller: Caller): Promise<unknown> {
@@ -148,15 +156,19 @@ export class Business {
     const kind = REPORTS.find((known) => known === asked);
     if (kind === undefined) throw new ContractError('informe_desconocido');
 
+    // 200 y 500: un informe se mira en una tabla ancha y se exporta, no se recorre de doce en
+    // doce. Los tres agregados caben siempre; `ausencias` es el que puede tener mil filas.
+    const pagina = readPaginado(query, 200, 500);
     const report = await this.business.report(asking, {
       kind,
       from: text(query.desde),
       to: text(query.hasta),
+      asked: pagina,
     });
     // Menos de cinco pacientes y el agregado no se devuelve: con dos filas, un «promedio»
     // identifica a las dos.
     if (report.suppressed) return { informe: kind, suprimido: true, por_que: 'menos_de_cinco' };
-    return { informe: kind, filas: report.rows };
+    return { informe: kind, ...paginaDe(pagina, report.total), filas: report.rows };
   }
 
   async plan(caller: Caller): Promise<unknown> {

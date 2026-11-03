@@ -1,5 +1,6 @@
 // Lo que las fotos necesitan de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { Paginado } from '../../../shared/contract/pagination';
 import type { SignedUrl } from '../../../shared/storage/signed-url';
 import type { UploadRequest } from './photos';
 
@@ -44,8 +45,17 @@ export interface PhotoPort {
   ): Promise<{ outcome: 'queued' | 'not_uploaded' | 'already' | 'no_photo'; row: PhotoRow | null }>;
   list(
     caller: PhotoCaller,
-    p: { patientId: string; sessionId: string | null; view: string | null; now: Date },
-  ): Promise<readonly (PhotoRow & { links: Record<string, SignedUrl> })[]>;
+    p: {
+      patientId: string;
+      sessionId: string | null;
+      view: string | null;
+      now: Date;
+      asked: Paginado;
+    },
+  ): Promise<{
+    rows: readonly (PhotoRow & { links: Record<string, SignedUrl> })[];
+    total: number;
+  }>;
   one(caller: PhotoCaller, photoId: string): Promise<PhotoRow | null>;
   master(
     caller: PhotoCaller,

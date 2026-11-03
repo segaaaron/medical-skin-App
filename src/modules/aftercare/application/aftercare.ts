@@ -1,5 +1,6 @@
 // Los cuidados, el semáforo, las incidencias, el hilo, los dispositivos y los avisos.
 
+import { paginaDe, readPaginado } from '../../../shared/contract/pagination';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
@@ -27,8 +28,14 @@ export class Aftercare {
     const patientId = asking.isPatient ? null : text(query.patient_id ?? query.paciente_id);
     if (!asking.isPatient && patientId === null) throw new ContractError('paciente_no_existe');
 
-    const plans = await this.aftercare.plans(asking, patientId);
-    return { planes: plans.map((plan) => this.planView(plan)) };
+    // 20 y 100: la pantalla de cuidados es una lista de móvil y lo que importa son los
+    // últimos. El histórico completo se recorre pidiendo páginas.
+    const asked = readPaginado(query, 20, 100);
+    const page = await this.aftercare.plans(asking, patientId, asked);
+    return {
+      ...paginaDe(asked, page.total),
+      planes: page.rows.map((plan) => this.planView(plan)),
+    };
   }
 
   async markStep(stepId: string, input: unknown, caller: Caller): Promise<unknown> {

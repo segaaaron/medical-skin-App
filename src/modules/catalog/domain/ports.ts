@@ -1,5 +1,6 @@
 // Lo que el catálogo necesita de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { Paginado } from '../../../shared/contract/pagination';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type {
   Contraindication,
@@ -60,7 +61,11 @@ export type Protocol = {
 };
 
 export interface CatalogPort {
-  list(caller: CatalogWriter, includeArchived: boolean): Promise<readonly TreatmentRow[]>;
+  list(
+    caller: CatalogWriter,
+    includeArchived: boolean,
+    asked: Paginado,
+  ): Promise<{ rows: readonly TreatmentRow[]; total: number }>;
   create(
     caller: CatalogWriter,
     draft: TreatmentDraft,
@@ -100,12 +105,18 @@ export interface CatalogPort {
     treatmentId: string,
     list: readonly Contraindication[],
   ): Promise<readonly Contraindication[] | null>;
-  prices(caller: CatalogWriter): Promise<{ rows: readonly PriceRow[]; currency: string }>;
+  prices(
+    caller: CatalogWriter,
+    asked: Paginado,
+  ): Promise<{ rows: readonly PriceRow[]; currency: string; total: number }>;
   savePrices(
     caller: CatalogWriter,
     rows: readonly PriceRow[],
   ): Promise<{ outcome: 'saved' | 'no_treatment'; rows: readonly PriceRow[]; currency: string }>;
-  promotions(caller: CatalogWriter): Promise<readonly PromotionRow[]>;
+  promotions(
+    caller: CatalogWriter,
+    asked: Paginado,
+  ): Promise<{ rows: readonly PromotionRow[]; total: number }>;
   createPromotion(
     caller: CatalogWriter,
     draft: PromotionDraft,

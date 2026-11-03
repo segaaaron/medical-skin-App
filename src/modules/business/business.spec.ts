@@ -472,16 +472,23 @@ describe('informes, plan y exportación', () => {
       [B.practice, B.patient],
     );
 
+    // Se limpia antes para poder contar EXACTO: lo que se fija es «una línea por cita leída»,
+    // y con filas de otra corrida «más de cero» no distingue eso de cientos duplicados.
+    await owner.query(`delete from access_audit where data->>'motivo' = 'informe_ausencias'`);
+
     const report = (await business.report({ informe: 'ausencias' }, staff(B.doctor))) as {
-      filas: { paciente: string }[];
+      filas: { id: string; paciente: string }[];
     };
     expect(report.filas[0]?.paciente).toBe('Ana Antelo');
 
-    const { rows } = await owner.query<{ n: string }>(
-      `select count(*)::text as n from access_audit
-        where data->>'motivo' = 'informe_ausencias'`,
+    const { rows } = await owner.query<{ n: string; citas: string }>(
+      `select count(*)::text as n, count(distinct subject_id)::text as citas
+         from access_audit where data->>'motivo' = 'informe_ausencias'`,
     );
-    expect(Number(rows[0]?.n)).toBeGreaterThan(0);
+    // UNA por cita: ni cero —el acceso quedaría sin registrar— ni dos, que es lo que pasaría
+    // si el `insert ... from unnest` recibiera los identificadores repetidos.
+    expect(Number(rows[0]?.n)).toBe(report.filas.length);
+    expect(Number(rows[0]?.citas)).toBe(report.filas.length);
   });
 
   it('el plan avisa al 80 %, y ampliarlo no cobra', async () => {

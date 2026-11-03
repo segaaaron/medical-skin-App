@@ -6,6 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { type Paginado, totalDe } from '../../../shared/contract/pagination';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -122,8 +123,8 @@ export class BusinessRepository implements BusinessPort {
 
   async payments(
     caller: BusinessCaller,
-    p: { patientId: string | null; from: string | null; to: string | null },
-  ): Promise<readonly PaymentRow[]> {
+    p: { patientId: string | null; from: string | null; to: string | null; asked: Paginado },
+  ): Promise<{ rows: readonly PaymentRow[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // La paciente no puede leer `method` ni `reference` —no están en su `GRANT`—, así que su
       // consulta nombra menos columnas. El rol decide la forma, no un `if` de la app.
@@ -131,15 +132,19 @@ export class BusinessRepository implements BusinessPort {
         ? 'id, patient_id, session_id, concept, cents, charged_at, voided_at'
         : `id, patient_id, session_id, concept, cents, method, credit_used_cents, reference,
            charged_at, voided_at, voided_reason`;
-      const { rows } = await c.query<Record<string, unknown>>(
-        `select ${columns} from payment
+      // LA LISTA QUE CRECE MÁS RÁPIDO DE TODA LA API: una fila por cobro, para siempre. Sin
+      // `patient_id` ni fechas son todos los cobros de la historia de la consulta, y esa es la
+      // pantalla de caja que alguien abre todos los días.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
+        `select ${columns}, count(*) over () ::text as total from payment
           where ($1::uuid is null or patient_id = $1)
             and ($2::date is null or charged_at::date >= $2)
             and ($3::date is null or charged_at::date <= $3)
-          order by charged_at desc`,
-        [p.patientId, p.from, p.to],
+          order by charged_at desc, id
+          limit $4 offset $5`,
+        [p.patientId, p.from, p.to, p.asked.perPage, p.asked.offset],
       );
-      return rows.map(mapPayment);
+      return { rows: rows.map(mapPayment), total: totalDe(rows) };
     });
   }
 
@@ -371,8 +376,8 @@ export class BusinessRepository implements BusinessPort {
 
   async report(
     caller: BusinessCaller,
-    p: { kind: string; from: string | null; to: string | null },
-  ): Promise<{ suppressed: boolean; rows: readonly Record<string, unknown>[] }> {
+    p: { kind: string; from: string | null; to: string | null; asked: Paginado },
+  ): Promise<{ suppressed: boolean; rows: readonly Record<string, unknown>[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       if (p.kind === 'ingresos') {
         const { rows } = await c.query<Record<string, unknown>>(
@@ -391,27 +396,42 @@ export class BusinessRepository implements BusinessPort {
         // LA ÚNICA EXCEPCIÓN: `ausencias` SÍ nombra a quien no se presentó, «porque la doctora
         // necesita hablar con ella y ya tiene su ficha abierta». Y queda en la auditoría como
         // el acceso que es.
-        const { rows } = await c.query<Record<string, unknown>>(
+        // EL ÚNICO INFORME QUE DEVUELVE UNA FILA POR CITA, así que es el único que crece con
+        // el tiempo: sin `desde`/`hasta` son todas las cancelaciones de la historia de la
+        // consulta. Por eso lleva tope, y por eso `cuantas` es el total de verdad y no las
+        // filas servidas: la pantalla tiene que poder decir «200 de 1.340».
+        const { rows } = await c.query<Record<string, unknown> & { id: string; total: string }>(
           `select a.id, a.starts_at, a.status, a.cancelled_by, a.cancelled_at,
                   pa.first_name || ' ' || pa.last_name as paciente,
-                  extract(epoch from (a.starts_at - a.cancelled_at)) / 3600 as aviso_horas
+                  extract(epoch from (a.starts_at - a.cancelled_at)) / 3600 as aviso_horas,
+                  count(*) over () ::text as total
              from appointment a join patient pa on pa.id = a.patient_id
             where a.status in ('cancelada', 'no_asistio')
               and ($1::date is null or a.starts_at::date >= $1)
               and ($2::date is null or a.starts_at::date <= $2)
-            order by a.starts_at desc`,
-          [p.from, p.to],
+            -- Desempate por identificador: dos citas canceladas pueden compartir hora (la
+            -- restricción de solapamiento no mira las canceladas) y el empate rompe las páginas.
+            order by a.starts_at desc, a.id
+            limit $3 offset $4`,
+          [p.from, p.to, p.asked.perPage, p.asked.offset],
         );
-        for (const row of rows) {
+        // UNA sentencia para TODAS las líneas de auditoría, y no una por fila (2 de noviembre
+        // de 2026). El informe no tiene tope —un año de cancelaciones son cientos de citas— y
+        // antes eso eran cientos de `INSERT` dentro de UNA transacción: cada uno su viaje de
+        // ida y vuelta por PgBouncer, con la transacción abierta y su conexión ocupada todo el
+        // rato. Con `unnest` es un viaje, y la auditoría sigue teniendo su fila por cita leída:
+        // lo que no puede pasar es que registrar el acceso sea más caro que el acceso.
+        if (rows.length > 0) {
           await c.query(
             `insert into access_audit (practice_id, actor_account_id, action, subject_type,
                                        subject_id, data)
-             values (medskin_current_practice(), $1, 'paciente.ficha_abierta', 'cita', $2,
-                     jsonb_build_object('motivo', 'informe_ausencias'))`,
-            [caller.accountId, row.id],
+             select medskin_current_practice(), $1, 'paciente.ficha_abierta', 'cita', cita,
+                    jsonb_build_object('motivo', 'informe_ausencias')
+               from unnest($2::uuid[]) as cita`,
+            [caller.accountId, rows.map((row) => row.id)],
           );
         }
-        return { suppressed: false, rows };
+        return { suppressed: false, rows, total: totalDe(rows) };
       }
       if (p.kind === 'repeticion') {
         const { rows } = await c.query<Record<string, unknown>>(
@@ -566,14 +586,17 @@ export class BusinessRepository implements BusinessPort {
   private suppress(
     rows: readonly Record<string, unknown>[],
     cohort?: number,
-  ): { suppressed: boolean; rows: readonly Record<string, unknown>[] } {
+  ): { suppressed: boolean; rows: readonly Record<string, unknown>[]; total: number } {
     const people =
       cohort ??
       rows.reduce((total, row) => total + Number(row.pacientes ?? row.citas ?? 0), 0);
     if (rows.length > 0 && people > 0 && people < MIN_COHORT) {
-      return { suppressed: true, rows: [] };
+      return { suppressed: true, rows: [], total: 0 };
     }
-    return { suppressed: false, rows };
+    // Los tres informes AGREGADOS —ingresos, ocupación, repetición— ya vienen agrupados: su
+    // número de filas es meses × medio, día × hora o una sola fila, y no crece con el histórico.
+    // No se paginan porque no hace falta, y `cuantas` es lo que hay.
+    return { suppressed: false, rows, total: rows.length };
   }
 
   private async readPayment(c: PoolClient, id: string): Promise<PaymentRow | null> {

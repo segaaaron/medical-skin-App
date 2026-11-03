@@ -1,5 +1,6 @@
 // Lo que el negocio necesita de fuera. Sin NestJS, sin Fastify, sin `pg`.
 
+import type { Paginado } from '../../../shared/contract/pagination';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { MovementDraft, PaymentDraft } from './business';
 
@@ -59,8 +60,8 @@ export interface BusinessPort {
   }>;
   payments(
     caller: BusinessCaller,
-    p: { patientId: string | null; from: string | null; to: string | null },
-  ): Promise<readonly PaymentRow[]>;
+    p: { patientId: string | null; from: string | null; to: string | null; asked: Paginado },
+  ): Promise<{ rows: readonly PaymentRow[]; total: number }>;
   voidPayment(
     caller: BusinessCaller,
     paymentId: string,
@@ -90,8 +91,8 @@ export interface BusinessPort {
   ): Promise<{ outcome: 'moved' | 'no_lot' | 'negative'; left: number; replay: unknown }>;
   report(
     caller: BusinessCaller,
-    p: { kind: string; from: string | null; to: string | null },
-  ): Promise<{ suppressed: boolean; rows: readonly Record<string, unknown>[] }>;
+    p: { kind: string; from: string | null; to: string | null; asked: Paginado },
+  ): Promise<{ suppressed: boolean; rows: readonly Record<string, unknown>[]; total: number }>;
   plan(caller: BusinessCaller): Promise<PlanRow | null>;
   requestPlan(caller: BusinessCaller, wanted: string, note: string | null): Promise<string | null>;
   requestExport(

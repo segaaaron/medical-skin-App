@@ -86,8 +86,8 @@ export class PricesController {
 
   @Get()
   @HttpCode(200)
-  async list(@Req() req: RequestWithContext) {
-    return this.catalog.prices(callerOf(req));
+  async list(@Req() req: RequestWithContext, @Query() query: Record<string, unknown>) {
+    return this.catalog.prices(callerOf(req), query ?? {});
   }
 
   @Put()
@@ -103,8 +103,8 @@ export class PromotionsController {
 
   @Get()
   @HttpCode(200)
-  async list(@Req() req: RequestWithContext) {
-    return this.catalog.promotions(callerOf(req));
+  async list(@Req() req: RequestWithContext, @Query() query: Record<string, unknown>) {
+    return this.catalog.promotions(callerOf(req), query ?? {});
   }
 
   @Post()

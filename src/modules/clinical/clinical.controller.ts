@@ -1,6 +1,6 @@
 // `/v1/clinical-sessions…`, `/v1/lots…` y `/v1/consents…`.
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
@@ -63,8 +63,8 @@ export class LotsController {
 
   @Get()
   @HttpCode(200)
-  async list(@Req() req: RequestWithContext) {
-    return this.lots.list(callerOf(req));
+  async list(@Req() req: RequestWithContext, @Query() query: Record<string, unknown>) {
+    return this.lots.list(callerOf(req), query ?? {});
   }
 
   @Post()

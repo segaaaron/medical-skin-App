@@ -6,6 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { type Paginado, totalDe } from '../../../shared/contract/pagination';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import { claim, complete, release } from '../../../shared/idempotency/idempotency-rows';
@@ -40,26 +41,39 @@ const COLUMNS: Readonly<Record<string, string>> = {
   visibleToPatients: 'visible_to_patients',
 };
 
-const TREATMENT_SELECT = `
+const TREATMENT_COLUMNS = `
   select t.id, t.name, t.category, t.description, t.duration_minutes, t.planned_sessions,
          t.min_interval_days, t.requires_consent, t.visible_to_patients, t.status,
          t.applied_count, t.created_at, t.updated_at,
          (select cents from price p where p.treatment_id = t.id and p.zone is null) as base_cents,
-         (select currency from practice) as currency
+         (select currency from practice) as currency`;
+
+const TREATMENT_FROM = `
     from treatment t`;
+
+const TREATMENT_SELECT = `${TREATMENT_COLUMNS}${TREATMENT_FROM}`;
 
 export class CatalogRepository implements CatalogPort {
   constructor(private readonly pool: Pool) {}
 
-  async list(caller: CatalogWriter, includeArchived: boolean): Promise<readonly TreatmentRow[]> {
+  async list(
+    caller: CatalogWriter,
+    includeArchived: boolean,
+    asked: Paginado,
+  ): Promise<{ rows: readonly TreatmentRow[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows } = await c.query<Record<string, unknown>>(
-        `${TREATMENT_SELECT}
+      // `count(*) over ()` en el MISMO recorrido que la página: el total y las filas no pueden
+      // decir cosas distintas, que es lo que pasa con un segundo `select count(*)`.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
+        `${TREATMENT_COLUMNS},
+                count(*) over () ::text as total
+         ${TREATMENT_FROM}
           where ($1::boolean or t.status = 'activo')
-          order by t.created_at desc nulls first, t.id`,
-        [includeArchived],
+          order by t.created_at desc nulls first, t.id
+          limit $2 offset $3`,
+        [includeArchived, asked.perPage, asked.offset],
       );
-      return rows.map(mapTreatment);
+      return { rows: rows.map(mapTreatment), total: totalDe(rows) };
     });
   }
 
@@ -82,12 +96,9 @@ export class CatalogRepository implements CatalogPort {
 
       // Los insumos apuntan a `product` de ESTA consulta: la política lo garantiza, así que un
       // identificador de otra no devuelve fila y eso es el 404 del contrato.
-      for (const supply of draft.supplies) {
-        const { rows } = await c.query(`select 1 from product where id = $1`, [supply.productId]);
-        if (rows.length === 0) {
-          await release(c, { record: idempotency, accountId: caller.accountId });
-          return { outcome: 'no_product', row: null, replay: null };
-        }
+      if (await this.faltaAlguno(c, 'product', draft.supplies.map((s) => s.productId))) {
+        await release(c, { record: idempotency, accountId: caller.accountId });
+        return { outcome: 'no_product', row: null, replay: null };
       }
 
       let id: string;
@@ -208,9 +219,8 @@ export class CatalogRepository implements CatalogPort {
         );
       }
       if (edit.supplies !== undefined) {
-        for (const supply of edit.supplies) {
-          const { rows } = await c.query(`select 1 from product where id = $1`, [supply.productId]);
-          if (rows.length === 0) return { outcome: 'no_product', row: null };
+        if (await this.faltaAlguno(c, 'product', edit.supplies.map((s) => s.productId))) {
+          return { outcome: 'no_product', row: null };
         }
         await this.replaceSupplies(c, treatmentId, edit.supplies);
       }
@@ -327,14 +337,29 @@ export class CatalogRepository implements CatalogPort {
     });
   }
 
-  async prices(caller: CatalogWriter): Promise<{ rows: readonly PriceRow[]; currency: string }> {
+  async prices(
+    caller: CatalogWriter,
+    asked: Paginado,
+  ): Promise<{ rows: readonly PriceRow[]; currency: string; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows } = await c.query<{ treatment_id: string; zone: string | null; cents: number }>(
-        `select treatment_id, zone, cents from price order by treatment_id, zone nulls first`,
+      // La rejilla de precios crece con el catálogo POR LAS ZONAS: cien tratamientos con cinco
+      // zonas son quinientas filas, y es la lista que más rápido se hace grande sin que nadie
+      // dé de alta nada nuevo.
+      const { rows } = await c.query<{
+        treatment_id: string;
+        zone: string | null;
+        cents: number;
+        total: string;
+      }>(
+        `select treatment_id, zone, cents, count(*) over () ::text as total
+           from price order by treatment_id, zone nulls first
+          limit $1 offset $2`,
+        [asked.perPage, asked.offset],
       );
       return {
         rows: rows.map((r) => ({ treatmentId: r.treatment_id, zone: r.zone, cents: r.cents })),
         currency: await this.currency(c),
+        total: totalDe(rows),
       };
     });
   }
@@ -344,13 +369,8 @@ export class CatalogRepository implements CatalogPort {
     rows: readonly PriceRow[],
   ): Promise<{ outcome: 'saved' | 'no_treatment'; rows: readonly PriceRow[]; currency: string }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      for (const row of rows) {
-        const { rows: found } = await c.query(`select 1 from treatment where id = $1`, [
-          row.treatmentId,
-        ]);
-        if (found.length === 0) {
-          return { outcome: 'no_treatment', rows: [], currency: '' };
-        }
+      if (await this.faltaAlguno(c, 'treatment', rows.map((row) => row.treatmentId))) {
+        return { outcome: 'no_treatment', rows: [], currency: '' };
       }
 
       for (const row of rows) {
@@ -385,18 +405,27 @@ export class CatalogRepository implements CatalogPort {
     });
   }
 
-  async promotions(caller: CatalogWriter): Promise<readonly PromotionRow[]> {
+  async promotions(
+    caller: CatalogWriter,
+    asked: Paginado,
+  ): Promise<{ rows: readonly PromotionRow[]; total: number }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows } = await c.query<Record<string, unknown>>(
+      // Los tratamientos de cada promoción salen AGREGADOS en la misma consulta
+      // (`array_agg`), que es lo que aquí hace el trabajo de un DataLoader: una promoción con
+      // doce tratamientos sigue siendo una sola consulta.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
         `select p.*, (select currency from practice) as currency,
                 to_char(p.starts_on, 'YYYY-MM-DD') as starts_on_text,
                 to_char(p.ends_on, 'YYYY-MM-DD') as ends_on_text,
                 coalesce((select array_agg(pt.treatment_id::text)
-                            from promotion_treatment pt where pt.promotion_id = p.id), '{}') as treatments
+                            from promotion_treatment pt where pt.promotion_id = p.id), '{}') as treatments,
+                count(*) over () ::text as total
            from promotion p
-          order by p.ends_on desc nulls first, p.id`,
+          order by p.ends_on desc nulls first, p.id
+          limit $1 offset $2`,
+        [asked.perPage, asked.offset],
       );
-      return rows.map(mapPromotion);
+      return { rows: rows.map(mapPromotion), total: totalDe(rows) };
     });
   }
 
@@ -415,12 +444,9 @@ export class CatalogRepository implements CatalogPort {
       });
       if (replay !== null) return { outcome: 'created', row: null, replay: replay.response };
 
-      for (const id of draft.treatmentIds) {
-        const { rows } = await c.query(`select 1 from treatment where id = $1`, [id]);
-        if (rows.length === 0) {
-          await release(c, { record: idempotency, accountId: caller.accountId });
-          return { outcome: 'no_treatment', row: null, replay: null };
-        }
+      if (await this.faltaAlguno(c, 'treatment', draft.treatmentIds)) {
+        await release(c, { record: idempotency, accountId: caller.accountId });
+        return { outcome: 'no_treatment', row: null, replay: null };
       }
 
       let id: string;
@@ -592,6 +618,39 @@ export class CatalogRepository implements CatalogPort {
   private async currency(c: PoolClient): Promise<string> {
     const { rows } = await c.query<{ currency: string }>(`select currency from practice`);
     return rows[0]?.currency ?? '';
+  }
+
+  /**
+   * ¿FALTA ALGUNO? Una consulta, no una por identificador · 3 de noviembre de 2026.
+   *
+   * Los cuatro sitios que validan referencias —insumos al crear, insumos al editar, precios y
+   * los tratamientos de una promoción— hacían `select 1 ... where id = $1` DENTRO de un `for`.
+   * Con cinco insumos eran cinco viajes de ida y vuelta por PgBouncer con la transacción
+   * abierta, y con una rejilla de precios de cien filas eran cien. El número de filas que
+   * devuelve la base es el mismo; lo que cambia es cuántas veces se cruza la red.
+   *
+   * `distinct` sobre lo pedido, no `length`: un cuerpo que repite el mismo insumo dos veces no
+   * es un insumo que falte, y contándolo de la otra forma el contrato daría `producto_no_existe`
+   * sobre algo que sí existe.
+   *
+   * La política de la consulta sigue siendo lo que decide: un identificador de otra consulta no
+   * devuelve fila y cae en el mismo `404` que antes. Eso no cambia porque la forma del `where`
+   * cambie.
+   */
+  private async faltaAlguno(
+    c: PoolClient,
+    tabla: 'product' | 'treatment',
+    ids: readonly string[],
+  ): Promise<boolean> {
+    const pedidos = [...new Set(ids)];
+    if (pedidos.length === 0) return false;
+    const { rows } = await c.query<{ n: string }>(
+      // La tabla NO viene de ninguna entrada: es uno de los dos literales del tipo de arriba, y
+      // por eso se puede interpolar. Los identificadores van siempre parametrizados.
+      `select count(*)::text as n from ${tabla} where id = any($1::uuid[])`,
+      [pedidos],
+    );
+    return Number(rows[0]?.n ?? 0) !== pedidos.length;
   }
 }
 

@@ -6,6 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { type Paginado, totalDe } from '../../../shared/contract/pagination';
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import { EXPIRY, KEYS, signUrl, type SignedUrl, type StorageConfig } from '../../../shared/storage/signed-url';
 import type { PhotoCaller, PhotoPort, PhotoRow } from '../domain/ports';
@@ -16,11 +17,17 @@ function contextOf(caller: PhotoCaller): TenantContext {
   return { role: 'app_practitioner', practiceId: caller.practiceId, accountId: caller.accountId };
 }
 
-const PHOTO_SELECT = `
+// En dos piezas porque la lista paginada mete su `count(*) over ()` DENTRO de la lista de
+// columnas: pegarlo detrás del `from` es un error de sintaxis, y lo fue.
+const PHOTO_COLUMNS = `
   select p.id, p.practice_id, p.patient_id, p.session_id, p.view, p.status, p.uploaded_by,
          p.taken_at, p.camera, p.iso, p.failed_reason, p.derivatives_ready, p.master_format,
-         p.deleted_at
+         p.deleted_at`;
+
+const PHOTO_FROM = `
     from photo p`;
+
+const PHOTO_SELECT = `${PHOTO_COLUMNS}${PHOTO_FROM}`;
 
 export class PhotosRepository implements PhotoPort {
   constructor(
@@ -129,16 +136,36 @@ export class PhotosRepository implements PhotoPort {
 
   async list(
     caller: PhotoCaller,
-    p: { patientId: string; sessionId: string | null; view: string | null; now: Date },
-  ): Promise<readonly (PhotoRow & { links: Record<string, SignedUrl> })[]> {
+    p: {
+      patientId: string;
+      sessionId: string | null;
+      view: string | null;
+      now: Date;
+      asked: Paginado;
+    },
+  ): Promise<{
+    rows: readonly (PhotoRow & { links: Record<string, SignedUrl> })[];
+    total: number;
+  }> {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
-      const { rows } = await c.query<Record<string, unknown>>(
-        `${PHOTO_SELECT}
+      // LA GALERÍA ES LA LISTA QUE MÁS CUESTA POR FILA, y por eso el tope importa más aquí que
+      // en ninguna otra: cada foto sale con sus enlaces FIRMADOS, así que cada fila es trabajo
+      // de HMAC y bytes de respuesta. Una ficha con tres años de sesiones no se sirve entera a
+      // una pantalla que enseña doce miniaturas.
+      //
+      // Y EL ORDEN ACABA EN `p.id` A PROPÓSITO: con `limit`/`offset`, dos filas empatadas en las
+      // columnas del `order by` pueden cambiar de sitio entre dos consultas, y entonces una sale
+      // DOS VECES y otra NO SALE NUNCA. Aquí se empata de verdad: una tanda subida en la misma
+      // sesión comparte `taken_at` y puede compartir `created_at`. El identificador no se empata.
+      const { rows } = await c.query<Record<string, unknown> & { total: string }>(
+        `${PHOTO_COLUMNS}, count(*) over () ::text as total
+         ${PHOTO_FROM}
           where p.patient_id = $1 and p.deleted_at is null
             and ($2::uuid is null or p.session_id = $2)
             and ($3::text is null or p.view = $3)
-          order by p.taken_at desc nulls first, p.created_at desc`,
-        [p.patientId, p.sessionId, p.view],
+          order by p.taken_at desc nulls first, p.created_at desc, p.id
+          limit $4 offset $5`,
+        [p.patientId, p.sessionId, p.view, p.asked.perPage, p.asked.offset],
       );
 
       // Abrir las fotos de una ficha queda en la auditoría, igual que abrir la ficha.
@@ -150,16 +177,19 @@ export class PhotosRepository implements PhotoPort {
         [caller.accountId, p.patientId, rows[0]?.practice_id ?? null],
       );
 
-      return rows.map((row) => {
-        const photo = mapPhoto(row);
-        // `full` NO viaja en la lista: son 450 KB por foto y una cuadrícula no los necesita.
-        const links: Record<string, SignedUrl> = {};
-        if (photo.status === 'lista') {
-          links.thumb = this.sign(photo.id, 'thumb', p.now);
-          links.view = this.sign(photo.id, 'view', p.now);
-        }
-        return { ...photo, links };
-      });
+      return {
+        rows: rows.map((row) => {
+          const photo = mapPhoto(row);
+          // `full` NO viaja en la lista: son 450 KB por foto y una cuadrícula no los necesita.
+          const links: Record<string, SignedUrl> = {};
+          if (photo.status === 'lista') {
+            links.thumb = this.sign(photo.id, 'thumb', p.now);
+            links.view = this.sign(photo.id, 'view', p.now);
+          }
+          return { ...photo, links };
+        }),
+        total: totalDe(rows),
+      };
     });
   }
 

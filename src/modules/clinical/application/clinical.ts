@@ -1,6 +1,7 @@
 // Los diez endpoints del expediente. Cada uno comprueba su permiso, y uno comprueba el ROL:
 // la nota la firma la doctora y nadie más.
 
+import { paginaDe, readPaginado } from '../../../shared/contract/pagination';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
@@ -177,10 +178,13 @@ export class Lots {
     private readonly clock: ClockPort,
   ) {}
 
-  async list(caller: Caller): Promise<unknown> {
+  async list(caller: Caller, query: Record<string, unknown>): Promise<unknown> {
     const asking = clinicalOf(caller, 'inventario:editar');
-    const rows = await this.lots.list(asking);
-    return { lotes: rows.map(lotView) };
+    // 100 y 300: el inventario vivo de una consulta son decenas de lotes, pero los agotados se
+    // quedan, así que con los años la lista es histórico y hay que poder pedirlo por páginas.
+    const asked = readPaginado(query, 100, 300);
+    const page = await this.lots.list(asking, asked);
+    return { ...paginaDe(asked, page.total), lotes: page.rows.map(lotView) };
   }
 
   async create(input: unknown, caller: Caller, idempotency: IdempotencyRecord): Promise<unknown> {

@@ -3,6 +3,7 @@
 // (`promociones:editar`) son tres, y el contrato los separa porque una asistente puede ver el
 // catálogo y no tocar el dinero.
 
+import { paginaDe, readPaginado } from '../../../shared/contract/pagination';
 import { ContractError } from '../../../shared/contract/error-catalog';
 import type { IdempotencyRecord } from '../../../shared/idempotency/idempotency-key';
 import type { Caller } from '../../access/application/caller';
@@ -36,8 +37,11 @@ export class Catalog {
 
   async list(caller: Caller, query: Record<string, unknown>): Promise<unknown> {
     const asking = writerOf(caller, 'catalogo:leer');
-    const rows = await this.catalog.list(asking, query.estado === 'todos');
-    return { tratamientos: rows.map(treatmentView) };
+    // 100 por omisión y 200 de tope: el catálogo entero de una consulta cabe en una página, y
+    // la pantalla que lo usa es una tabla de escritorio, no una lista de móvil.
+    const asked = readPaginado(query, 100, 200);
+    const page = await this.catalog.list(asking, query.estado === 'todos', asked);
+    return { ...paginaDe(asked, page.total), tratamientos: page.rows.map(treatmentView) };
   }
 
   async create(input: unknown, caller: Caller, key: IdempotencyRecord): Promise<unknown> {
@@ -116,10 +120,13 @@ export class Catalog {
     return { contraindicaciones: saved.map(contraindicationView) };
   }
 
-  async prices(caller: Caller): Promise<unknown> {
+  async prices(caller: Caller, query: Record<string, unknown>): Promise<unknown> {
     const asking = writerOf(caller, 'precios:editar');
-    const { rows, currency } = await this.catalog.prices(asking);
-    return { precios: rows.map((r) => priceView(r, currency)) };
+    // 200 y 500: una fila por tratamiento Y POR ZONA, así que esta lista es múltiplo del
+    // catálogo. Es la que más alto necesita el tope y la que antes lo iba a necesitar.
+    const asked = readPaginado(query, 200, 500);
+    const { rows, currency, total } = await this.catalog.prices(asking, asked);
+    return { ...paginaDe(asked, total), precios: rows.map((r) => priceView(r, currency)) };
   }
 
   async savePrices(input: unknown, caller: Caller): Promise<unknown> {
@@ -129,10 +136,11 @@ export class Catalog {
     return { precios: result.rows.map((r) => priceView(r, result.currency)) };
   }
 
-  async promotions(caller: Caller): Promise<unknown> {
+  async promotions(caller: Caller, query: Record<string, unknown>): Promise<unknown> {
     const asking = writerOf(caller, 'promociones:editar');
-    const rows = await this.catalog.promotions(asking);
-    return { promociones: rows.map(promotionView) };
+    const asked = readPaginado(query, 50, 100);
+    const page = await this.catalog.promotions(asking, asked);
+    return { ...paginaDe(asked, page.total), promociones: page.rows.map(promotionView) };
   }
 
   async createPromotion(input: unknown, caller: Caller, key: IdempotencyRecord): Promise<unknown> {
