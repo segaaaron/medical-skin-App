@@ -575,6 +575,13 @@
       "when": 1793755937002,
       "tag": "0081_borrar_la_consulta_libera_el_correo",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793761180021,
+      "tag": "0082_soltar_los_correos_que_quedaron_colgados",
+      "breakpoints": true
     }
   ]
 }
