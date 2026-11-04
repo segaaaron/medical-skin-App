@@ -15,7 +15,12 @@
 // bandeja, no hay credencial y no hay enlace que firmar.
 
 import { nextCursor, type ConsoleSearch } from '../domain/console-search';
-import type { ConsoleSearchPort, PlatformActor } from '../domain/platform-ports';
+import { ContractError } from '../../../shared/contract/error-catalog';
+import type {
+  ConsoleSearchPort,
+  PlatformActor,
+  TenantLifecyclePort,
+} from '../domain/platform-ports';
 
 export type TenantSearchResponse = {
   cuantas: number;
@@ -54,8 +59,58 @@ export class SearchTenants {
         region_etiqueta: this.regionLabel,
         alta_en: row.createdOn,
         plan: row.plan,
+        estado: row.status,
         doctora: { correo: row.ownerEmail },
       })),
     };
+  }
+}
+
+// =========================================================================================
+// SUSPENDER, REACTIVAR Y BORRAR UNA CONSULTA · 3 de noviembre de 2026
+//
+// Pedido por el dueño: «borrar que borras al doctor con todo lo que está ligado a ese doctor,
+// y otro que diga suspendido, que solo suspenda al doctor, que no le deje entrar a la app
+// cuando está suspendido».
+//
+// SON DOS COSAS DISTINTAS Y NO UNA GRADACIÓN DE LA OTRA:
+//   · suspender · reversible, no toca un dato, y cierra las sesiones abiertas;
+//   · borrar    · irreversible, y se lleva los expedientes de todas sus pacientes.
+// =========================================================================================
+
+export class SetTenantStatus {
+  constructor(private readonly tenants: TenantLifecyclePort) {}
+
+  async run(
+    practiceId: string,
+    status: 'activa' | 'suspendida',
+    actor: PlatformActor,
+  ): Promise<unknown> {
+    const done = await this.tenants.setStatus({ actor, practiceId, status });
+    if (done === null) throw new ContractError('consulta_no_existe');
+
+    return {
+      consulta_id: practiceId,
+      estado: done.status,
+      // Cuántas sesiones se cerraron. La pantalla lo necesita para poder decir «se cerraron 2
+      // sesiones abiertas» en vez de dejar a quien suspende preguntándose si la doctora
+      // seguía dentro.
+      sesiones_cerradas: done.revokedSessions,
+    };
+  }
+}
+
+export class DeleteTenant {
+  constructor(private readonly tenants: TenantLifecyclePort) {}
+
+  /**
+   * NO SE DESHACE, y la respuesta lo dice con números: cuántas fichas se llevó. Quien lo
+   * aprieta ya escribió el nombre de la consulta en la consola; esto es lo que queda después.
+   */
+  async run(practiceId: string, actor: PlatformActor): Promise<unknown> {
+    const gone = await this.tenants.remove({ actor, practiceId });
+    if (gone === null) throw new ContractError('consulta_no_existe');
+
+    return { consulta_id: practiceId, nombre: gone.name, fichas_borradas: gone.patients };
   }
 }

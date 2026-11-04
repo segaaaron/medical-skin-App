@@ -17,6 +17,7 @@ export type ErrorCode =
   | 'contrasena_temporal_caducada'
   | 'acceso_en_pausa'
   | 'cuenta_suspendida'
+  | 'consulta_suspendida'
   // POST /v1/access/new-password
   | 'contrasena_corta'
   | 'contrasena_muy_usada'
@@ -280,6 +281,20 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Demasiados intentos. Puedes volver a entrar a las {hora}.',
     field: null,
   },
+  /**
+   * LA CONSULTA, NO LA CUENTA. La suspende MedSkin desde la consola y afecta a quien trabaja
+   * en ella; sus pacientes siguen entrando a su propio expediente, porque sus políticas
+   * cuelgan de `patient_link`, no del estado de la consulta.
+   *
+   * La frase no dice por qué: el motivo es una conversación entre MedSkin y la dueña, y no
+   * cabe en una pantalla de acceso.
+   */
+  consulta_suspendida: {
+    status: 403,
+    message: 'Tu consulta está suspendida. Escríbenos a hola@medskin.app.',
+    field: null,
+  },
+
   cuenta_suspendida: {
     status: 403,
     message: 'Tu cuenta está suspendida. Escríbenos a hola@medskin.app.',
@@ -355,7 +370,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   sesion_no_existe: { status: 404, message: 'Esa sesión ya no está abierta.', field: null },
   es_esta_sesion: {
     status: 400,
-    message: 'Esa es esta sesión. Usa «Cerrar sesión».',
+    message: 'Es la sesión desde la que estás entrando ahora. Usa «Cerrar sesión».',
     field: 'sesion_id',
   },
 
@@ -366,7 +381,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // ---------------------------------------------------------------------------------
   correo_mal_escrito: {
     status: 400,
-    message: 'Ese correo no parece un correo. Revísalo.',
+    message: 'Revisa tu correo: parece que falta algo o está mal escrito.',
     field: 'correo',
   },
   demasiados_codigos: {
@@ -379,7 +394,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // La frase lleva el número de intentos y la pone quien lanza, con `datos.intentos_restantes`.
   codigo_no_coincide: {
     status: 401,
-    message: 'Ese código no es. Te quedan {intentos} intentos.',
+    message: 'Ese código no es correcto. Te quedan {intentos} intentos.',
     field: 'codigo',
   },
   codigo_caducado: { status: 410, message: 'Ese código ya caducó. Pide otro.', field: null },
@@ -387,7 +402,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // sigue bien, porque es justo lo que la paciente va a temer (`Arranque.dc.html` · 8).
   codigo_anulado: {
     status: 410,
-    message: 'Ese código se anuló por tantos intentos. Pide uno nuevo: tu cuenta sigue bien.',
+    message: 'Ese código se anuló por el número de intentos. Pide uno nuevo: tu cuenta no está bloqueada.',
     field: null,
   },
   demasiados_intentos: {
@@ -455,7 +470,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   merma_sin_motivo: {
     status: 400,
-    message: 'Dinos por qué se perdió: va al inventario.',
+    message: 'Indica por qué se perdió: queda registrado en el inventario.',
     field: 'motivo',
   },
   movimiento_de_sesion: {
@@ -463,7 +478,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Esa salida la registra la sesión. Corrígela desde la sesión.',
     field: 'tipo',
   },
-  cobro_no_existe: { status: 404, message: 'Ese cobro ya no está.', field: null },
+  cobro_no_existe: { status: 404, message: 'No encontramos ese cobro.', field: null },
   exportacion_reciente: {
     status: 429,
     message: 'Ya pediste una copia hoy. Te llega por correo.',
@@ -478,17 +493,17 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // -------------------------------------------------------------------------------------
   // `cuidados.md`.
   // -------------------------------------------------------------------------------------
-  paso_futuro: { status: 409, message: 'Ese cuidado todavía no toca.', field: null },
+  paso_futuro: { status: 409, message: 'Ese cuidado todavía no corresponde a hoy.', field: null },
   paso_no_existe: { status: 404, message: 'Ese cuidado ya no está.', field: null },
-  mensaje_vacio: { status: 400, message: 'Escribe algo.', field: 'texto' },
+  mensaje_vacio: { status: 400, message: 'Escribe tu mensaje antes de enviarlo.', field: 'texto' },
   mensaje_demasiado_largo: {
     status: 400,
-    message: 'Es muy largo. Mándalo en dos.',
+    message: 'El mensaje es demasiado largo. Divídelo en dos.',
     field: 'texto',
   },
   demasiados_mensajes: {
     status: 429,
-    message: 'Mandaste muchos mensajes seguidos. Espera un rato.',
+    message: 'Enviaste muchos mensajes seguidos. Espera unos minutos.',
     field: null,
   },
   vinculo_revocado: { status: 409, message: 'Ese chat está cerrado.', field: null },
@@ -519,7 +534,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Llegaste al límite de almacenamiento de tu plan. Amplíalo para seguir subiendo fotos.',
     field: null,
   },
-  no_se_subio: { status: 409, message: 'Esa foto no llegó. Vuelve a intentarlo.', field: null },
+  no_se_subio: { status: 409, message: 'No recibimos esa foto. Vuelve a intentarlo.', field: null },
   // Se decide por los BYTES MAGICOS, nunca por la extension ni por el `Content-Type`. Y el
   // rechazo se registra como fallo: el objeto se borra y queda la fila del intento.
   no_es_una_imagen: {
@@ -529,12 +544,12 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   dimensiones_fuera_de_rango: {
     status: 422,
-    message: 'Esa foto no nos sirve: es demasiado pequeña o demasiado grande.',
+    message: 'Esa foto no se puede usar: es demasiado pequeña o demasiado grande.',
     field: null,
   },
   // Mensaje vacio: «nada, la app sigue».
   ya_confirmada: { status: 409, message: '', field: null },
-  foto_no_existe: { status: 404, message: 'Esa foto ya no está.', field: null },
+  foto_no_existe: { status: 404, message: 'No encontramos esa foto.', field: null },
   foto_no_lista: { status: 409, message: 'Esa foto todavía se está procesando.', field: null },
   vistas_distintas: {
     status: 409,
@@ -711,7 +726,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     field: null,
   },
   ya_tiene_cita: { status: 409, message: 'Ya tienes una cita para esto.', field: null },
-  cita_no_existe: { status: 404, message: 'Esa cita ya no está.', field: null },
+  cita_no_existe: { status: 404, message: 'No encontramos esa cita.', field: null },
   cita_ya_atendida: {
     status: 409,
     message: 'Esa cita ya se atendió. No se puede mover.',
@@ -743,7 +758,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   franjas_que_se_cruzan: {
     status: 400,
-    message: 'Esas dos franjas se cruzan. Júntalas.',
+    message: 'Esas dos franjas se superponen. Únelas en una sola.',
     field: 'franjas',
   },
   dia_desconocido: { status: 400, message: 'Elige un día de la semana.', field: 'franjas' },
@@ -789,7 +804,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   intervalo_necesario: {
     status: 400,
     message:
-      'Dinos cada cuántos días se puede repetir: es lo que evita agendarlo antes de tiempo.',
+      'Indica cada cuántos días se puede repetir: es lo que evita agendarlo antes de tiempo.',
     field: 'intervalo_minimo_dias',
   },
   producto_no_existe: {
@@ -819,7 +834,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   demasiados_pasos: {
     status: 400,
-    message: 'Veinte pasos son muchos para recordar. Junta los que puedas.',
+    message: 'Veinte pasos son demasiados para recordar. Agrupa los que puedas.',
     field: 'pasos',
   },
   semaforo_dia_repetido: {
@@ -924,7 +939,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   demasiados_reenvios: {
     status: 429,
-    message: 'Ya le mandaste el acceso 3 veces en la última hora. Espera un rato.',
+    message: 'Ya le enviaste el acceso 3 veces en la última hora. Espera unos minutos.',
     field: null,
   },
   // No está en la tabla del contrato: el cuerpo es `{ "via": … }` con tres valores y hace
@@ -1035,7 +1050,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
     message: 'Revisa su fecha de nacimiento: falta o no está bien escrita.',
     field: 'nacimiento',
   },
-  nacimiento_futuro: { status: 400, message: 'Esa fecha todavía no llegó.', field: 'nacimiento' },
+  nacimiento_futuro: { status: 400, message: 'Esa fecha es futura. Revísala.', field: 'nacimiento' },
   // La única frase del tramo que manda a atender en papel, y es la verdad: el
   // consentimiento de un tutor no existe en el producto y fingir que sí sería peor.
   menor_de_edad: {
@@ -1052,7 +1067,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // sacarla.
   celular_mal_escrito: {
     status: 400,
-    message: 'Ese número no parece un celular. Escríbelo con el código del país: +59177124408.',
+    message: 'Revisa el número: escríbelo con el código del país, por ejemplo +59177124408.',
     field: 'celular',
   },
   referida_sin_quien: {
@@ -1094,12 +1109,12 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // medio contestar, no un «no tiene».
   alergias_sin_cuales: {
     status: 400,
-    message: 'Dinos a qué es alérgica, o marca que no tiene alergias.',
+    message: 'Indica a qué es alérgica, o marca que no tiene alergias.',
     field: 'alergias',
   },
   medicacion_sin_cuales: {
     status: 400,
-    message: 'Dinos qué medicación toma.',
+    message: 'Indica qué medicación toma.',
     field: 'medicacion',
   },
   fototipo_fuera_de_escala: {
@@ -1163,12 +1178,12 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   ruta_no_existe: { status: 404, message: '', field: null },
   cuerpo_no_valido: {
     status: 400,
-    message: 'Algo de lo que mandaste no está bien. Revísalo y vuelve a intentar.',
+    message: 'Hay un dato que no es válido. Revísalo y vuelve a intentarlo.',
     field: null,
   },
   cuerpo_demasiado_grande: {
     status: 413,
-    message: 'Eso es demasiado grande para mandarlo así. Las fotos se suben por su propia pantalla.',
+    message: 'El contenido es demasiado grande para enviarlo así. Las fotos se suben desde su propia pantalla.',
     field: null,
   },
   formato_no_admitido: { status: 415, message: '', field: null },
@@ -1208,7 +1223,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   demasiadas_peticiones: {
     status: 429,
-    message: 'Vas muy rápido. Espera unos segundos.',
+    message: 'Estás enviando demasiadas peticiones seguidas. Espera unos segundos.',
     field: null,
   },
 

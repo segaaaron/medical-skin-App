@@ -28,6 +28,11 @@ export type AccessCredential = {
   practiceId: string | null;
   practitionerRole: PractitionerRole | null;
   permissions: readonly string[] | null;
+  /**
+   * El estado de SU consulta: `activa` | `suspendida`, y nulo cuando no hay consulta —una
+   * paciente, o un correo que no existe—. El nulo es «no aplica», nunca «suspendida».
+   */
+  practiceStatus: string | null;
 };
 
 export type SavePasswordVerdict = 'saved' | 'already_chosen' | 'no_code' | 'no_credential';

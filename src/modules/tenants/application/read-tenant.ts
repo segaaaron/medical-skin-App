@@ -19,6 +19,8 @@ import type { PlatformActor, TenantFile, TenantFilePort } from '../domain/platfo
 export type TenantFileResponse = {
   id: string;
   nombre: string;
+  /** `activa` | `suspendida`. La consola pinta la insignia con esto. */
+  estado: string;
   plan: { clave: string; pacientes: number; limite_pacientes: number };
   region: string;
   region_etiqueta: string;
@@ -88,6 +90,7 @@ function view(
   return {
     id: file.id,
     nombre: file.name,
+    estado: file.status,
     plan: {
       clave: file.plan,
       // El MISMO recuento que ve la doctora: `status = 'activa'`, porque las archivadas no

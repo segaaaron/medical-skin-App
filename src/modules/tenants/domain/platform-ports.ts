@@ -137,6 +137,8 @@ export type TenantFile = {
   name: string;
   plan: string;
   patientLimit: number;
+  /** `activa` | `suspendida`. Suspendida, su doctora no puede entrar; sus pacientes sí. */
+  status: string;
   /** De `medskin_platform_practice_stats()`: tres números y ni una fila. */
   activePatients: number;
   region: string;
@@ -211,6 +213,12 @@ export type TenantRow = {
    * que la base niega — lo cazó la prueba contra la base con «permission denied».
    */
   ownerEmail: string | null;
+  /**
+   * `activa` | `suspendida`. Va en el PADRÓN y no solo en la ficha porque es donde se ve de un
+   * vistazo cuál está parada: sin él la consola puede suspender y no puede DECIR que algo está
+   * suspendido, que es un interruptor con la luz apagada.
+   */
+  status: string;
   /** Para el cursor. No sale en la respuesta. */
   createdAt: Date;
 };
@@ -218,4 +226,30 @@ export type TenantRow = {
 export interface ConsoleSearchPort {
   /** Devuelve `perPage + 1` filas: la de más es cómo se sabe que hay siguiente página. */
   searchTenants(p: { actor: PlatformActor; search: ConsoleSearch }): Promise<readonly TenantRow[]>;
+}
+
+// -----------------------------------------------------------------------------------------
+// SUSPENDER, REACTIVAR Y BORRAR · 3 de noviembre de 2026
+// -----------------------------------------------------------------------------------------
+
+export interface TenantLifecyclePort {
+  /**
+   * Nulo cuando no hay consulta con ese `id`: `404 consulta_no_existe`.
+   * `revokedSessions` son las sesiones que se cerraron al suspender; al reactivar es 0.
+   */
+  setStatus(p: {
+    actor: PlatformActor;
+    practiceId: string;
+    status: 'activa' | 'suspendida';
+  }): Promise<{ status: string; revokedSessions: number } | null>;
+
+  /**
+   * Borra la consulta y, en cascada, TODO lo que cuelga de ella: pacientes, historias
+   * clínicas, vínculos, citas, sesiones y catálogo. Devuelve el nombre y cuántas fichas se
+   * llevó, que es lo único que queda de esa consulta —en la auditoría—.
+   */
+  remove(p: {
+    actor: PlatformActor;
+    practiceId: string;
+  }): Promise<{ name: string; patients: number } | null>;
 }

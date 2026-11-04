@@ -43,6 +43,7 @@ const SENUELO: AccessCredential = {
   practiceId: null,
   practitionerRole: null,
   permissions: null,
+  practiceStatus: null,
 };
 
 const PACIENTE: AccessCredential = {
@@ -57,6 +58,7 @@ const PACIENTE: AccessCredential = {
   practiceId: null,
   practitionerRole: null,
   permissions: null,
+  practiceStatus: null,
 };
 
 const DOCTORA: AccessCredential = {
@@ -65,6 +67,7 @@ const DOCTORA: AccessCredential = {
   practiceId: CONSULTA,
   practitionerRole: 'doctor',
   permissions: null,
+  practiceStatus: null,
 };
 
 function armar(opciones: {
@@ -92,6 +95,7 @@ function armar(opciones: {
         accountRole: 'patient' as const,
         practiceId: null,
         permissions: null,
+  practiceStatus: null,
       }),
   };
 
@@ -129,6 +133,7 @@ function armar(opciones: {
         firstDayDone: true,
         practitionerRole: 'doctor' as const,
         permissions: null,
+  practiceStatus: null,
       });
     },
     nextStepFacts: () =>
@@ -137,6 +142,7 @@ function armar(opciones: {
         firstDayDone: true,
         practitionerRole: 'doctor' as const,
         permissions: null,
+  practiceStatus: null,
       }),
     list: () => Promise.resolve([]),
     revokeOne: () => Promise.resolve(true),
@@ -250,6 +256,37 @@ describe('POST /v1/access · el orden de las comprobaciones', () => {
 
     expect(error.code).toBe('cuenta_suspendida');
     expect(error.status).toBe(403);
+  });
+
+  it('una CONSULTA suspendida no deja entrar a su doctora, y es un 403 distinto', async () => {
+    const error = await errorDe(() =>
+      armar({
+        credencial: { ...DOCTORA, practiceStatus: 'suspendida' },
+        coincide: true,
+      }).caso.run(PETICION),
+    );
+
+    // Código PROPIO y no `cuenta_suspendida`: la cuenta de la doctora está perfectamente bien;
+    // lo que MedSkin suspendió es su consulta. Si compartieran código, la pantalla le diría
+    // «tu cuenta está suspendida» a alguien cuya cuenta no lo está.
+    expect(error.code).toBe('consulta_suspendida');
+    expect(error.status).toBe(403);
+  });
+
+  it('una consulta ACTIVA, y una paciente sin consulta, entran igual que siempre', async () => {
+    // El nulo es «no aplica», NUNCA «suspendida»: una paciente no tiene consulta, y tratar su
+    // nulo como suspensión dejaría fuera a todas las pacientes del producto.
+    await expect(
+      armar({ credencial: { ...DOCTORA, practiceStatus: 'activa' }, coincide: true }).caso.run(
+        PETICION,
+      ),
+    ).resolves.toMatchObject({ rol: 'doctor' });
+
+    await expect(
+      armar({ credencial: { ...PACIENTE, practiceStatus: null }, coincide: true }).caso.run(
+        PETICION,
+      ),
+    ).resolves.toMatchObject({ rol: 'patient' });
   });
 
   it('la suspensión se evalúa ANTES que la temporal caducada', async () => {

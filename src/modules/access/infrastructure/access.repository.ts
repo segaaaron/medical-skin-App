@@ -40,6 +40,8 @@ type CredentialRow = {
   practice_id: string | null;
   practitioner_role: string | null;
   permissions: string[] | null;
+  /** `activa` | `suspendida`, nulo si no hay consulta. Lo añade la migración 0079. */
+  practice_status: string | null;
 };
 
 /**
@@ -110,6 +112,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
         practiceId: row.practice_id,
         practitionerRole: row.practitioner_role as PractitionerRole | null,
         permissions: row.permissions,
+        practiceStatus: row.practice_status,
       };
     });
   }
@@ -145,6 +148,9 @@ export class AccessRepository implements CredentialPort, SessionPort {
         practiceId,
         practitionerRole: null,
         permissions: null,
+        // `readMine` es para quien YA tiene sesión: no decide un acceso, así que el estado de
+        // la consulta no aplica aquí, igual que `accountStatus` y `region`.
+        practiceStatus: null,
       };
     });
   }

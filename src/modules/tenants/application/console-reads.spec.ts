@@ -28,6 +28,7 @@ function consulta(n: number): TenantRow {
     createdOn: '2026-03-14',
     plan: 'consultorio',
     ownerEmail: 'andrea.paz@clinicapaz.bo',
+  status: 'activa',
     createdAt: new Date('2026-03-14T10:02:00.000Z'),
   };
 }
@@ -117,6 +118,10 @@ describe('GET /v1/platform/tenants · la búsqueda', () => {
     expect(Object.keys(salida.consultas[0] ?? {}).sort()).toEqual([
       'alta_en',
       'doctora',
+      // `estado` entró el 3 de noviembre de 2026 y está TAMBIÉN en la ficha, que es lo que
+      // esta prueba protege: sin él la consola puede suspender y no puede decir que algo está
+      // suspendido.
+      'estado',
       'id',
       'nombre',
       'plan',

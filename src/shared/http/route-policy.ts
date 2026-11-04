@@ -467,6 +467,22 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:consultas:leer',
     failurePhrase: FAILURE_PHRASES.readTenant,
   },
+
+  // SUSPENDER Y BORRAR · 3 de noviembre de 2026. Dos permisos distintos y a propósito:
+  // suspender se deshace y es trabajo de soporte; borrar se lleva los expedientes de todas
+  // sus pacientes y no se deshace, así que no puede caer en una cuenta de soporte acotada.
+  'POST /v1/platform/tenants/:id/suspend': {
+    platformPermission: 'plataforma:consultas:suspender',
+    failurePhrase: FAILURE_PHRASES.readTenant,
+  },
+  'POST /v1/platform/tenants/:id/reactivate': {
+    platformPermission: 'plataforma:consultas:suspender',
+    failurePhrase: FAILURE_PHRASES.readTenant,
+  },
+  'DELETE /v1/platform/tenants/:id': {
+    platformPermission: 'plataforma:consultas:borrar',
+    failurePhrase: FAILURE_PHRASES.readTenant,
+  },
   // Permiso PROPIO y no `plataforma:consultas:leer`: quien mira el padrón responde «qué
   // consultas hay», y esto responde «esta persona tiene cuenta en MedSkin» — otro oráculo y
   // sobre otra clase de sujeto, porque una cuenta puede ser de una paciente.

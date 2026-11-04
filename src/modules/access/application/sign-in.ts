@@ -116,6 +116,17 @@ export class SignIn {
     // cuenta, y solo las ve quien ya demostró saber la contraseña.
     if (credential.accountStatus !== 'activa') throw new ContractError('cuenta_suspendida');
 
+    // LA CONSULTA SUSPENDIDA, y va AQUÍ y no antes: igual que el estado de la cuenta, solo se
+    // consulta cuando la contraseña ya coincidió. Responder «tu consulta está suspendida» a
+    // quien no sabe la contraseña diría que ese correo existe y en qué estado está.
+    //
+    // `null` es «no aplica» —una paciente no tiene consulta— y nunca se trata como suspendida.
+    // Es la comprobación que convierte el estado en algo: hasta el 3 de noviembre de 2026 la
+    // columna existía y NO LA MIRABA NADIE, así que suspender no apagaba nada.
+    if (credential.practiceStatus === 'suspendida') {
+      throw new ContractError('consulta_suspendida');
+    }
+
     const now = this.clock.now();
     if (credential.isTemporary) {
       const expires = credential.tempExpiresAt;

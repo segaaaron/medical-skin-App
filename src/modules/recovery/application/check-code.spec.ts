@@ -208,7 +208,9 @@ describe('POST /v1/recovery/code · los dos 410, también para quien no existe',
       ),
     );
     expect(error.data).toEqual({ motivo: 'codigo_nuevo' });
-    expect(error.userMessage).toContain('tu cuenta sigue bien');
+    // Lo que la prueba fija es que la frase DISTINGA «pediste otro» de «te pasaste de
+    // intentos», y que en los dos casos diga que la cuenta no quedó bloqueada.
+    expect(error.userMessage).toContain('tu cuenta no está bloqueada');
   });
 
   it('un 410 no gasta intento: no se comparó nada', async () => {

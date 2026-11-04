@@ -554,6 +554,20 @@
       "when": 1793404137278,
       "tag": "0078_los_permisos_de_pacientes_a_quien_toca",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793749411441,
+      "tag": "0079_suspender_y_borrar_una_consulta",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793749818538,
+      "tag": "0080_suspender_cierra_las_sesiones_abiertas",
+      "breakpoints": true
     }
   ]
 }

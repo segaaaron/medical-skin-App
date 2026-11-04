@@ -44,6 +44,7 @@ import type {
   TenantAdmissionPort,
   TenantFile,
   TenantFilePort,
+  TenantLifecyclePort,
   TenantRow,
 } from '../domain/platform-ports';
 import type { ConsoleSearch } from '../domain/console-search';
@@ -60,6 +61,7 @@ type FileRow = {
   name: string;
   plan: string;
   patient_limit: number;
+        status: string;
   region: string;
   created_on: string;
   owner_account_id: string | null;
@@ -225,7 +227,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
       const { rows } = await c.query<FileRow>(
         // `created_at` en la zona del despliegue y como `date`: «alta_en: 2026-03-14» es una
         // fecha de calendario, y pasarla por un instante la mueve un día.
-        `select p.id, p.name, p.plan, p.patient_limit, p.region,
+        `select p.id, p.name, p.plan, p.patient_limit, p.region, p.status,
                 (p.created_at at time zone $2)::date::text as created_on,
                 p.owner_account_id,
                 l.practice_country, l.specialty, l.license_number,
@@ -252,6 +254,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         name: row.name,
         plan: row.plan,
         patientLimit: row.patient_limit,
+        status: row.status,
         activePatients: Number(numbers?.patient_count ?? 0),
         region: row.region,
         createdOn: row.created_on,
@@ -325,7 +328,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         // Ya no se une a `license`: el `?licencia=` filtraba por los cuatro estados de la
         // revisión y la columna `licencia` del renglón los devolvía. Un `JOIN` que no aporta
         // ninguna columna es una tabla más en el plan por nada.
-        `select p.id, p.name, p.region, p.plan, p.created_at,
+        `select p.id, p.name, p.region, p.plan, p.created_at, p.status,
                 (p.created_at at time zone $1)::date::text as created_on,
                 a.email
            from practice p
@@ -353,6 +356,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         region: row.region,
         createdOn: row.created_on,
         plan: row.plan,
+        status: row.status,
         ownerEmail: row.email,
         createdAt: row.created_at,
       }));
@@ -366,6 +370,7 @@ type TenantSearchRow = {
   name: string;
   region: string;
   plan: string;
+  status: string;
   created_at: Date;
   created_on: string;
   email: string | null;
@@ -408,3 +413,127 @@ function claimOf(
  * cambiar los imports de quien ya la usaba.
  */
 export { fingerprintOf } from '../../../shared/idempotency/idempotency-key';
+
+// =========================================================================================
+// SUSPENDER, REACTIVAR Y BORRAR UNA CONSULTA · 3 de noviembre de 2026
+//
+// Dos operaciones distintas y una no sustituye a la otra: suspender se deshace y no toca un
+// solo dato; borrar no se deshace y se lleva todo lo que cuelga de la consulta.
+// =========================================================================================
+
+export class TenantLifecycleRepository implements TenantLifecyclePort {
+  constructor(private readonly pool: Pool) {}
+
+  /**
+   * Suspender y reactivar, en UNA transacción con su auditoría y con la revocación.
+   *
+   * Cero filas es el `404`: un identificador que no existe y uno de otra región responden lo
+   * mismo, porque la política decide y no un `if` nuestro.
+   *
+   * SUSPENDER REVOCA LAS SESIONES ABIERTAS y reactivar NO las devuelve, a propósito: una
+   * sesión cerrada no se reabre, y la doctora vuelve a entrar con su contraseña. Sin la
+   * revocación, quien tuviera la app abierta seguiría trabajando hasta doce horas (0080).
+   */
+  async setStatus(p: {
+    actor: PlatformActor;
+    practiceId: string;
+    status: 'activa' | 'suspendida';
+  }): Promise<{ status: string; revokedSessions: number } | null> {
+    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
+      const { rows } = await c.query<{ status: string }>(
+        `update practice set status = $2, updated_at = now()
+          where id = $1 returning status`,
+        [p.practiceId, p.status],
+      );
+      const row = rows[0];
+      if (row === undefined) return null;
+
+      let revoked = 0;
+      if (p.status === 'suspendida') {
+        // POR LA DUEÑA Y NO POR LA CONSULTA, y no es un rodeo: `app_platform` NO tiene
+        // `session.practice_id` —son cinco columnas y esa no está—, y un `where` sobre una
+        // columna sin privilegio se deniega igual que un `select`. Lo prueba
+        // `access-functions.spec.ts`, y esa frontera se queda donde está: la consola cuenta
+        // sesiones, no sabe de qué consulta son.
+        //
+        // Llegar por `practice.owner_account_id` da además lo que se pidió: suspender al
+        // DOCTOR. Hoy hay uno por consulta —los sub-roles se fueron el 30 de octubre—, así
+        // que su cuenta y «la gente de esa consulta» son lo mismo. El día que haya equipo,
+        // esto cierra la sesión de la dueña y no la de su asistente, y habrá que decidirlo.
+        const { rowCount } = await c.query(
+          `update session set revoked_at = now()
+            where account_id = (select owner_account_id from practice where id = $1)
+              and revoked_at is null`,
+          [p.practiceId],
+        );
+        revoked = rowCount ?? 0;
+      }
+
+      await this.audit(c, p.actor, p.practiceId, `consulta.${p.status}`, {
+        sesiones_cerradas: revoked,
+      });
+      return { status: row.status, revokedSessions: revoked };
+    });
+  }
+
+  /**
+   * EL BORRADO, Y LO QUE SE LLEVA POR DELANTE.
+   *
+   * Todas las claves ajenas hacia `practice` son `ON DELETE CASCADE`, así que esta sentencia
+   * borra también las pacientes de esa consulta, sus historias clínicas, sus vínculos y sus
+   * correcciones de nota. **Es la opción que el dueño eligió el 3 de noviembre de 2026**, con
+   * las otras dos escritas delante —conservar desligado, o anonimizar— y sabiendo que es la
+   * única de las tres que puede incumplir el plazo legal de conservación.
+   *
+   * LA AUDITORÍA VA ANTES DEL BORRADO y no después, y no es estilo: después no queda fila de
+   * la que leer el nombre, y una línea que dice «se borró algo» sin decir qué no sirve para
+   * nada. Se guarda el nombre y el recuento de fichas que se lleva, que es lo único que
+   * quedará de esa consulta.
+   */
+  async remove(p: {
+    actor: PlatformActor;
+    practiceId: string;
+  }): Promise<{ name: string; patients: number } | null> {
+    return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
+      const { rows } = await c.query<{ name: string; patients: string }>(
+        `select p.name, (select count(*) from patient where practice_id = p.id)::text as patients
+           from practice p where p.id = $1`,
+        [p.practiceId],
+      );
+      const row = rows[0];
+      if (row === undefined) return null;
+
+      await this.audit(c, p.actor, p.practiceId, 'consulta.borrada', {
+        nombre: row.name,
+        fichas_borradas: Number(row.patients),
+      });
+
+      const { rowCount } = await c.query(`delete from practice where id = $1`, [p.practiceId]);
+      // Cero filas aquí con la lectura de arriba en verde sería que otra petición la borró en
+      // medio. No es un 500: el resultado que el cliente quería ya se cumplió.
+      if (rowCount === 0) return { name: row.name, patients: Number(row.patients) };
+
+      return { name: row.name, patients: Number(row.patients) };
+    });
+  }
+
+  /**
+   * La bitácora de la consola. `practice_id` va NULO a propósito, igual que en el resto de
+   * acciones de plataforma: la fila la lee la consola, no la consulta — y en el borrado la
+   * consulta ya no existe cuando alguien lea esto.
+   */
+  private async audit(
+    c: PoolClient,
+    actor: PlatformActor,
+    practiceId: string,
+    action: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await c.query(
+      `insert into access_audit (practice_id, actor_account_id, actor_label, action,
+                                 subject_type, subject_id, data, region)
+       values (null, $1, $2, $3, 'consulta', $4, $5, $6)`,
+      [actor.subject, actor.label, action, practiceId, JSON.stringify(data), actor.region],
+    );
+  }
+}

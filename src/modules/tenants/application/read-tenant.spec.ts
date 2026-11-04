@@ -25,6 +25,7 @@ const FICHA: TenantFile = {
   name: 'Clínica Paz',
   plan: 'consultorio',
   patientLimit: 300,
+  status: 'activa',
   activePatients: 148,
   region: 'latam',
   createdOn: '2026-03-14',
@@ -63,6 +64,9 @@ describe('GET /v1/platform/tenants/{id}', () => {
     await expect(caso.run(PRACTICE, ACTOR)).resolves.toEqual({
       id: PRACTICE,
       nombre: 'Clínica Paz',
+      // El estado de la CONSULTA, que no es el de su dueña: abajo `doctora.estado` es el de la
+      // cuenta. Dos cosas distintas que la pantalla pinta por separado.
+      estado: 'activa',
       plan: { clave: 'consultorio', pacientes: 148, limite_pacientes: 300 },
       region: 'latam',
       // De la configuración del despliegue, no de la base (decisión 6).

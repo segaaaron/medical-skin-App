@@ -31,7 +31,8 @@ import { AdmissionFailures } from './infrastructure/admission-failures';
 import { PlatformRepository } from './infrastructure/platform.repository';
 import { TenantsRepository } from './infrastructure/tenants.repository';
 import { WelcomeMail } from './infrastructure/welcome-mail';
-import { SearchTenants } from './application/console-reads';
+import { DeleteTenant, SearchTenants, SetTenantStatus } from './application/console-reads';
+import { TenantLifecycleRepository } from './infrastructure/platform.repository';
 import { PlatformTenantsController } from './platform-tenants.controller';
 import { TenantsController } from './tenants.controller';
 
@@ -74,6 +75,23 @@ import { TenantsController } from './tenants.controller';
       provide: PlatformRepository,
       useFactory: (pool: Pool, cfg: Config) => new PlatformRepository(pool, cfg.ZONA_HORARIA),
       inject: [POOL, CONFIG],
+    },
+    // Suspender, reactivar y borrar. Repositorio APARTE del de lectura: lo que escribe sobre
+    // una consulta entera no comparte clase con lo que la lee.
+    {
+      provide: TenantLifecycleRepository,
+      useFactory: (pool: Pool) => new TenantLifecycleRepository(pool),
+      inject: [POOL],
+    },
+    {
+      provide: SetTenantStatus,
+      useFactory: (repo: TenantLifecycleRepository) => new SetTenantStatus(repo),
+      inject: [TenantLifecycleRepository],
+    },
+    {
+      provide: DeleteTenant,
+      useFactory: (repo: TenantLifecycleRepository) => new DeleteTenant(repo),
+      inject: [TenantLifecycleRepository],
     },
     {
       provide: WelcomeMail,

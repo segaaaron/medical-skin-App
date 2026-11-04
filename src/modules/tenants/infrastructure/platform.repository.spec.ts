@@ -20,7 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { withTenantContext, type TenantContext } from '../../../shared/db/tenant-context';
 import type { CreatedTenant, PlatformActor } from '../domain/platform-ports';
-import { PlatformRepository, fingerprintOf } from './platform.repository';
+import { PlatformRepository, TenantLifecycleRepository, fingerprintOf } from './platform.repository';
 
 const ownerUrl =
   process.env.DATABASE_URL_OWNER ??
@@ -679,4 +679,110 @@ describe('GET /v1/platform/tenants · buscar contra la base', () => {
   // describe de `GET /v1/platform/licenses`, la bandeja: traía la matrícula, la clave de la
   // credencial y el orden ascendente por fecha de envío. Los dos se fueron con la revisión
   // manual el 30 de octubre de 2026: no hay estados que filtrar ni bandeja que servir.
+});
+
+// =========================================================================================
+// SUSPENDER, REACTIVAR Y BORRAR · contra la base real, porque lo que hay que probar aquí es
+// exactamente lo que un doble no puede: el `ON DELETE CASCADE` y los `GRANT` de la 0079/0080.
+// =========================================================================================
+
+describe('suspender, reactivar y borrar una consulta', () => {
+  const lifecycle = new TenantLifecycleRepository(app);
+
+  it('suspender cierra las sesiones abiertas; reactivar NO las devuelve', async () => {
+    // Una sesión viva de la dueña, como la de alguien con la app abierta.
+    await owner.query(
+      `insert into session (id, account_id, practice_id, scope, device_id)
+       values (gen_random_uuid(), $1, $2, 'completo', 'dispositivo-prueba')`,
+      [FILE.account, FILE.practice],
+    );
+
+    const vivas = async () =>
+      owner
+        .query<{ n: string }>(
+          `select count(*)::text as n from session
+            where practice_id = $1 and revoked_at is null`,
+          [FILE.practice],
+        )
+        .then((r) => Number(r.rows[0]?.n));
+    expect(await vivas()).toBeGreaterThan(0);
+
+    const suspendida = await lifecycle.setStatus({
+      actor: ACTOR,
+      practiceId: FILE.practice,
+      status: 'suspendida',
+    });
+    expect(suspendida).toMatchObject({ status: 'suspendida' });
+    expect(suspendida?.revokedSessions).toBeGreaterThan(0);
+    // ESTO ES LO QUE HACE QUE SUSPENDER SUSPENDA. Sin la revocación, quien ya estaba dentro
+    // seguiría trabajando hasta doce horas, que es lo que dura su refresco.
+    expect(await vivas()).toBe(0);
+
+    const activa = await lifecycle.setStatus({
+      actor: ACTOR,
+      practiceId: FILE.practice,
+      status: 'activa',
+    });
+    expect(activa).toEqual({ status: 'activa', revokedSessions: 0 });
+    // Reactivar NO reabre lo cerrado, a propósito: la doctora vuelve a entrar con su
+    // contraseña, que es lo que cualquiera espera después de que le levanten una suspensión.
+    expect(await vivas()).toBe(0);
+  });
+
+  it('una consulta que no existe es 404 y no escribe nada', async () => {
+    const antes = await owner
+      .query<{ n: string }>(`select count(*)::text as n from access_audit`)
+      .then((r) => r.rows[0]?.n);
+
+    expect(
+      await lifecycle.setStatus({
+        actor: ACTOR,
+        practiceId: 'cccccccc-0000-4000-8000-0000000000ff',
+        status: 'suspendida',
+      }),
+    ).toBeNull();
+    expect(await lifecycle.remove({ actor: ACTOR, practiceId: 'cccccccc-0000-4000-8000-0000000000ff' })).toBeNull();
+
+    const despues = await owner
+      .query<{ n: string }>(`select count(*)::text as n from access_audit`)
+      .then((r) => r.rows[0]?.n);
+    expect(despues).toBe(antes);
+  });
+
+  it('borrar se lleva las fichas en cascada, y la auditoría se escribe ANTES', async () => {
+    // Una paciente con su historia, para que el cascade tenga algo que llevarse.
+    const { rows: puesta } = await owner.query<{ id: string }>(
+      `insert into patient (practice_id, first_name, last_name, birth_date, email, how_arrived)
+       values ($1, 'Borrada', 'Enlacascada', '1990-01-01', 'cascada@prueba.local', 'instagram')
+       returning id`,
+      [OTHER.practice],
+    );
+    const paciente = puesta[0]!.id;
+    await owner.query(`insert into medical_history (practice_id, patient_id) values ($1, $2)`, [
+      OTHER.practice,
+      paciente,
+    ]);
+
+    const borrada = await lifecycle.remove({ actor: ACTOR, practiceId: OTHER.practice });
+    expect(borrada?.patients).toBeGreaterThan(0);
+
+    // La consulta y TODO lo que colgaba de ella.
+    const quedan = async (tabla: string, columna: string, valor: string) =>
+      owner
+        .query<{ n: string }>(`select count(*)::text as n from ${tabla} where ${columna} = $1`, [valor])
+        .then((r) => Number(r.rows[0]?.n));
+    expect(await quedan('practice', 'id', OTHER.practice)).toBe(0);
+    expect(await quedan('patient', 'id', paciente)).toBe(0);
+    expect(await quedan('medical_history', 'patient_id', paciente)).toBe(0);
+
+    // Y LA LÍNEA DE AUDITORÍA SIGUE AHÍ, con el nombre y el recuento dentro: es lo único que
+    // queda de esa consulta. Si se escribiera después del borrado no habría de dónde leer el
+    // nombre, y «se borró algo» no sirve para nada.
+    const { rows: fila } = await owner.query<{ data: Record<string, unknown> }>(
+      `select data from access_audit
+        where action = 'consulta.borrada' and subject_id = $1`,
+      [OTHER.practice],
+    );
+    expect(fila[0]?.data).toMatchObject({ nombre: borrada?.name, fichas_borradas: borrada?.patients });
+  });
 });

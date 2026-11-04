@@ -103,7 +103,7 @@ export const practice = pgTable(
   (t) => [
     check('practice_region_ck', sql`${t.region} in ${REGIONS}`),
     check('practice_plan_ck', sql`${t.plan} in ('individual', 'consultorio', 'clinica')`),
-    check('practice_status_ck', sql`${t.status} in ('activa', 'pausada')`),
+    check('practice_status_ck', sql`${t.status} in ('activa', 'suspendida')`),
     check('practice_country_ck', sql`${t.country} ~ '^[A-Z]{2}$'`),
     check('practice_name_ck', sql`length(${t.name}) between 2 and 120`),
     // Sin índice compuesto: se lee por clave primaria desde la política de RLS

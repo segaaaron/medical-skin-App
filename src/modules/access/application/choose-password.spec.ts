@@ -35,6 +35,7 @@ const TEMPORAL: AccessCredential = {
   practiceId: null,
   practitionerRole: null,
   permissions: null,
+  practiceStatus: null,
 };
 
 const PACIENTE: Caller = {
@@ -82,6 +83,7 @@ function armar(opciones: {
         accountRole: opciones.guardadoComo?.accountRole ?? ('patient' as const),
         practiceId: opciones.guardadoComo?.practiceId ?? null,
         permissions: null,
+  practiceStatus: null,
       });
     },
   };
@@ -110,6 +112,7 @@ function armar(opciones: {
         practitionerRole:
           opciones.guardadoComo?.accountRole === 'doctor' ? ('doctor' as const) : null,
         permissions: null,
+  practiceStatus: null,
       });
     },
     nextStepFacts: () => {
@@ -119,6 +122,7 @@ function armar(opciones: {
         firstDayDone: false,
         practitionerRole: null,
         permissions: null,
+  practiceStatus: null,
       });
     },
     list: () => Promise.resolve([]),

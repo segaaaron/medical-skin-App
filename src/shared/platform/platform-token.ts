@@ -66,6 +66,10 @@ export const PLATFORM_TOKEN_LIFETIME_SECONDS = 15 * 60;
 export const PLATFORM_PERMISSIONS = [
   'plataforma:consultas:crear',
   'plataforma:consultas:leer',
+  // Suspender es reversible y no toca un dato; borrar se lleva los expedientes de todas sus
+  // pacientes y NO se deshace. Dos permisos y no uno (3 de noviembre de 2026).
+  'plataforma:consultas:suspender',
+  'plataforma:consultas:borrar',
   // Aquí estaba `plataforma:licencias:decidir`, y se fue con la revisión manual el 30 de
   // octubre de 2026: MedSkin no verifica licencias, así que no hay decisión que autorizar.
   // Se BORRA de la lista en vez de quedarse sin ruta que lo pida, porque esta lista es

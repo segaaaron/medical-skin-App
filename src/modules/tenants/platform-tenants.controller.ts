@@ -13,13 +13,13 @@
 // firmado y lo verificó el guardia. Comprobarlo dos veces son dos autorizaciones que se
 // pueden desacordar.
 
-import { Controller, Get, HttpCode, Inject, Param, Post, Req, Res } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
 import { ContractError } from '../../shared/contract/error-catalog';
 import type { RequestWithContext } from '../../shared/http/request-context';
 import type { PlatformCaller } from '../../shared/platform/platform-token';
-import { SearchTenants } from './application/console-reads';
+import { DeleteTenant, SearchTenants, SetTenantStatus } from './application/console-reads';
 import { CreateTenant } from './application/create-tenant';
 import { ReadTenant } from './application/read-tenant';
 import { readIdempotencyKey } from '../../shared/idempotency/idempotency-key';
@@ -47,6 +47,8 @@ export class PlatformTenantsController {
     @Inject(CreateTenant) private readonly createTenant: CreateTenant,
     @Inject(ReadTenant) private readonly readTenant: ReadTenant,
     @Inject(SearchTenants) private readonly searchTenants: SearchTenants,
+    @Inject(SetTenantStatus) private readonly setStatus: SetTenantStatus,
+    @Inject(DeleteTenant) private readonly deleteTenant: DeleteTenant,
   ) {}
 
   /**
@@ -81,6 +83,36 @@ export class PlatformTenantsController {
   async file(@Req() req: RequestWithContext, @Param('id') id: string) {
     if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
     return this.readTenant.run(id, actorOf(req));
+  }
+
+  /**
+   * SUSPENDER Y REACTIVAR · la misma forma que `patients/{pid}/archive` y `/reactivate`, para
+   * no inventar un tercer estilo en la misma consola. Idempotente: suspender lo suspendido
+   * devuelve el mismo 200.
+   */
+  @Post(':id/suspend')
+  @HttpCode(200)
+  async suspend(@Req() req: RequestWithContext, @Param('id') id: string) {
+    if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
+    return this.setStatus.run(id, 'suspendida', actorOf(req));
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(200)
+  async reactivate(@Req() req: RequestWithContext, @Param('id') id: string) {
+    if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
+    return this.setStatus.run(id, 'activa', actorOf(req));
+  }
+
+  /**
+   * BORRAR · se lleva la consulta y todo lo que cuelga de ella, expedientes incluidos. No se
+   * deshace. Su permiso es propio y no el de suspender, precisamente por eso.
+   */
+  @Delete(':id')
+  @HttpCode(200)
+  async remove(@Req() req: RequestWithContext, @Param('id') id: string) {
+    if (!UUID.test(id)) throw new ContractError('consulta_no_existe');
+    return this.deleteTenant.run(id, actorOf(req));
   }
 }
 

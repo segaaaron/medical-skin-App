@@ -514,12 +514,27 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
     // Y se para ahí. Se comprueba contra el CATÁLOGO, no contra la lista de abajo: si
     // alguien concede `city` o `device` mañana, esto falla aunque no toque esta prueba.
     const granted = await owner
-      .query<{ column_name: string }>(
-        `select column_name from information_schema.column_privileges
-          where grantee = 'app_platform' and table_name = 'session' order by column_name`,
+      .query<{ column_name: string; privilege_type: string }>(
+        `select column_name, privilege_type from information_schema.column_privileges
+          where grantee = 'app_platform' and table_name = 'session'
+          order by column_name, privilege_type`,
       )
-      .then((r) => r.rows.map((c) => c.column_name));
-    expect(granted).toEqual(['account_id', 'app_version', 'last_seen_at', 'platform', 'revoked_at']);
+      .then((r) => r.rows);
+    expect(granted.filter((g) => g.privilege_type === 'SELECT').map((g) => g.column_name)).toEqual([
+      'account_id',
+      'app_version',
+      'last_seen_at',
+      'platform',
+      'revoked_at',
+    ]);
+
+    // Y ESCRIBE UNA SOLA, desde la 0080: `revoked_at`, que es cómo suspender una consulta
+    // cierra las sesiones que ya estaban abiertas. Es la diferencia entre «cerrar la sesión de
+    // alguien» y «poder tocar sus sesiones»: no puede abrir una, ni mover su refresco, ni leer
+    // su huella. Si alguien concede una segunda columna de escritura, esto falla.
+    expect(granted.filter((g) => g.privilege_type !== 'SELECT')).toEqual([
+      { column_name: 'revoked_at', privilege_type: 'UPDATE' },
+    ]);
 
     // Y las trece que no. «Desde qué teléfono y desde qué ciudad entró» es un dato de
     // localización de quien va a una clínica de estética, y la pantalla promete que no se
@@ -551,11 +566,20 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
       // Tampoco por un WHERE sobre una columna que no se le concedió: la cláusula también
       // se comprueba, así que no se puede filtrar por ciudad para adivinarla.
       where_city: await whatItSees(app, ctxPlatform, `select account_id from session where city = 'Santa Cruz'`),
-      // Ni cerrar sesiones: `revoked_at` se LEE, y su política sigue siendo solo de SELECT.
-      closes: await whatItSees(app, ctxPlatform, 'update session set revoked_at = now() where account_id = $1', [
-        PATIENT.account,
-      ]),
-    }).toEqual({ star: 'permiso denegado', where_city: 'permiso denegado', closes: 'permiso denegado' });
+      // DESDE LA 0080 SÍ PUEDE CERRAR SESIONES —es cómo suspender una consulta echa a quien ya
+      // estaba dentro— pero SOLO esa columna. Escribir el motivo sigue denegado, y es la
+      // frontera que importa: cerrar la sesión de alguien no es poder tocar sus sesiones.
+      //
+      // Se prueba con el motivo y no con `revoked_at`, a propósito: un `update` que SÍ pasa
+      // revocaría de verdad las sesiones de esta base y dejaría a las pruebas de abajo
+      // contando cero. Lo que la consola puede hacer se fija arriba, contra el catálogo.
+      reason: await whatItSees(
+        app,
+        ctxPlatform,
+        `update session set revoked_reason = 'x' where account_id = $1`,
+        [PATIENT.account],
+      ),
+    }).toEqual({ star: 'permiso denegado', where_city: 'permiso denegado', reason: 'permiso denegado' });
   });
 
   it('cuenta las sesiones de la dueña llegando por practice.owner_account_id', async () => {
