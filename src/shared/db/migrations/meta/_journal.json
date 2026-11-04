@@ -589,6 +589,13 @@
       "when": 1793766344562,
       "tag": "0083_la_consola_resetea_el_pin",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793768500000,
+      "tag": "0084_quien_reenvia_un_acceso_tambien_lo_resetea",
+      "breakpoints": true
     }
   ]
 }
