@@ -34,6 +34,25 @@ import type { RegistrationClock } from './register-patient';
 export type PlatformResendResponse = {
   enviado_en: string;
   caduca_en: string;
+  /**
+   * EL PIN QUE SE ACABA DE ACUÑAR, y está aquí por decisión del dueño del 4 de noviembre de
+   * 2026, en contra de lo que estas dos rutas dijeron hasta hoy («Va a su propio correo.
+   * Soporte no la ve»).
+   *
+   * EL CASO QUE LO PIDE: soporte acuña una temporal nueva, con eso MATA la anterior, y si el
+   * correo de la cuenta está mal escrito —que es justo cuando alguien llama a soporte— lo
+   * único que ha conseguido es dejar a esa persona sin la que tenía y sin la nueva.
+   *
+   * LO QUE CUESTA, dicho aquí para que nadie lo descubra dentro de seis meses: quien tiene
+   * `plataforma:acceso:reenviar` o `plataforma:acceso:resetear` puede ahora LEER la credencial
+   * que acuña, y dictarla por teléfono o por chat. Por eso cada llamada deja
+   * `credencial_vista: true` en `access_audit`: lo que se concede se puede auditar.
+   *
+   * LO QUE SIGUE SIN PODERSE, y no es negociable aquí: consultar una contraseña YA EXISTENTE.
+   * No se guarda en claro en ninguna parte —solo su hash de Argon2id—, así que lo que viaja
+   * es la que esta misma llamada acaba de crear, en el momento en que existe, y nada más.
+   */
+  contrasena_temporal: string;
 };
 
 export class ResendPlatformAccess {
@@ -46,7 +65,7 @@ export class ResendPlatformAccess {
 
   /**
    * `force` es el RESETEO (`POST …/access/reset`, 4 de noviembre de 2026): el mismo camino
-   * entero —acuñar, mandar al correo de la persona, no devolver la contraseña— contra la
+   * entero —acuñar, mandar al correo de la persona y devolver el PIN a la consola— contra la
    * función que SÍ pisa una credencial ya elegida. Lo que separa a las dos acciones no es este
    * booleano: es el permiso de la tabla de rutas y el `GRANT EXECUTE` de cada función. Aquí
    * solo cambia a qué función se llama, qué dice la bitácora y qué frase lleva el 500.
@@ -102,6 +121,9 @@ export class ResendPlatformAccess {
       // segundo no se puede saber desde aquí y prometerlo sería mentir.
       enviado_en: this.clock.now().toISOString(),
       caduca_en: renewed.expiresAt.toISOString(),
+      // Se devuelve DESPUÉS de que el correo saliera, no antes: si el relé falla esto es un
+      // 500 y la consola no se queda con un PIN que además nadie recibió.
+      contrasena_temporal: temporary,
     };
   }
 

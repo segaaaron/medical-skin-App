@@ -385,9 +385,13 @@ export type PlatformResendOutcome = 'acceso_renovado' | 'cuenta_no_existe' | 'ya
 export interface PlatformAccessPort {
   /**
    * `medskin_platform_resend_access()`: acuña la temporal nueva, mata la anterior y revoca
-   * las sesiones de esa cuenta (0020). **Devuelve dos columnas y ninguna es la contraseña**,
-   * y eso no es una omisión: «Va a su propio correo. Soporte no la ve» tiene que ser verdad
-   * en la base y no en el controlador.
+   * las sesiones de esa cuenta (0020). **Devuelve dos columnas y ninguna es la contraseña.**
+   *
+   * Desde el 4 de noviembre de 2026 la RESPUESTA del endpoint sí lleva el PIN, por decisión
+   * del dueño, pero esto no cambia: el que viaja es el que el borde acaba de acuñar y todavía
+   * tiene en memoria. **De la base no sale ninguna credencial**, ni por aquí ni por ningún
+   * sitio: lo que hay guardado es su hash de Argon2id, así que una contraseña YA existente
+   * sigue sin poder consultarse.
    *
    * `email` vuelve **solo** en `acceso_renovado` —es a dónde hay que escribir— y nulo en los
    * otros dos: no se filtra el correo de nadie por un 404 ni por un 409.

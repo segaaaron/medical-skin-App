@@ -129,9 +129,14 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
       // persona eligió— y `access_audit_action_idx` es por `action`, así que «enséñame todos
       // los reseteos» tiene que ser una lectura por índice y no un filtro sobre un json.
       const action = p.force ? 'cuenta.acceso_reseteado' : 'cuenta.acceso_pedido';
+      // `credencial_vista`: desde el 4 de noviembre de 2026 estas dos rutas DEVUELVEN el PIN a
+      // la consola, así que el operador pudo leerlo. Es una etiqueta cerrada, no el PIN —en la
+      // bitácora no entra ninguna credencial—, y está para que «quién pudo ver la contraseña de
+      // esta persona» tenga respuesta.
       await this.audit(c, p.actor, p.accountId, action, {
         via: 'correo',
         origen: 'consola',
+        credencial_vista: true,
       });
 
       return { outcome, expiresAt: row.expires_at, email };

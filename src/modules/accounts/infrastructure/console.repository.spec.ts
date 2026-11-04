@@ -190,12 +190,19 @@ beforeEach(async () => {
 });
 
 describe('POST /v1/platform/accounts/{id}/access/resend', () => {
-  it('la contraseña va a su correo y NO a la respuesta: soporte no la ve', async () => {
+  it('la contraseña va a su correo Y a la respuesta, y es la que abre la credencial', async () => {
     const respuesta = await reenvio().run(PAUSADA, SOPORTE);
 
-    // El cuerpo del contrato, entero: dos campos y ninguno es la contraseña.
-    expect(Object.keys(respuesta).sort()).toEqual(['caduca_en', 'enviado_en']);
-    expect(JSON.stringify(respuesta)).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
+    // El cuerpo del contrato, entero. `contrasena_temporal` desde el 4 de noviembre de 2026:
+    // el PIN que ESTA llamada acaba de acuñar, para que soporte pueda dictarlo cuando el correo
+    // de la cuenta está mal escrito —que es justo cuando se usa esto—.
+    expect(Object.keys(respuesta).sort()).toEqual([
+      'caduca_en',
+      'contrasena_temporal',
+      'enviado_en',
+    ]);
+    expect(respuesta.contrasena_temporal).toMatch(/^\d{6}$/);
+    expect(respuesta.contrasena_temporal).toBe(mandados[0]?.temporaryPassword);
     const vida = new Date(respuesta.caduca_en).getTime() - Date.now();
     expect(vida).toBeGreaterThan(71 * 3600_000);
     expect(vida).toBeLessThanOrEqual(72 * 3600_000);
@@ -312,7 +319,8 @@ describe('POST /v1/platform/accounts/{id}/access/reset', () => {
     const pin = mandados[0]?.temporaryPassword ?? '';
     expect(pin).toMatch(/^\d{6}$/);
     expect(mandados[0]?.email).toBe(CORREO_RESETEO);
-    expect(JSON.stringify(respuesta)).not.toContain(pin);
+    // El mismo PIN en el correo y en la respuesta: la consola dicta exactamente lo que se mandó.
+    expect(respuesta.contrasena_temporal).toBe(pin);
 
     const guardada = await credencialDe(RESETEO);
     expect(await new Argon2Passwords().verify(guardada?.hash ?? '', pin)).toBe(true);
@@ -341,6 +349,8 @@ describe('POST /v1/platform/accounts/{id}/access/reset', () => {
       actor_label: 'Marcela · soporte',
       subject_id: RESETEO,
       practice_id: null,
+      // Lo que se concede se audita: soporte pudo LEER esta credencial.
+      data: { credencial_vista: true },
     });
     const fila = JSON.stringify(filas[0]);
     expect(fila).not.toContain(CORREO_RESETEO);
