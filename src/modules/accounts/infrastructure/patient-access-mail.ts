@@ -34,7 +34,7 @@ export class PatientAccessMail implements PatientAccessMailPort, PatientLinkNoti
 
   /**
    * El aviso de quien ya tenía cuenta. MISMO ASUNTO, «Tu acceso a MedSkin» y nada más: lo
-   * que cambia es el cuerpo, que no nombra ninguna contraseña porque no se acuñó ninguna.
+   * que cambia es el cuerpo, que no nombra ninguna contraseña porque no se generó ninguna.
    * Dos asuntos distintos dirían en la pantalla bloqueada del teléfono cuál de los dos
    * casos es, y eso es exactamente lo que el asunto no dice nunca.
    */

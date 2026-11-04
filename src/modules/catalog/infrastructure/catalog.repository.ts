@@ -105,7 +105,7 @@ export class CatalogRepository implements CatalogPort {
       // UN `SAVEPOINT`, Y NO ES UN ADORNO: en Postgres una violación de restricción aborta la
       // TRANSACCIÓN ENTERA, no la sentencia. Sin esto, el `release()` del `catch` muere con
       // «current transaction is aborted» y lo que recibe quien llama es un 500 donde el
-      // contrato promete un 409. Medido el 28 de octubre con su prueba.
+      // contrato especifica un 409. Medido el 28 de octubre con su prueba.
       await c.query('savepoint before_insert');
       try {
         const { rows } = await c.query<{ id: string }>(
@@ -138,7 +138,7 @@ export class CatalogRepository implements CatalogPort {
         throw failure;
       }
 
-      // El precio base nace con el tratamiento: «un tratamiento sin precio base no se ofrece».
+      // El precio base se crea con el tratamiento: «un tratamiento sin precio base no se ofrece».
       await c.query(
         `insert into price (practice_id, treatment_id, zone, cents)
          values (medskin_current_practice(), $1, null, $2)`,

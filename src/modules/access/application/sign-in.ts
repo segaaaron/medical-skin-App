@@ -2,11 +2,11 @@
 //
 // EL ORDEN DE LAS COMPROBACIONES ES PARTE DEL CONTRATO (`acceso.md` · «El orden de las
 // comprobaciones, que es parte del contrato») y es la diferencia entre cerrar y abrir el
-// único oráculo del producto:
+// única filtración del producto:
 //
 //   1. forma del cuerpo
 //   2. la PAUSA, antes de verificar nada y exista o no la cuenta
-//   3. el verificado de Argon2id SIEMPRE: contra el hash real, o contra el señuelo
+//   3. el verificado de Argon2id SIEMPRE: contra el hash real, o contra el decoy
 //   4. si no coincide → 401 `acceso_no_coincide`, y AQUÍ TERMINA
 //   5. solo si coincide → suspensión, temporal caducada, y el 200
 //
@@ -40,7 +40,7 @@ import type {
 } from '../domain/ports';
 import { resolvePermissions, resolveRole } from '../domain/role';
 
-/** Lo que `acceso.md` promete de la pausa: 5 intentos → 15 minutos. */
+/** Lo que `acceso.md` especifica de la pausa: 5 intentos → 15 minutos. */
 export const PAUSE_MINUTES = 15;
 
 /** `sesion.md`: paciente 30 días · doctora y equipo 12 h. */
@@ -96,10 +96,10 @@ export class SignIn {
     const before = await this.pause.peek(email, request.ip);
     if (before.paused) throw this.pausedError(before.pausedUntil);
 
-    // --- 3 · el verificado, siempre. El hash es el real o el del señuelo, y la función de
+    // --- 3 · el verificado, siempre. El hash es el real o el del decoy, y la función de
     // la base garantiza que nunca falta: sin él no hay «mismo tiempo».
     const credential = await this.credentials.read(email);
-    // Sin `who` cuando el hash es el del SEÑUELO: no hay cuenta que nombrar, y una fila de
+    // Sin `who` cuando el hash es el del DECOY: no hay cuenta que nombrar, y una fila de
     // aviso por cada intento sobre un correo que no existe es inundar el registro gratis.
     const matched = await this.passwords.verify(credential.hash, password, whoOf(credential));
 
@@ -140,7 +140,7 @@ export class SignIn {
       // sentencia que marca `temp_used_at`, así que entrar con la temporal vieja no
       // coincide con el hash y cae en `acceso_no_coincide` dos pasos más arriba. El
       // código salió del catálogo en vez de conservar el hash de la temporal 72 h para
-      // mejorar una frase: eso es guardar una credencial muerta.
+      // mejorar una frase: eso es guardar una credencial invalidada.
     }
 
     const role = resolveRole(credential.accountRole, credential.practitionerRole);
@@ -236,14 +236,14 @@ export class SignIn {
       campos: ['correo', 'contrasena'],
       intentos_restantes: attemptsLeft,
       pausa_minutos: PAUSE_MINUTES,
-      aviso: `Te quedan ${intentos} antes de una pausa de ${PAUSE_MINUTES} minutos.`,
+      aviso: `Te quedan ${intentos}. Después tendrás que esperar ${PAUSE_MINUTES} minutos para volver a entrar.`,
     });
   }
 }
 
 /**
  * Quién es el dueño de ese hash, para el aviso de una credencial ilegible. `undefined`
- * cuando la función devolvió el SEÑUELO —`accountId` nulo—, que no tiene dueño.
+ * cuando la función devolvió el DECOY —`accountId` nulo—, que no tiene dueño.
  */
 function whoOf(
   credential: AccessCredential,

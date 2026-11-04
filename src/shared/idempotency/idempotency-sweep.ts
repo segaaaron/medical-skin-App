@@ -5,8 +5,8 @@
 // Por qué importa más que la higiene normal: la respuesta guardada del `201` de
 // `POST /v1/patients` lleva la contraseña temporal EN CLARO cuando la vía es `whatsapp` o
 // `ninguna`. Pasadas sus 24 h esa fila ya no sirve para nada y sigue siendo el nombre, el
-// correo y una credencial de una paciente. `_convenciones.md` promete «durante 24 h», que es
-// una promesa de retención y no solo una ventana de repetición, y hasta la 0024 nadie barría:
+// correo y una credencial de una paciente. `_convenciones.md` especifica «durante 24 h», que es
+// una especificación de retención y no solo una ventana de repetición, y hasta la 0024 nadie barría:
 // `expires_at` se escribía, `idempotency_key_purge_idx` existía desde la 0000 y nadie los
 // leía.
 //
@@ -35,7 +35,7 @@ import {
 /** Cada hora. No hace falta más: lo que barre caducó hace rato y la lectura ya lo ignora. */
 export const SWEEP_EVERY_MS = 60 * 60 * 1000;
 
-/** La cota de la función: `10 000` significa «puede haber más, vuelve a llamar». */
+/** El límite de la función: `10 000` significa «puede haber más, vuelve a llamar». */
 export const SWEEP_BATCH = 10_000;
 
 /**
@@ -45,11 +45,11 @@ export const SWEEP_BATCH = 10_000;
  * Por qué se vuelve a llamar en el mismo trabajo y no se deja para la hora siguiente: nadie
  * ha barrido nunca, así que la primera corrida tiene por delante toda la deuda del día uno, y
  * a 10 000 por hora una deuda de 100 000 tardaría diez horas en desaparecer. Por qué con
- * cota: sin ella, esa primera corrida se queda dando vueltas sin fin conocido, y este trabajo
+ * límite: sin ella, esa primera corrida se queda dando vueltas sin fin conocido, y este trabajo
  * toca la tabla que está en la ruta caliente de todo `POST` que crea algo.
  *
  * Y cada pasada es SU PROPIA TRANSACCIÓN —una llamada, un `withTenantContext()`—, que es lo
- * que hace que la cota de 10 000 sirva para lo que existe: los bloqueos de fila se sueltan
+ * que hace que el límite de 10 000 sirva para lo que existe: los bloqueos de fila se sueltan
  * entre pasada y pasada, así que el alta de una paciente no espera detrás del barrido.
  */
 export const SWEEP_MAX_PASSES = 20;
@@ -58,7 +58,7 @@ export type SweepResult = {
   /** Filas borradas en ESTE trabajo, sumando sus pasadas. Nunca «las que estaban caducadas». */
   deleted: number;
   passes: number;
-  /** `true` si la última pasada llegó a la cota: queda deuda para la hora siguiente. */
+  /** `true` si la última pasada llegó a el límite: queda deuda para la hora siguiente. */
   pending: boolean;
 };
 
@@ -66,7 +66,7 @@ export class IdempotencySweep {
   constructor(private readonly pool: Pool) {}
 
   /**
-   * Llama a la función hasta que una pasada devuelva menos que la cota —«no quedaba nada más
+   * Llama a la función hasta que una pasada devuelva menos que el límite —«no quedaba nada más
    * en ese instante»— o hasta agotar `SWEEP_MAX_PASSES`.
    *
    * No lleva clave de idempotencia y no la necesita: la operación es idempotente por
@@ -122,7 +122,7 @@ export function startIdempotencySweep(
   // `upsertJobScheduler` y no `add({ repeat })`: es la forma viva en BullMQ 6 y, siendo
   // `upsert`, arrancar dos veces el proceso no deja dos programaciones.
   //
-  // Con su `catch`: esta promesa no la espera nadie —el módulo se construye sin bloquear el
+  // Con su `catch`: esta especificación no la espera nadie —el módulo se construye sin bloquear el
   // arranque por un trabajo de higiene— y una programación que falla porque la base no está
   // sería, sin esto, un rechazo sin dueño. Que no se programe es un fallo registrable, no un
   // motivo para que la API no arranque: lo que esto barre puede esperar una hora.
@@ -191,12 +191,12 @@ export async function recordSweepFailure(
  * EL BARRIDO DEL PLAZO DE CONSERVACIÓN · diario · hallazgo `borrado:retencion-sin-barrendero`.
  *
  * Vive aquí al lado del de idempotencia porque es la misma pieza con otro plazo: una tabla que
- * promete una retención y una función de la base que la cumple. Lo que borra lo decide
+ * especifica una retención y una función de la base que la cumple. Lo que borra lo decide
  * `medskin_purge_retained()` (0051), no este archivo: el rol de la aplicación no puede
  * anonimizar una ficha de otra consulta, y el trabajo corre con `app_anonymous`, cuyo único
  * privilegio son funciones como esa.
  *
- * Y es el barrido más delicado del sistema, así que dos cotas: 50 fichas por pasada y hasta
+ * Y es el barrido más delicado del sistema, así que dos límites: 50 fichas por pasada y hasta
  * cinco pasadas por trabajo. Si algún día hay 10 000 vencimientos el mismo día, se irán en
  * cuarenta días de barridos y no en una noche que nadie mira.
  */
@@ -217,7 +217,7 @@ export class RetentionSweep {
    * médico se borra al vencer el plazo, o se conserva como registro profesional obligatorio con
    * su propio plazo, distinto del de los datos de contacto?», y en varias jurisdicciones la
    * respuesta es la segunda. Si es la segunda, lo que está mal no es el barrendero: es la
-   * promesa del 200 y la cabecera de la 0051.
+   * especificación del 200 y la cabecera de la 0051.
    *
    * MIENTRAS NO ESTÉ DECIDIDO, NO CORRE. El vencimiento más temprano posible es 2033 —siete
    * años desde el primer borrado—, así que no se pierde nada esperando, y hoy **cero filas**

@@ -28,7 +28,7 @@
 // LA RESERVA Y EL CIERRE SON DOS TIEMPOS, y `http_status` nulo es lo que los separa —es lo
 // que esa columna nullable significa, y hasta hoy nadie la escribía así—: los dos endpoints
 // que mandan un correo no conocen su respuesta completa hasta DESPUÉS del `COMMIT` (`enviado`
-// dice si el relé la aceptó, y el relé no puede correr dentro de una transacción sin pinchar
+// dice si el reenvío la aceptó, y el reenvío no puede correr dentro de una transacción sin pinchar
 // una conexión del pooler mientras el SMTP piensa).
 //
 // Y UNA RESERVA SIN CERRAR NO SE VUELVE A EJECUTAR NUNCA: quien la encuentra recibe el `500`
@@ -46,7 +46,7 @@ export const IDEMPOTENCY_HOURS = 24;
 /**
  * La respuesta guardada de una petición que ya se atendió.
  *
- * **«Byte a byte» era prometer más de lo que la columna da, y esa frase estaba en seis
+ * **«Byte a byte» era especificar más de lo que la columna da, y esa frase estaba en seis
  * sitios** (medido el 28 de octubre): `response` es `jsonb`, y `jsonb` reordena las claves,
  * **descarta las duplicadas** —`{"a":1,"a":2}` queda en `{"a":2}`— y normaliza los números
  * —`1e2` queda en `100`—. Lo que se repite es **la respuesta de la misma petición**, idéntica
@@ -147,7 +147,7 @@ export async function complete(
 }
 
 /**
- * SUELTA LA RESERVA. Se llama cuando la operación acabó en un veredicto que **no se repite**
+ * SUELTA LA RESERVA. Se llama cuando la operación acabó en un resultado que **no se repite**
  * —un `403`, un `404`, un `409`, un `429`—: esas no son una respuesta que repetir y «el
  * reintento tiene que poder volver a intentarlo de verdad» (`_convenciones.md`). Sin esto,
  * una doctora a la que el alta le dijo «tu licencia está en revisión» no podría reintentar
@@ -183,7 +183,7 @@ export async function release(
  */
 async function lookup<T>(c: PoolClient, p: Claim): Promise<Replay<T> | null> {
   // `account_id` va escrito aunque la política ya acote: la de `app_practitioner` es por
-  // INQUILINO —`practice_id = medskin_current_practice()`—, así que sin esta condición la
+  // TENANT —`practice_id = medskin_current_practice()`—, así que sin esta condición la
   // clave de una compañera de la misma consulta se leería como propia. La clave del contrato
   // es `(Idempotency-Key, cuenta que llama, cuerpo hasheado)`, y es también la clave primaria.
   const { rows } = await c.query<{

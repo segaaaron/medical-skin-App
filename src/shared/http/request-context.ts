@@ -44,7 +44,7 @@ function singleHeader(value: string | string[] | undefined): string | null {
   if (text === undefined) return null;
   const trimmed = text.trim();
   // Tope de largo: una cabecera es entrada del cliente y va a parar a una columna de
-  // texto y a la bitácora (OWASP A03).
+  // texto y a la auditoría (OWASP A03).
   return trimmed === '' ? null : trimmed.slice(0, 120);
 }
 

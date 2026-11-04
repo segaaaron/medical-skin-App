@@ -4,7 +4,7 @@
 // **sin cabecera el mecanismo entero se apagaba en silencio** mientras la petición se
 // atendía igual. `_convenciones.md` la exige en «todo `POST` que crea algo» y `cuentas.md`
 // lo dice con el motivo: «es obligatorio: la pantalla es una carga que bloquea». Una
-// promesa del contrato que el servidor no comprueba no es una promesa.
+// especificación del contrato que el servidor no comprueba no es una especificación.
 //
 // El `400 clave_idempotencia_faltante` va **con `mensaje` vacío**, como `ruta_no_existe` y
 // `formato_no_admitido`: una cabecera que falta es un error DE LA APP, y no hay nada que

@@ -2,7 +2,7 @@
 //
 // La prueba que justifica este archivo es la última: **la búsqueda no devuelve ni un campo
 // que la ficha no tenga**. Es la única lectura de consola que devuelve más de una consulta,
-// así que es la única que puede filtrar el padrón por accidente, y lo que lo acota es el
+// así que es la única que puede filtrar el registro por accidente, y lo que lo acota es el
 // subconjunto de campos. Si alguien añade uno aquí sin añadirlo a la ficha, esto falla.
 //
 // AQUÍ SE PROBABA TAMBIÉN LA BANDEJA DE LICENCIAS, con su enlace firmado de cinco minutos a
@@ -47,7 +47,7 @@ describe('readConsoleSearch · lo que se acepta de la query', () => {
   });
 
   it('`q` de menos de dos caracteres no es una búsqueda, es un volcado', () => {
-    // Con `%a%` devuelve casi todo el padrón y el filtro es decorativo.
+    // Con `%a%` devuelve casi todo el registro y el filtro es decorativo.
     expect(() => readConsoleSearch({ q: 'a' })).toThrow(ContractError);
     expect(readConsoleSearch({ q: '  paz  ' }).query).toBe('paz');
   });
@@ -87,7 +87,7 @@ describe('readConsoleSearch · lo que se acepta de la query', () => {
 
 describe('GET /v1/platform/tenants · la búsqueda', () => {
   it('sin resultados es un 200 con lista vacía, nunca un 404', async () => {
-    // Un 404 diría «ese correo no está en MedSkin», que es el oráculo que el acceso cierra.
+    // Un 404 diría «ese correo no está en MedSkin», que es la filtración que el acceso cierra.
     const caso = new SearchTenants(puerto([]), 'Bolivia · bo-1');
     const salida = await caso.run(readConsoleSearch({ q: 'nadie' }), ACTOR);
 

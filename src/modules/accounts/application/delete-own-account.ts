@@ -8,7 +8,7 @@
 // LOS TRES `409` NO SON `if`s DE ESTE ARCHIVO. Los comprueba la misma transacción que
 // borraría, en el orden del contrato —equipo, pacientes, suscripción—, y aquí solo se
 // traducen a su código y a su frase. Igual que el `403`: «recepción y asistente, no» es el
-// veredicto `not_allowed` de la función, que no se puede olvidar en un controlador.
+// resultado `not_allowed` de la función, que no se puede olvidar en un controlador.
 
 import { z } from 'zod';
 
@@ -67,7 +67,7 @@ export class DeleteOwnAccount {
     const owner = ownerOf(caller);
     const credential = await this.credentials.readMine(owner);
     // Una contraseña vacía se verifica igual que cualquier otra: el mismo camino y el mismo
-    // coste, y el mismo 401. Aquí no hay oráculo que cerrar —quien llama ya está dentro—,
+    // coste, y el mismo 401. Aquí no hay filtración que cerrar —quien llama ya está dentro—,
     // pero tampoco hay motivo para tener dos caminos donde uno basta.
     const matched =
       credential !== null && (await this.passwords.verify(credential.hash, password, owner));

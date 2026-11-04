@@ -52,7 +52,7 @@ import { TenantsController } from './tenants.controller';
     {
       provide: SubmitLicense,
       // Solo el repositorio. Llevaba además el reloj y la zona del despliegue para calcular
-      // las «24 h hábiles» de `respuesta_estimada_en`: no hay plazo que prometer porque no hay
+      // las «24 h hábiles» de `respuesta_estimada_en`: no hay plazo que especificar porque no hay
       // nadie revisando, y la hora de la declaración la pone la base en el mismo `UPDATE`.
       useFactory: (repo: TenantsRepository) => new SubmitLicense(repo),
       inject: [TenantsRepository],

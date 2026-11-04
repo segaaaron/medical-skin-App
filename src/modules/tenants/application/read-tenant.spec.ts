@@ -1,7 +1,7 @@
 // `GET /v1/platform/tenants/{id}` · la ficha de la consola.
 //
 // Lo que se fija aquí:
-//   · NO HAY UN SOLO CAMPO DE PACIENTE en la respuesta, y `incidencias` nace vacía;
+//   · NO HAY UN SOLO CAMPO DE PACIENTE en la respuesta, y `incidencias` empieza vacía;
 //   · `licencia` son los TRES DATOS DECLARADOS y su fecha, sin `estado` ni `verificada_en`:
 //     MedSkin no verifica licencias (migración 0072);
 //   · un `id` sin consulta es `404` y una consulta sin dueña es 500 con su causa.

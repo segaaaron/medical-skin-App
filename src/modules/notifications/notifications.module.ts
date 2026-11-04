@@ -3,7 +3,7 @@
 // LOS REMITENTES SE CONSTRUYEN SOLO SI HAY CREDENCIAL. En desarrollo no hay `.p8` de Apple ni
 // cuenta de servicio de Google, así que la lista de remitentes queda vacía y la pasada de
 // envío no toca ninguna fila: los avisos se ENCOLAN igual —que es lo que las pruebas
-// comprueban— y esperan. Inventar un remitente de mentira que «envía» a la nada sería volver a
+// comprueban— y esperan. Inventar un remitente de falsedad que «envía» a la nada sería volver a
 // tener una respuesta que afirma un aviso que no sale, que es justo el defecto que esto cierra.
 
 import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';

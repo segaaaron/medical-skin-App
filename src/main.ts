@@ -91,7 +91,7 @@ async function start() {
   // trabajo de correo a medias es una paciente esperando un código que nunca sale.
   app.enableShutdownHooks();
 
-  // LA PARIDAD DEL SEÑUELO, antes de aceptar una sola petición: si el señuelo no cuesta lo
+  // LA PARIDAD DEL DECOY, antes de aceptar una sola petición: si el decoy no cuesta lo
   // mismo que una contraseña real, el tiempo del `401 acceso_no_coincide` dice si un correo
   // tiene cuenta en MedSkin, y eso es dato de salud. El proceso no arranca y dice qué
   // difiere (migración 0007 · `medskin_access_decoy_params()`).

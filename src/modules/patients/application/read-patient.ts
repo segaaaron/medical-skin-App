@@ -110,7 +110,7 @@ export class ReadPatient {
     const asking = practiceCallerOf(caller, PERMISSION);
     // Un `id` que no es un uuid no es de esta consulta: la misma respuesta que uno inventado,
     // y sin consultar nada. Con otra forma la base muere con «invalid input syntax for type
-    // uuid» y eso sería un 500 donde el contrato promete un 404.
+    // uuid» y eso sería un 500 donde el contrato especifica un 404.
     if (!UUID.test(patientId)) throw new ContractError('paciente_no_existe');
 
     const row = await this.patients.file(asking, patientId);

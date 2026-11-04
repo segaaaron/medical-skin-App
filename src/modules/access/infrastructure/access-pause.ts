@@ -6,7 +6,7 @@
 //
 // Lo que se consulta aquí es el contador de Redis y NO `account.locked_until`, y es a
 // propósito: `locked_until` solo existe para un correo que tiene cuenta, así que mirarlo
-// para decidir el 429 sería el oráculo que el 401 cierra. Además, la consola levanta la
+// para decidir el 429 sería la filtración que el 401 cierra. Además, la consola levanta la
 // pausa escribiendo esas columnas (`cuentas.md`) y lo que tiene que borrar es TAMBIÉN la
 // clave de Redis: por eso las claves viven en `COUNTER_KEYS` y no aquí dentro.
 //

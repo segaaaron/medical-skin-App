@@ -3,7 +3,7 @@
 //
 // ESTE ARCHIVO FIRMABA NADA Y AHORA FIRMA, decidido el 30 de octubre de 2026
 // (`plataforma-acceso.md` · «La entrada de la consola»). La cabecera anterior decía que era
-// «la única frontera de autenticación del backend que NO acuña nada», y dejó de ser verdad:
+// «la única frontera de autenticación del backend que NO genera nada», y dejó de ser verdad:
 // un comentario que explica una propiedad que el archivo ya no tiene es peor que ninguno.
 //
 // Lo que lo obligó: el servicio de identidad de plataforma no existe y no tiene fecha. Sin
@@ -78,15 +78,15 @@ export const PLATFORM_PERMISSIONS = [
   'plataforma:acceso:reenviar',
   // `POST /v1/platform/accounts/{id}/access/reset`, nuevo el 4 de noviembre de 2026. PROPIO y
   // NO `plataforma:acceso:reenviar`, y la separación ES la decisión: el reenvío solo alcanza a
-  // quien todavía no eligió su contraseña, y el reseteo PISA una credencial ya elegida —la
+  // quien todavía no eligió su contraseña, y el reseteo SOBRESCRIBE una credencial ya elegida —la
   // única acción de la casa que puede—. Con un permiso único, «quien reenvía un acceso puede
   // quitarle a cualquiera la contraseña que eligió» sería verdad para siempre y nadie lo habría
   // decidido.
   'plataforma:acceso:resetear',
   'plataforma:pausa:levantar',
   // `GET /v1/platform/accounts?correo=`, nuevo el 31 de octubre de 2026. PROPIO y no
-  // `plataforma:consultas:leer`: quien mira el padrón responde «qué consultas hay», y esto
-  // responde «esta persona tiene cuenta en MedSkin» — otro oráculo y sobre otra clase de
+  // `plataforma:consultas:leer`: quien mira el registro responde «qué consultas hay», y esto
+  // responde «esta persona tiene cuenta en MedSkin» — otra filtración y sobre otra clase de
   // sujeto, porque una cuenta puede ser de una paciente. Reusar el de consultas habría
   // concedido la segunda pregunta a todo el que tenía la primera sin que nadie lo decidiera.
   'plataforma:cuentas:buscar',
@@ -147,7 +147,7 @@ const LABEL_MAX = 120;
  * eso esas columnas no tienen clave foránea.
  *
  * Se descartó lo contrario —pasar las columnas a `text`— porque deja la columna de actor de
- * la bitácora polimórfica en tipo, cuando todos los demás actores son `uuid`, y obliga a
+ * la auditoría polimórfica en tipo, cuando todos los demás actores son `uuid`, y obliga a
  * reescribir una política, que es lo más caro de cambiar en esta base. El servicio que firma
  * es nuestro: puede emitir el `sub` como uuid o traducirlo antes de firmar.
  *
@@ -235,7 +235,7 @@ export class PlatformTokens {
   }
 
   /**
-   * ACUÑA EL TOKEN DE CONSOLA · `POST /v1/platform/access`.
+   * GENERA EL TOKEN DE CONSOLA · `POST /v1/platform/access`.
    *
    * Lo que NO sale de aquí y por eso no se puede falsear desde el cuerpo de una petición:
    * el `aud`, que es siempre la región del despliegue, y el `exp`, que es la constante del

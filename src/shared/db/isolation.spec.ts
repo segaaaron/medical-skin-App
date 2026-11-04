@@ -179,14 +179,14 @@ async function clean() {
   await owner.query('delete from practice where id = any($1::uuid[])', [[A.practice, B.practice]]);
   await owner.query('delete from account where id = any($1::uuid[])', [[A.account, B.account, PATIENT.account]]);
   // Estas tres no se las lleva ningún cascade porque no tienen claves foráneas: la de
-  // idempotencia porque su consulta es «el de quien llama», y las dos bitácoras porque
+  // idempotencia porque su consulta es «el de quien llama», y las dos auditorías porque
   // deben sobrevivir al borrado de lo que describen (§12.2.8).
   await owner.query('delete from idempotency_key where account_id = any($1::uuid[])', [
     [A.account, B.account, PATIENT.account],
   ]);
   await owner.query('delete from service_failure where practice_id = any($1::uuid[])', [[A.practice, B.practice]]);
   await owner.query('delete from access_audit where practice_id = any($1::uuid[])', [[A.practice, B.practice]]);
-  // Y la cuarta sin claves foráneas: la bitácora clínica. `patient`, `patient_link` y
+  // Y la cuarta sin claves foráneas: la auditoría clínica. `patient`, `patient_link` y
   // `medical_history` sí se las lleva el cascade de `practice`.
   await owner.query('delete from medical_history_audit where practice_id = any($1::uuid[])', [
     [A.practice, B.practice],
@@ -360,7 +360,7 @@ describe('aislamiento entre consultas · conexión directa (5433)', () => {
     }).toEqual({ practitioner: 'permiso denegado', platform: 'permiso denegado' });
   });
 
-  it('la bitácora es inmutable: nadie puede reescribirla ni borrarla', async () => {
+  it('la auditoría es inmutable: nadie puede reescribirla ni borrarla', async () => {
     await expect(
       read(app, ctxPractitionerA, 'update access_audit set action = $1 where practice_id = $2', [
         'falseada',
@@ -524,7 +524,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
     );
     expect(written.rowCount).toBe(1);
 
-    // Y su fila de bitácora no puede apuntar a la consulta de otra: el `WITH CHECK` no es
+    // Y su fila de auditoría no puede apuntar a la consulta de otra: el `WITH CHECK` no es
     // `true`, es su propio vínculo aceptado.
     expect({
       own: await whatItSees(
@@ -541,7 +541,7 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
          values ($1, $2, 'medicacion', 'null'::jsonb, 'patient')`,
         [B.practice, B.patient],
       ),
-      // Y no la lee: la bitácora de la ficha es de la consulta.
+      // Y no la lee: la auditoría de la ficha es de la consulta.
       read: await whatItSees(app, ctxPatient, 'select id from medical_history_audit'),
     }).toEqual({ own: '0 filas', other_tenant: 'permiso denegado', read: 'permiso denegado' });
   });
@@ -555,11 +555,11 @@ describe('tramo 2 · patient, patient_link y medical_history', () => {
       patient: await whatItSees(app, ctxPlatform, 'select id from patient'),
       patient_link: await whatItSees(app, ctxPlatform, 'select id from patient_link'),
       medical_history: await whatItSees(app, ctxPlatform, 'select id from medical_history'),
-      // La bitácora de CAMBIOS de la historia sigue cerrada: lo que se decidió es que soporte
+      // La auditoría de CAMBIOS de la historia sigue cerrada: lo que se decidió es que soporte
       // lea el expediente, no el rastro de quién lo editó dentro de la consulta.
       medical_history_audit: await whatItSees(app, ctxPlatform, 'select id from medical_history_audit'),
       // DOS filas y no una, y el número es la prueba: este archivo siembra A y B, y la
-      // consola ve las dos. Cruzar inquilinos es lo que la distingue de todos los demás roles
+      // consola ve las dos. Cruzar tenants es lo que la distingue de todos los demás roles
       // —no fija `medskin.practice_id` y su política es `current_user = 'app_platform'`—, así
       // que un `1 fila` aquí significaría que el aislamiento se le aplicó por error.
     }).toEqual({
@@ -763,7 +763,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
        select p.practice_id, p.id, false, 1 + (random() * 5)::int, 'doctor', now()
          from patient p where p.email like 'ficha-%@prueba.local'`,
     );
-    // Las dos bitácoras, para medir los índices de «lo último primero» del tramo 1 sobre
+    // Las dos auditorías, para medir los índices de «lo último primero» del tramo 1 sobre
     // una tabla con filas de verdad: 20 000 líneas de auditoría y 10 000 fallos en A, y la
     // mitad en B, que es lo que obliga al motor a elegir entre leer 50 por el índice y
     // ordenar veinte mil.
@@ -812,7 +812,7 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     // de la lista pendiente entra en el cálculo del planificador, así que mientras no se
     // vacíe el motor prefiere el recorrido completo. En producción lo hace el autovacuum
     // solo; aquí hay que pedirlo, o esta suite mediría el plan de una tabla que acaba de
-    // nacer y no el de una tabla viva.
+    // empezar y no el de una tabla viva.
     await owner.query('vacuum analyze patient');
     await owner.query('vacuum analyze patient_link');
     await owner.query('vacuum analyze medical_history');
@@ -899,9 +899,9 @@ describe('los planes de las rutas calientes del tramo 2', () => {
     expect(used).not.toContain('Seq Scan on patient_link');
   });
 
-  it('la bitácora de la consulta se lee por índice, sin ordenar veinte mil líneas', async () => {
+  it('la auditoría de la consulta se lee por índice, sin ordenar veinte mil líneas', async () => {
     // `order by occurred_at desc` sin `where practice_id`: la consulta lo pone la
-    // política. Es la forma de «lo último primero» que repiten las dos bitácoras.
+    // política. Es la forma de «lo último primero» que repiten las dos auditorías.
     const used = await plan(ctxPractitionerA, 'select id, action from access_audit order by occurred_at desc limit 50');
     expect(used).toContain('access_audit_practice_idx');
     expect(used).not.toContain('Sort');

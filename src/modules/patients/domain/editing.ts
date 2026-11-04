@@ -64,7 +64,7 @@ export function readPatientEdit(input: unknown, now: Date): PatientEdit {
   if (Object.keys(edit).length === 0) throw new ContractError('nada_que_cambiar');
 
   // El celular y la casilla de WhatsApp viajan juntos aunque el cuerpo traiga uno solo:
-  // quitar el número y dejar la casilla marcada deja una ficha que promete un chat que no
+  // quitar el número y dejar la casilla marcada deja una ficha que especifica un chat que no
   // existe. Si el `PATCH` borra el celular, la casilla se apaga.
   if (edit.phone === null) edit.hasWhatsapp = false;
 

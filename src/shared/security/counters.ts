@@ -2,12 +2,12 @@
 //
 // No son filas del dominio, y la razón no es el rendimiento: tienen que poder contar para un
 // correo que NO tiene cuenta. Si solo contaran para los correos reales, `intentos_restantes`
-// bajaría solo para ellos y el contador sería el oráculo que la respuesta idéntica cierra.
+// bajaría solo para ellos y el contador sería la filtración que la respuesta idéntica cierra.
 //
 // Tres reglas, las tres del contrato:
 //   1. se incrementa exista o no la cuenta;
 //   2. la clave lleva el HMAC del correo, NUNCA el correo (un volcado de esta tabla no es un
-//      padrón de pacientes de clínicas de estética), y HMAC y no un hash desnudo porque el
+//      registro de pacientes de clínicas de estética), y HMAC y no un hash desnudo porque el
 //      espacio de los correos es enumerable;
 //   3. un fallo NO abre la puerta: lanza, y el endpoint responde 500.
 //

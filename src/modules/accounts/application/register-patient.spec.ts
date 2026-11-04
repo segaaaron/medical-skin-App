@@ -11,7 +11,7 @@
 //     `fuente: doctora`;
 //   · ningún 400 toca la base ni gasta el límite de altas;
 //   · quien ya tiene cuenta no recibe temporal ninguna y su texto no la nombra;
-//   · el relé caído es un 500 que admite lo que se perdió, deshace la marca de envío y no
+//   · el reenvío caído es un 500 que admite lo que se perdió, deshace la marca de envío y no
 //     deja ni el correo ni la contraseña en la causa que acaba en `service_failure`.
 
 import { describe, expect, it } from 'vitest';
@@ -84,7 +84,7 @@ const CUERPO = {
 
 type Opciones = {
   registro?: PatientRegistration;
-  releCaido?: boolean;
+  reenvioCaido?: boolean;
   compensacionCaida?: boolean;
   demasiadas?: boolean;
   cierreCaido?: boolean;
@@ -150,7 +150,7 @@ function armar(opciones: Opciones = {}) {
   const mail: PatientAccessMailPort & PatientLinkNoticeMailPort = {
     sendAccess: (facts) => {
       pasos.push('correo');
-      if (opciones.releCaido === true) {
+      if (opciones.reenvioCaido === true) {
         return Promise.reject(new Error('ECONNREFUSED 127.0.0.1:1025'));
       }
       enviados.push(facts);
@@ -158,7 +158,7 @@ function armar(opciones: Opciones = {}) {
     },
     sendLinkNotice: (facts) => {
       pasos.push('correo:aviso');
-      if (opciones.releCaido === true) {
+      if (opciones.reenvioCaido === true) {
         return Promise.reject(new Error('ECONNREFUSED 127.0.0.1:1025'));
       }
       avisados.push(facts);
@@ -231,7 +231,7 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
     const respuesta = await caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE);
 
     expect(respuesta.acceso.via).toBe('correo');
-    // «`enviado` significa que el relé aceptó el mensaje, no que llegó a su bandeja.»
+    // «`enviado` significa que el reenvío aceptó el mensaje, no que llegó a su bandeja.»
     expect(respuesta.acceso.enviado).toBe(true);
     expect(respuesta.acceso.contrasena_temporal).toBeNull();
     expect(respuesta.acceso.whatsapp).toBeUndefined();
@@ -337,7 +337,7 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
 
     expect(respuesta.acceso.via).toBe('ya_tiene_cuenta');
     expect(respuesta.acceso.contrasena_temporal).toBeNull();
-    // No se acuñó ninguna, así que no hay nada que caduque: una fecha aquí sería inventada.
+    // No se generó ninguna, así que no hay nada que caduque: una fecha aquí sería inventada.
     expect(respuesta.acceso.caduca_en).toBeNull();
     expect(respuesta.acceso.caduca_en_texto).toBeNull();
     expect(respuesta.acceso.whatsapp?.texto).toContain('Entra con tu cuenta de siempre');
@@ -354,7 +354,7 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
     const respuesta = await caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE);
 
     expect(respuesta.acceso.via).toBe('ya_tiene_cuenta');
-    // `enviado` significa lo mismo que siempre: el relé aceptó el mensaje.
+    // `enviado` significa lo mismo que siempre: el reenvío aceptó el mensaje.
     expect(respuesta.acceso.enviado).toBe(true);
     expect(respuesta.acceso.contrasena_temporal).toBeNull();
     expect(respuesta.acceso.caduca_en).toBeNull();
@@ -372,17 +372,17 @@ describe('POST /v1/patients · la ficha, la cuenta y el acceso', () => {
     expect(pasos).toEqual(['limite', 'argon2:hashear', 'base', 'correo:aviso', 'clave:cerrar']);
   });
 
-  it('el relé caído del aviso no promete un reenvío que daría 409', async () => {
+  it('el reenvío caído del aviso no especifica un reenvío que daría 409', async () => {
     const { caso, marcas } = armar({
       registro: { ...CREADA, accountAlreadyExisted: true },
-      releCaido: true,
+      reenvioCaido: true,
     });
     const fallo = await errorDe(() => caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE));
 
     expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
       codigo: 'fallo_de_servicio',
       estado: 500,
-      // NO dice «vuelve a mandárselo»: no hay acceso que mandar —no se acuñó ninguna
+      // NO dice «vuelve a mandárselo»: no hay acceso que mandar —no se generó ninguna
       // temporal— y el reenvío le daría `409 ya_eligio_su_contrasena` si ya eligió la suya.
       mensaje:
         'No pudimos avisarle por correo. Su ficha ya está creada, así que no la vuelvas a dar de alta: ella ya tiene su cuenta y va a ver tu invitación cuando abra la app.',
@@ -487,7 +487,7 @@ describe('POST /v1/patients · lo que no entra', () => {
   });
 });
 
-describe('POST /v1/patients · los veredictos de la base', () => {
+describe('POST /v1/patients · los resultados de la base', () => {
   // AQUÍ ESTABA «la licencia sin verificar no da de alta a nadie», el `409
   // licencia_sin_verificar`. Se fue el 30 de octubre de 2026 con la revisión manual: MedSkin
   // no verifica licencias, así que una consulta invita pacientes desde el alta. Era el único
@@ -570,9 +570,9 @@ describe('POST /v1/patients · los veredictos de la base', () => {
   });
 });
 
-describe('POST /v1/patients · el relé caído', () => {
+describe('POST /v1/patients · el reenvío caído', () => {
   it('es un 500 que admite lo que se perdió y deshace la marca de envío', async () => {
-    const { caso, pasos, marcas } = armar({ releCaido: true });
+    const { caso, pasos, marcas } = armar({ reenvioCaido: true });
     const fallo = await errorDe(() => caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE));
 
     expect({ codigo: fallo.code, estado: fallo.status, mensaje: fallo.userMessage }).toEqual({
@@ -589,18 +589,18 @@ describe('POST /v1/patients · el relé caído', () => {
     const datos = fallo.data as { paciente_id?: unknown; cuenta_id?: unknown };
     expect(typeof datos.paciente_id).toBe('string');
     expect(typeof datos.cuenta_id).toBe('string');
-    // La marca vuelve a nulo porque el vínculo acaba de nacer y nulo es lo que había:
+    // La marca vuelve a nulo porque el vínculo acaba de empezar y nulo es lo que había:
     // `access_sent_at` solo puede afirmar un envío que ocurrió.
     expect(marcas).toEqual([null]);
     expect(pasos).toEqual(['limite', 'argon2:hashear', 'base', 'correo', 'deshacer-marca']);
   });
 
   it('ni el correo ni la contraseña entran en la causa que acaba en `service_failure`', async () => {
-    const { caso } = armar({ releCaido: true });
+    const { caso } = armar({ reenvioCaido: true });
     const fallo = await errorDe(() => caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE));
 
     // La cadena entera, que es lo que el registro de fallos recorre: la causa propia, la
-    // del relé y lo que cuelgue de ella.
+    // del reenvío y lo que cuelgue de ella.
     const cadena = cadenaDe(fallo);
     expect(cadena).toContain(FICHA);
     expect(cadena).toContain('ECONNREFUSED');
@@ -612,7 +612,7 @@ describe('POST /v1/patients · el relé caído', () => {
   });
 
   it('si la compensación tampoco se puede, la causa lo dice en vez de taparlo', async () => {
-    const { caso } = armar({ releCaido: true, compensacionCaida: true });
+    const { caso } = armar({ reenvioCaido: true, compensacionCaida: true });
     const fallo = await errorDe(() => caso.run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, CLAVE));
 
     expect(fallo.code).toBe('fallo_de_servicio');

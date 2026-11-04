@@ -20,7 +20,7 @@
 // La repetición devuelve la respuesta completa, contraseña incluida, que es la decisión
 // escrita del 27 de octubre: «una sola vez» significa que ninguna LECTURA posterior la trae,
 // no que el reintento de la misma petición se quede sin ella. Y deja su propia línea en la
-// bitácora, que la escribe la misma transacción que la leyó.
+// auditoría, que la escribe la misma transacción que la leyó.
 //
 // Este controlador vive en `modules/accounts` a propósito: `cuentas.md` contrata este
 // endpoint. La ficha de `pacientes.md` —la lista, la búsqueda, la edición— es el tramo 2.

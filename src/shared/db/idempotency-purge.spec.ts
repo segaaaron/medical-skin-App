@@ -1,5 +1,5 @@
 // La prueba de la 0024: el barrido de `idempotency_key`, que es lo que hace verdad la
-// promesa de 24 h de `_convenciones.md`.
+// especificación de 24 h de `_convenciones.md`.
 //
 // Mismas reglas que sus hermanas: contra la base real en Docker, sin un solo doble, RLS
 // nunca se desactiva, siembra el DUEÑO del esquema y todo lo que se COMPRUEBA pasa por los
@@ -75,7 +75,7 @@ async function seedKeys() {
     `insert into idempotency_key (key, account_id, practice_id, body_hash, http_status, response, expires_at)
      values
        -- La caducada de A lleva en su respuesta lo que la convierte en el problema: el 201
-       -- del alta con la contraseña temporal en claro, que la idempotencia promete repetir
+       -- del alta con la contraseña temporal en claro, que la idempotencia especifica repetir
        -- la respuesta de la misma petición, contraseña incluida, mientras la fila viva.
        ($1, $6, $9,  'h1', 201, '{"contrasena_temporal": "tejado-lila-07"}'::jsonb, now() - interval '1 minute'),
        ($2, $6, $9,  'h2', 201, '{"ok": true}'::jsonb,                             now() + interval '23 hours'),

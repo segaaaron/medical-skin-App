@@ -4,11 +4,11 @@
 // LA REGLA, Y ES LO ÚNICO QUE ESTE CONTRATO INVENTA: la paciente escribe un campo **solo si
 // está vacío o si lo escribió ella**. Un campo que escribió la doctora no se sobrescribe, y la
 // respuesta dice cuáles no se guardaron y por qué. Guardar por encima sería perder una
-// anotación clínica sin que nadie se entere; callarlo sería mentirle sobre su propio
+// anotación clínica sin que nadie se entere; callarlo sería informar en falso sobre su propio
 // expediente.
 //
 // SIN `fototipo` Y SIN `notas`: el fototipo lo evalúa quien la ve y `notas` es el cuaderno de la
-// doctora. No es una promesa de este archivo: `app_patient` no tiene `GRANT` sobre esas dos
+// doctora. No es una especificación de este archivo: `app_patient` no tiene `GRANT` sobre esas dos
 // columnas, así que un intento muere con «permiso denegado» (0006).
 
 import { ContractError } from '../../../shared/contract/error-catalog';

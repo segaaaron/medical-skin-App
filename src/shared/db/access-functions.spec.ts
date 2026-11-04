@@ -63,7 +63,7 @@ const PATIENT = {
 const PLATFORM = { account: 'eeeeeeee-0000-4000-8000-00000000000d' };
 // La paciente del reenvío, aparte de `PATIENT` a propósito: las pruebas de
 // `contrasena-nueva` consumen la temporal de aquella, y el reenvío necesita una sin
-// consumir para poder distinguir sus tres veredictos.
+// consumir para poder distinguir sus tres resultados.
 const RESEND = {
   account: 'eeeeeeee-0000-4000-8000-00000000000e',
   patient: 'eeeeeeee-0000-4000-8000-00000000001e',
@@ -276,9 +276,9 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       practice: await whatItSees(app, ctxAnonymous, 'select id from practice'),
       practitioner: await whatItSees(app, ctxAnonymous, 'select id from practitioner'),
       license: await whatItSees(app, ctxAnonymous, 'select id from license'),
-      // El señuelo tampoco: es la otra mitad de la promesa del «mismo tiempo».
+      // El decoy tampoco: es la otra mitad de la especificación del «mismo tiempo».
       access_decoy: await whatItSees(app, ctxAnonymous, 'select hash from access_decoy'),
-      // Y no puede escribir en ningún sitio, ni en la bitácora.
+      // Y no puede escribir en ningún sitio, ni en la auditoría.
       insert_account: await whatItSees(
         app,
         ctxAnonymous,
@@ -336,7 +336,7 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
         [NEW_EMAIL, 'Valeria', 'Antelo', HASH],
       ),
       // Y la de verificar credenciales NO la puede llamar la doctora: si pudiera, tendría
-      // el oráculo del padrón de otra clínica que `app_anonymous` existe para cerrar.
+      // la filtración del registro de otra clínica que `app_anonymous` existe para cerrar.
       credential_as_practitioner: await canRun(ctxPractitionerA, 'select * from medskin_access_credential($1)', [
         PATIENT.email,
       ]),
@@ -409,13 +409,13 @@ describe('app_anonymous · el rol de las peticiones sin sesión', () => {
       expect(row?.hash, which).toMatch(/^\$argon2id\$/);
     }
 
-    // 2 · Los dos correos inexistentes reciben el MISMO señuelo, y no es el hash de nadie.
+    // 2 · Los dos correos inexistentes reciben el MISMO decoy, y no es el hash de nadie.
     expect(missing[0]?.hash).toBe(alsoMissing[0]?.hash);
     expect(missing[0]?.hash).not.toBe(exists[0]?.hash);
     expect(missing[0]?.account_id).toBeNull();
 
     // 3 · Para una cuenta que existe viaja lo que el endpoint necesita para decidir, y el
-    // mismo veredicto escriba el correo como lo escriba.
+    // mismo resultado escriba el correo como lo escriba.
     expect(uppercase[0]).toEqual(exists[0]);
     expect({
       account_id: exists[0]?.account_id,
@@ -537,7 +537,7 @@ describe('la consola · session por columnas y el vínculo con la dueña', () =>
     ]);
 
     // Y las trece que no. «Desde qué teléfono y desde qué ciudad entró» es un dato de
-    // localización de quien va a una clínica de estética, y la pantalla promete que no se
+    // localización de quien va a una clínica de estética, y la pantalla especifica que no se
     // lee: cuántas, no cuáles. No es un filtro en el código del endpoint, es un grant que
     // no existe.
     const closed = [
@@ -673,7 +673,7 @@ describe('license · lo que la doctora puede escribir de su propia fila', () => 
   // de base de la revisión manual: que la doctora no tenía `UPDATE` sobre `status` —ni
   // colándolo entre las columnas que sí podía escribir—, que
   // `medskin_license_to_review()` validaba la transición, exigía ser la dueña y dejaba su fila
-  // de bitácora, y que un segundo envío era `already_in_review`.
+  // de auditoría, y que un segundo envío era `already_in_review`.
   //
   // Nada de eso existe desde el 30 de octubre de 2026 (migración 0072): no hay `status`, no
   // hay función y no hay transición. Lo que SÍ sigue siendo verdad y por eso se queda probado:
@@ -913,7 +913,7 @@ describe('el alta de cuentas · lo que cada rol puede crear', () => {
       status: 'activa',
     });
 
-    // Nació con su temporal, su rol y la región de la consulta. Lo comprueba el dueño,
+    // Empezó con su temporal, su rol y la región de la consulta. Lo comprueba el dueño,
     // porque la doctora no tiene política de lectura sobre la cuenta de su paciente: lo
     // que ve de su acceso lo verá en `patient_link`, del tramo 2.
     const [row] = await owner
@@ -925,7 +925,7 @@ describe('el alta de cuentas · lo que cada rol puede crear', () => {
       .then((r) => r.rows);
     expect(row).toEqual({ role: 'patient', region: 'latam', temporary: true });
 
-    // Un correo que ya tiene cuenta se REUSA y no se le acuña contraseña ninguna: ya tiene
+    // Un correo que ya tiene cuenta se REUSA y no se le genera contraseña ninguna: ya tiene
     // la suya. Es lo único que la respuesta revela de su existencia.
     const [repeated] = await read<{ account_id: string; already_existed: boolean }>(
       app,
@@ -1001,7 +1001,7 @@ describe('el alta de cuentas · lo que cada rol puede crear', () => {
 });
 
 describe('la recuperación · un código vivo por cuenta', () => {
-  it('acuña solo para quien ya estrenó su contraseña, y el camino del correo que no existe es el mismo', async () => {
+  it('genera solo para quien ya usó por primera vez su contraseña, y el camino del correo que no existe es el mismo', async () => {
     const mint = (email: string) =>
       read<{ medskin_recovery_mint: boolean }>(
         app,
@@ -1010,11 +1010,11 @@ describe('la recuperación · un código vivo por cuenta', () => {
         [email, HASH],
       );
 
-    // La paciente ya eligió su contraseña en la prueba anterior, así que sí se acuña.
+    // La paciente ya eligió su contraseña en la prueba anterior, así que sí se genera.
     expect((await mint(PATIENT.email))[0]?.medskin_recovery_mint).toBe(true);
     // Un correo que no existe: `false`, y ni una fila escrita.
     expect((await mint(EMAIL_THAT_DOES_NOT_EXIST))[0]?.medskin_recovery_mint).toBe(false);
-    // Y quien nunca estrenó su temporal tampoco: «quien no probó nunca que tiene el correo
+    // Y quien nunca usó por primera vez su temporal tampoco: «quien no probó nunca que tiene el correo
     // no puede usar el correo para entrar». Su camino es que la doctora le reenvíe el acceso.
     expect((await mint(NEW_EMAIL))[0]?.medskin_recovery_mint).toBe(false);
 
@@ -1046,7 +1046,7 @@ describe('la recuperación · un código vivo por cuenta', () => {
     expect(codes[0]?.n).toBe('1');
   });
 
-  it('el código vigente viaja con señuelo, y cinco fallos lo anulan sin tocar la cuenta', async () => {
+  it('el código vigente viaja con decoy, y cinco fallos lo anulan sin tocar la cuenta', async () => {
     const live = (email: string) =>
       read<{ verdict: string; account_id: string | null; code_hash: string; attempts_left: number }>(
         app,
@@ -1242,10 +1242,10 @@ describe('el registro de fallos del rol sin sesión (0004 y 0005)', () => {
 });
 
 // =========================================================================================
-// EL SEÑUELO Y SU COSTE (0007) · el oráculo del reloj, cerrado
+// EL DECOY Y SU COSTE (0007) · la filtración del reloj, cerrado
 // =========================================================================================
-describe('los parámetros del señuelo del acceso (0007)', () => {
-  // El señuelo de esta base es el que sembró la migración y así se queda: si una prueba
+describe('los parámetros del decoy del acceso (0007)', () => {
+  // El decoy de esta base es el que sembró la migración y así se queda: si una prueba
   // lo tocara, el «mismo tiempo» de las siguientes mediría otra cosa.
   let seeded: string;
   beforeAll(async () => {
@@ -1256,11 +1256,11 @@ describe('los parámetros del señuelo del acceso (0007)', () => {
     await owner.query('update access_decoy set hash = $1 where only_row and hash <> $1', [seeded]);
   });
 
-  it('el señuelo está sembrado con los MISMOS parámetros con los que hashea la aplicación', async () => {
-    // Esta es la prueba que faltaba el día que la 0002 sembró el señuelo con los valores
+  it('el decoy está sembrado con los MISMOS parámetros con los que hashea la aplicación', async () => {
+    // Esta es la prueba que faltaba el día que la 0002 sembró el decoy con los valores
     // por defecto de la librería: `m=65536,t=3,p=4` contra los `m=19456,t=2,p=1` reales.
     // Verificar contra uno costaba 15,4 ms y contra el otro 28,2 ms, y esa diferencia es un
-    // oráculo de enumeración de cuentas con un cronómetro y una sola petición por correo.
+    // filtración de enumeración de cuentas con un cronómetro y una sola petición por correo.
     //
     // Los parámetros viajan DENTRO del hash codificado, así que el coste lo fija la fila de
     // la base y no la configuración del proceso: comparar las dos cosas es la única forma
@@ -1281,8 +1281,8 @@ describe('los parámetros del señuelo del acceso (0007)', () => {
 
   it('los parámetros se pueden leer y el hash sigue sin poder leerse', async () => {
     expect({
-      // El señuelo no se lee desde ningún rol de aplicación: es la otra mitad de la
-      // promesa del «mismo tiempo», y lo que no se lee no se compara.
+      // El decoy no se lee desde ningún rol de aplicación: es la otra mitad de la
+      // especificación del «mismo tiempo», y lo que no se lee no se compara.
       anonimo: await whatItSees(app, ctxAnonymous, 'select hash from access_decoy'),
       doctora: await whatItSees(app, ctxPractitionerA, 'select hash from access_decoy'),
       plataforma: await whatItSees(app, ctxPlatform, 'select hash from access_decoy'),
@@ -1359,7 +1359,7 @@ describe('el reenvío del acceso de la doctora (0006)', () => {
     expect(nobody).toEqual(notMine);
   });
 
-  it('acuña una temporal nueva, mata la anterior y marca cuándo se mandó', async () => {
+  it('genera una temporal nueva, invalida la anterior y marca cuándo se mandó', async () => {
     const before = await owner.query<{ hash: string; sent: string | null }>(
       `select c.hash, l.access_sent_at as sent from credential c
          join patient_link l on l.account_id = c.account_id
@@ -1385,13 +1385,13 @@ describe('el reenvío del acceso de la doctora (0006)', () => {
     );
     expect(after.rows[0]?.hash).toBe(NEW_TEMP);
     expect(after.rows[0]?.temporary).toBe(true);
-    // La temporal nueva no se ha estrenado: la marca de la anterior se borra.
+    // La temporal nueva no se ha usado: la marca de la anterior se borra.
     expect(after.rows[0]?.first).toBeNull();
     expect(after.rows[0]?.sent).not.toBeNull();
   });
 
   it('una cuenta sin vínculo en esta consulta es «paciente_no_existe», no un acceso nuevo', async () => {
-    // Si esto devolviera otra cosa, una doctora podría acuñar una temporal sobre la cuenta
+    // Si esto devolviera otra cosa, una doctora podría generar una temporal sobre la cuenta
     // de cualquiera y entrar con ella. Es el agujero que `patient_link` cierra.
     const probes = await Promise.all(
       [
@@ -1489,7 +1489,7 @@ describe('el reenvío del acceso de la doctora (0006)', () => {
 // devolverle todo lo que necesita para contestar —incluido el rol dentro de la consulta—
 // en UNA transacción: si hiciera falta una segunda lectura y fallara, la contraseña ya
 // estaría guardada y el 500 del contrato diría «todavía puedes entrar con la temporal»,
-// que en ese instante es mentira.
+// que en ese instante es falsedad.
 // =========================================================================================
 describe('la contraseña definitiva por recuperación, con app_account (0013)', () => {
   const RECOVERED = '$argon2id$v=19$m=19456,p=1,t=2$cmVjdXBlcmFkYXNhbA$4+9Luamu4CrTRSqz7rWxCJY49vSQUkKTBlaiJPvmXcs';
@@ -1565,13 +1565,13 @@ describe('la contraseña definitiva por recuperación, con app_account (0013)', 
     ).rejects.toMatchObject({ code: '42501' });
   });
 
-  it('y la bitácora de la MISMA transacción entra con la consulta que devolvió la función', async () => {
+  it('y la auditoría de la MISMA transacción entra con la consulta que devolvió la función', async () => {
     // Es la segunda consulta que el repositorio hace en esa transacción, y la que faltaba
     // por probar: `practice_id` es el de la doctora —lo acaba de devolver la función— y
     // `medskin.practice_id` está VACÍO, porque este rol no fija consulta. La política de
     // inserción de `access_audit` es `with check (true)` a propósito; si no lo fuera, o si
     // faltara el `GRANT INSERT`, `POST /v1/access/new-password` sería un 500 con la
-    // contraseña ya guardada, que es justo lo que el contrato promete que no pasa.
+    // contraseña ya guardada, que es justo lo que el contrato especifica que no pasa.
     await withTenantContext(app, ctxAccountOwner, (c) =>
       c.query(
         `insert into access_audit (practice_id, actor_account_id, actor_label, action,

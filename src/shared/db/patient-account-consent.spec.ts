@@ -163,7 +163,7 @@ describe('el alta de pacientes · ninguna cuenta de practicante se convierte en 
     expect(await createFor(B.patientEmail)).toEqual([
       { verdict: 'ya_tiene_cuenta', account_id: B.patientAccount, already_existed: true, status: 'activa' },
     ]);
-    // Y no se le acuñó una segunda credencial ni una segunda cuenta.
+    // Y no se le generó una segunda credencial ni una segunda cuenta.
     expect(await countsOf(B.patientEmail)).toEqual({ accounts: 1, credentials: 1 });
   });
 

@@ -11,12 +11,12 @@ import type { PlatformPermission } from '../../../shared/platform/platform-token
 /**
  * Lo que la función de la base devuelve, y lo mínimo para decidir.
  *
- * `platformAccountId` NULO significa **señuelo**: el correo no existe y `hash` es el de
+ * `platformAccountId` NULO significa **decoy**: el correo no existe y `hash` es el de
  * `access_decoy`. Eso lo sabe el proceso y no la respuesta HTTP, que es un solo
  * `401 acceso_no_coincide` en los dos casos.
  *
  * `hash` nunca es nulo. Si lo fuera no habría «mismo tiempo», y sin «mismo tiempo» el 401
- * miente: la función de la base lanza antes que devolver una fila sin él.
+ * informa en falso: la función de la base lanza antes que devolver una fila sin él.
  */
 export type PlatformCredential = {
   platformAccountId: string | null;

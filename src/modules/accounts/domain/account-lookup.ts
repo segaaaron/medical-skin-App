@@ -2,7 +2,7 @@
 //
 // LA DECISIÓN QUE DEFINE ESTE ARCHIVO, y es de una línea: **el correo es EXACTO, no un `ilike`.**
 // Un `%paz%` sobre `account` devolvería un listado de personas de MedSkin con dos caracteres, y
-// ahí dentro hay pacientes: ese es el padrón que §12.2.1 existe para cerrar. Con el correo
+// ahí dentro hay pacientes: ese es el registro que §12.2.1 existe para cerrar. Con el correo
 // completo, quien pregunta ya sabía a quién buscaba — que es exactamente la situación de soporte
 // atendiendo a alguien que escribió pidiendo ayuda.
 //

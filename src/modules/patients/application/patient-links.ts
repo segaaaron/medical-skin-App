@@ -3,7 +3,7 @@
 // «¿Es esta tu doctora?». LA PACIENTE, Y NADIE MÁS: nunca la doctora. Es el
 // `siguiente_paso: "vincular"` de `acceso.md`.
 //
-// ESTA ES LA ÚNICA LECTURA DEL SISTEMA QUE CRUZA INQUILINOS: `patient_link` filtrado por
+// ESTA ES LA ÚNICA LECTURA DEL SISTEMA QUE CRUZA TENANTS: `patient_link` filtrado por
 // `account_id` y no por `practice_id`. Cruza solo las fichas de quien pregunta, y por eso la
 // política de esa tabla tiene dos caras —por `practice_id` para la doctora, por `account_id`
 // para la paciente—. `consulta`, `doctora` y `ciudad` salen de las COPIAS que guarda

@@ -1,4 +1,4 @@
-// `GET /v1/tenants/mine` · lo que el contrato promete de `PrimerDia` y de `Licencia`.
+// `GET /v1/tenants/mine` · lo que el contrato especifica de `PrimerDia` y de `Licencia`.
 //
 // Lo que se fija aquí:
 //   · `puede` viaja RESUELTO porque la app lo lee, y lo único que lo cierra es el cupo del

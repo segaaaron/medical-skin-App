@@ -31,7 +31,7 @@ const clock = { now: () => NOW };
 const outbox = new NotificationsRepository(app);
 const aftercare = new Aftercare(new AftercareRepository(app), clock);
 
-/** Un remitente de mentira que CUENTA lo que le mandan. No hay credenciales en desarrollo. */
+/** Un remitente de falsedad que CUENTA lo que le mandan. No hay credenciales en desarrollo. */
 class FakePush implements PushPort {
   readonly sent: { token: string; title: string; body: string; data: unknown }[] = [];
   constructor(

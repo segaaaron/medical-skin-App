@@ -5,11 +5,11 @@
 // aplicación y por `withTenantContext()`.
 //
 // LA PRUEBA QUE JUSTIFICA ESTE ARCHIVO es «el doctor ve en su registro que soporte leyó la
-// historia». `medskin-design.md` §4 promete que «no existe un rol que pueda mirar historiales
+// historia». `medskin-design.md` §4 especifica que «no existe un rol que pueda mirar historiales
 // sin que el doctor lo sepa», y esa frase sobrevive a esta migración SOLO por eso: la fila de
 // auditoría lleva el `practice_id` de la paciente, que es lo que la política del doctor
 // compara. Esa columna admite nulo, así que una fila mal escrita quedaría invisible para él y
-// la promesa moriría en silencio. Si alguien toca la función, esto falla.
+// la especificación moriría en silencio. Si alguien toca la función, esto falla.
 
 import { Pool, type QueryResultRow } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -191,7 +191,7 @@ describe('lo que la consola NO puede hacer, y lo dice la base', () => {
   });
 });
 
-describe('EL DOCTOR VE QUE SOPORTE LEYÓ LA HISTORIA · la promesa de §4', () => {
+describe('EL DOCTOR VE QUE SOPORTE LEYÓ LA HISTORIA · la especificación de §4', () => {
   it('la lectura deja su fila con el motivo, y la doctora de ESA consulta la ve', async () => {
     const [fila] = await read<{ practice: string }>(
       ctxPlatform,
@@ -201,7 +201,7 @@ describe('EL DOCTOR VE QUE SOPORTE LEYÓ LA HISTORIA · la promesa de §4', () =
     // Devuelve el consulta de la paciente, que es lo que el llamador usa como su 404.
     expect(fila?.practice).toBe(A.practice);
 
-    // Y AQUÍ ESTÁ LA PROMESA: la doctora lo lee en SU registro, con su propio rol y su propio
+    // Y AQUÍ ESTÁ LA ESPECIFICACIÓN: la doctora lo lee en SU registro, con su propio rol y su propio
     // contexto. Si la fila se escribiera con `practice_id` nulo —la columna lo admite—, esto
     // saldría vacío y nadie se enteraría.
     const suyo = await read<{ action: string; subject_id: string; data: { motivo: string } }>(
@@ -217,7 +217,7 @@ describe('EL DOCTOR VE QUE SOPORTE LEYÓ LA HISTORIA · la promesa de §4', () =
     ]);
   });
 
-  it('la doctora de OTRA consulta no la ve: la bitácora sigue siendo por inquilino', async () => {
+  it('la doctora de OTRA consulta no la ve: la auditoría sigue siendo por tenant', async () => {
     const ajeno = await read(
       ctxDoctora(B),
       `select action from access_audit where action = 'platform.history.read'`,

@@ -1,7 +1,7 @@
 // LA PRIMERA CUENTA DE CONSOLA · `pnpm platform:seed`
 //
 // La pone una semilla y NO un endpoint, por la misma razón que el alta de la primera
-// doctora: la cuenta que puede abrir el padrón de todas las consultas no la crea nadie desde
+// doctora: la cuenta que puede abrir el registro de todas las consultas no la crea nadie desde
 // dentro. Un endpoint que crea cuentas de plataforma es un endpoint que, con un error de
 // permisos, fabrica superusuarios (`plataforma-acceso.md` · «La primera cuenta»).
 //

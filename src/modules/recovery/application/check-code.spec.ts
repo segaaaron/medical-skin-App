@@ -1,9 +1,9 @@
 // `POST /v1/recovery/code` · el orden, que es parte del contrato, y las dos cosas
-// que el contrato promete y es fácil romper:
+// que el contrato especifica y es fácil romper:
 //
 //   · el 401 es UNO para tres situaciones —código mal, correo sin cuenta, cuenta sin
 //     código vivo— con el mismo cuerpo y el mismo contador decreciente;
-//   · el intento NO SE CUENTA cuando el fallo es del servidor, porque el 500 promete que
+//   · el intento NO SE CUENTA cuando el fallo es del servidor, porque el 500 especifica que
 //     «el código sigue valiendo».
 //
 // Y la tercera, que es de forma pero igual de dura: el token no lleva rol.
@@ -18,17 +18,17 @@ const CUENTA = '11111111-1111-4111-8111-111111111111';
 const IP = '201.131.0.9';
 const PETICION = { correo: 'carla.rojas@gmail.com', codigo: '418203' };
 
-/** El señuelo: `accountId` nulo y un hash que verificar igual. */
-const SENUELO: LiveCode = {
+/** El decoy: `accountId` nulo y un hash que verificar igual. */
+const DECOY: LiveCode = {
   verdict: 'live',
   accountId: null,
-  codeHash: '$argon2id$senuelo',
+  codeHash: '$argon2id$decoy',
   expiresAt: new Date('2026-10-27T13:28:00.000Z'),
   attemptsLeft: 5,
   voidedReason: null,
 };
 
-const VIVO: LiveCode = { ...SENUELO, accountId: CUENTA, codeHash: '$argon2id$real' };
+const VIVO: LiveCode = { ...DECOY, accountId: CUENTA, codeHash: '$argon2id$real' };
 
 function armar(opciones: {
   codigo?: LiveCode;
@@ -130,17 +130,17 @@ describe('POST /v1/recovery/code · el orden', () => {
     expect(pasos).toEqual(['contador:ip']);
   });
 
-  it('el verificado de Argon2id corre SIEMPRE, también contra el señuelo', async () => {
-    const { caso, pasos } = armar({ codigo: SENUELO });
+  it('el verificado de Argon2id corre SIEMPRE, también contra el decoy', async () => {
+    const { caso, pasos } = armar({ codigo: DECOY });
     await errorDe(() => caso.run(PETICION, IP));
 
-    expect(pasos).toContain('argon2:$argon2id$senuelo');
+    expect(pasos).toContain('argon2:$argon2id$decoy');
   });
 });
 
 describe('POST /v1/recovery/code · el 401 es uno para tres', () => {
   it('correo sin cuenta y código mal dan el mismo cuerpo y el mismo contador', async () => {
-    const sinCuenta = await errorDe(() => armar({ codigo: SENUELO }).caso.run(PETICION, IP));
+    const sinCuenta = await errorDe(() => armar({ codigo: DECOY }).caso.run(PETICION, IP));
     const codigoMal = await errorDe(() =>
       armar({ codigo: VIVO, coincide: false }).caso.run(PETICION, IP),
     );
@@ -159,7 +159,7 @@ describe('POST /v1/recovery/code · el 401 es uno para tres', () => {
   });
 
   it('un correo sin cuenta NO gasta intento en la base: no hay fila que gastar', async () => {
-    const { caso, pasos } = armar({ codigo: SENUELO });
+    const { caso, pasos } = armar({ codigo: DECOY });
     await errorDe(() => caso.run(PETICION, IP));
 
     expect(pasos).not.toContain('codigo:intento');
@@ -177,7 +177,7 @@ describe('POST /v1/recovery/code · los dos 410, también para quien no existe',
       ),
     );
     const inventado = await errorDe(() =>
-      armar({ codigo: SENUELO, intentosGastados: 5 }).caso.run(PETICION, IP),
+      armar({ codigo: DECOY, intentosGastados: 5 }).caso.run(PETICION, IP),
     );
 
     expect(real.code).toBe('codigo_anulado');
@@ -192,7 +192,7 @@ describe('POST /v1/recovery/code · los dos 410, también para quien no existe',
       armar({ codigo: { ...VIVO, verdict: 'expired' } }).caso.run(PETICION, IP),
     );
     const inventado = await errorDe(() =>
-      armar({ codigo: SENUELO, codigoVivo: false, sePidio: true }).caso.run(PETICION, IP),
+      armar({ codigo: DECOY, codigoVivo: false, sePidio: true }).caso.run(PETICION, IP),
     );
 
     expect(real.code).toBe('codigo_caducado');
@@ -233,7 +233,7 @@ describe('POST /v1/recovery/code · el token', () => {
       token_caduca_en: '2026-10-27T13:23:00.000Z',
       alcance: 'recuperacion',
     });
-    // Si esta lista crece con `rol`, el flujo de recuperación se convierte en un oráculo
+    // Si esta lista crece con `rol`, el flujo de recuperación se convierte en una filtración
     // mejor que el del acceso: diría QUÉ es la persona, no solo que existe.
     expect(Object.keys(firmados[0] ?? {}).sort()).toEqual(['alcance', 'region', 'sub']);
     expect(firmados[0]?.sub).toBe(CUENTA);

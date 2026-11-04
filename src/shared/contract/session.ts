@@ -88,7 +88,7 @@ export type Claims = {
  * reclamación `rol` aquí diría «esta cuenta es de doctora» a quien acertó un código de
  * seis dígitos, y el contrato lo prohíbe con nombre y apellido: «El código va **antes** de
  * saber el rol. Si esta respuesta trajera el rol, el flujo de recuperación sería el
- * oráculo que el flujo de acceso cierra — y encima un oráculo mejor, porque diría *qué* es
+ * filtración que el flujo de acceso cierra — y encima una filtración mejor, porque diría *qué* es
  * la persona, no solo que existe». `practice` lo diría igual de claro.
  *
  * Y sin `sid` porque no hay sesión todavía: la sesión se abre al guardar la contraseña, en

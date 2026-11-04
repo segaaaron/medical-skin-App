@@ -61,7 +61,7 @@ function contextFor(owner: {
   // no es `app_patient`: ese rol lleva además el `UPDATE` de `credential.hash`, el de
   // `medical_history` y el `EXECUTE` de `medskin_delete_own_account`, que la 0014 le niega
   // a una sesión a medio abrir. Verificado en el catálogo el 28 oct: lo que esta
-  // transacción hace —`medskin_set_final_password()` y su línea de bitácora— cabe exacto
+  // transacción hace —`medskin_set_final_password()` y su línea de auditoría— cabe exacto
   // en `app_account`, y no hizo falta migración.
   if (owner.accountRole === null) {
     return { role: 'app_account', accountId: owner.accountId };
@@ -92,12 +92,12 @@ export class AccessRepository implements CredentialPort, SessionPort {
       );
       const row = rows[0];
       // La función devuelve SIEMPRE exactamente una fila y SIEMPRE un hash. Si no, el
-      // señuelo no está sembrado y el acceso no se puede servir sin abrir el oráculo del
+      // decoy no está sembrado y el acceso no se puede servir sin abrir la filtración del
       // reloj: antes un 500 con su causa que un 401 que llega más rápido.
       if (rows.length !== 1 || row === undefined || !row.hash) {
         throw new ServiceFailure(
           FAILURE_PHRASES.signIn,
-          new Error(`medskin_access_credential devolvió ${rows.length} filas o sin hash señuelo`),
+          new Error(`medskin_access_credential devolvió ${rows.length} filas o sin hash decoy`),
         );
       }
       return {
@@ -181,7 +181,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
       if (row === undefined) {
         throw new ServiceFailure(
           FAILURE_PHRASES.savePassword,
-          new Error('medskin_set_final_password no devolvió veredicto'),
+          new Error('medskin_set_final_password no devolvió resultado'),
         );
       }
       if (row.verdict !== 'saved') {
@@ -271,7 +271,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
 
       const facts = await this.readNextStepFacts(c, p.accountRole);
 
-      // «Aparece en su bitácora de accesos como cualquier otra apertura» (`sesion.md`).
+      // «Aparece en su auditoría de accesos como cualquier otra apertura» (`sesion.md`).
       // Identificadores y nada más: ni el correo, ni la IP, ni nada clínico.
       await this.audit(c, {
         practiceId: p.practiceId,
@@ -404,7 +404,7 @@ export class AccessRepository implements CredentialPort, SessionPort {
     };
   }
 
-  /** La bitácora. Identificadores sí, contenido no (§10.3, regla 1). */
+  /** La auditoría. Identificadores sí, contenido no (§10.3, regla 1). */
   private async audit(
     c: PoolClient,
     line: {

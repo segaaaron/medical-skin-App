@@ -2,7 +2,7 @@
 //
 // TODO LO DE UNA SESIÓN OCURRE EN UNA TRANSACCIÓN: la sesión, sus aplicaciones, sus puntos, el
 // descuento de stock y su movimiento. «Un inventario que se actualiza después es un inventario
-// que miente cada vez que algo falla en medio.»
+// que informa en falso cada vez que algo falla en medio.»
 
 import type { Pool, PoolClient } from 'pg';
 
@@ -160,7 +160,7 @@ export class ClinicalRepository implements ClinicalPort {
         });
       }
 
-      // La nota nace vacía: «la sesión nace en borrador y el expediente no se cierra hasta
+      // La nota empieza vacía: «la sesión empieza en borrador y el expediente no se cierra hasta
       // firmar la nota».
       await c.query(
         `insert into session_note (practice_id, session_id) values (medskin_current_practice(), $1)`,

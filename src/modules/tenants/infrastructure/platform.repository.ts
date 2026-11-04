@@ -9,7 +9,7 @@
 // `app_platform` y `withTenantContext()`, como todo lo demás. El contexto que se fija es
 // `medskin.account_id` = el `sub` del token de plataforma, y eso **no crea ninguna fila en
 // `account`**: es lo que la política de `idempotency_key` compara
-// (`account_id = medskin_current_account()`) y lo que viaja a la bitácora. `practice_id` NO
+// (`account_id = medskin_current_account()`) y lo que viaja a la auditoría. `practice_id` NO
 // se fija: la consola cruza consultas a propósito y sus políticas son
 // `current_user = 'app_platform'`, no por consulta.
 //
@@ -19,7 +19,7 @@
 //   · `session.practice_id` — la 0003 le concedió cinco columnas y ninguna más, así que la
 //     consola solo puede agrupar sesiones por cuenta. Las versiones de la consulta salen de
 //     la misma función.
-//   · `credential` — no tiene política: soporte no toca contraseñas, lo promete la pantalla.
+//   · `credential` — no tiene política: soporte no toca contraseñas, lo especifica la pantalla.
 //
 // Y las columnas se nombran UNA POR UNA: un privilegio de columna se comprueba ANTES que la
 // política, así que `select *` sobre `session` con este rol es «permiso denegado».
@@ -81,7 +81,7 @@ type OwnerRow = {
 };
 
 /**
- * El veredicto que no es `created` viaja en un error para que `withTenantContext()` haga
+ * El resultado que no es `created` viaja en un error para que `withTenantContext()` haga
  * `ROLLBACK`: sin eso, el `INSERT` de `practice` quedaría como una consulta sin dueña, que
  * «no existe» según el contrato y que la consola vería como una consulta real.
  */
@@ -164,7 +164,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         );
         const row = admitted[0];
         if (row === undefined)
-          throw new Error('medskin_create_practice_owner no devolvió veredicto');
+          throw new Error('medskin_create_practice_owner no devolvió resultado');
         if (row.verdict !== 'created' || row.account_id === null) {
           throw new AdmissionRejected(row.verdict as Exclude<AdmissionVerdict, 'created'>);
         }
@@ -174,7 +174,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         // función que ya usan la semilla y las pruebas: la fila existe desde la línea de
         // arriba, así que esto la completa.
         //
-        // `declared_at` SÍ se pone, y es lo que esta escritura promete: lo que la consola
+        // `declared_at` SÍ se pone, y es lo que esta escritura especifica: lo que la consola
         // anotó en el alta es una declaración del doctor —se la dio por teléfono o en el
         // formulario— y tiene su fecha. Sin ella, la ficha diría que no declaró nada mientras
         // enseña su matrícula.
@@ -198,7 +198,7 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
         // es el correo de la dueña, que NO cambia este 201 ni lo hace fallar. Así que se
         // cierra en la misma transacción y este camino no deja reservas sin cerrar.
         //
-        // Y no hay `release()` que llamar: todos los veredictos que no crean —`email_taken`,
+        // Y no hay `release()` que llamar: todos los resultados que no crean —`email_taken`,
         // los dos de la función— LANZAN, así que la transacción se deshace entera y con ella
         // la reserva. Si algún día uno devuelve en vez de lanzar, hay que soltarla.
         await complete(c, {
@@ -500,7 +500,7 @@ export class TenantLifecycleRepository implements TenantLifecyclePort {
     practiceId: string;
   }): Promise<{ name: string; patients: number; accountsReleased: number } | null> {
     return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
-      // La bitácora PRIMERO, porque después del borrado no queda de dónde leer el nombre ni
+      // La auditoría PRIMERO, porque después del borrado no queda de dónde leer el nombre ni
       // el número de fichas: esta fila es lo único que sobrevive a esa consulta.
       const { rows: before } = await c.query<{ name: string; patients: string }>(
         `select p.name, (select count(*) from patient where practice_id = p.id)::text as patients
@@ -541,7 +541,7 @@ export class TenantLifecycleRepository implements TenantLifecyclePort {
   }
 
   /**
-   * La bitácora de la consola. `practice_id` va NULO a propósito, igual que en el resto de
+   * La auditoría de la consola. `practice_id` va NULO a propósito, igual que en el resto de
    * acciones de plataforma: la fila la lee la consola, no la consulta — y en el borrado la
    * consulta ya no existe cuando alguien lea esto.
    */

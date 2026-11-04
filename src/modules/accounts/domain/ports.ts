@@ -59,9 +59,9 @@ export type PatientForDelivery = {
   /** El nombre con el que la doctora se presenta: «Dra. Andrea Paz». */
   practitionerName: string;
   /**
-   * `patient_link.access_sent_at` ANTES de acuñar, y no es un dato del mensaje: es lo que
+   * `patient_link.access_sent_at` ANTES de generar, y no es un dato del mensaje: es lo que
    * hace falta para poder DESHACER la marca si el envío falla. Se lee aquí porque esta
-   * lectura ya pasa por la política de la consulta y acuñar la sobreescribe: después ya no
+   * lectura ya pasa por la política de la consulta y generar la sobreescribe: después ya no
    * hay de dónde sacarla. Nulo cuando nunca se le mandó, que es el caso de la primera vez.
    */
   accessSentAt: Date | null;
@@ -77,8 +77,8 @@ export interface PatientAccessPort {
   forDelivery(owner: AccountOwner, accountId: string): Promise<PatientForDelivery | null>;
 
   /**
-   * `medskin_resend_patient_access()`: acuña la temporal nueva, mata la anterior y marca
-   * el envío. Devuelve el veredicto, nunca la fila.
+   * `medskin_resend_patient_access()`: genera la temporal nueva, invalida la anterior y marca
+   * el envío. Devuelve el resultado, nunca la fila.
    */
   resend(p: {
     owner: AccountOwner;
@@ -90,7 +90,7 @@ export interface PatientAccessPort {
 
   /**
    * Deshace la marca de envío devolviéndole SU VALOR ANTERIOR. Existe porque la función
-   * escribe `access_sent_at = now()` AL ACUÑAR y el envío pasa después, así que un relé
+   * escribe `access_sent_at = now()` AL GENERAR y el envío pasa después, así que un reenvío
    * caído dejaba en la base la afirmación «ya se le mandó» siendo falsa.
    *
    * `previous` y no nulo a secas: compensar es deshacer lo que esta llamada escribió, no
@@ -111,8 +111,8 @@ export interface ResendLimitPort {
 
 /**
  * El correo del acceso, que es la OTRA MITAD de `via: "correo"`: por ahí la temporal no
- * viaja en la respuesta —«el correo lo manda MedSkin»—, así que si nadie lo manda, acuñar
- * mata la que la paciente tenía y no le llega ninguna. Puerto pequeño: un solo verbo, y
+ * viaja en la respuesta —«el correo lo manda MedSkin»—, así que si nadie lo manda, generar
+ * invalida la que la paciente tenía y no le llega ninguna. Puerto pequeño: un solo verbo, y
  * añadir otro canal es otra implementación y no un `switch`.
  *
  * Lanza si no se pudo entregar. Un `void` silencioso aquí sería el defecto otra vez.
@@ -205,7 +205,7 @@ export interface AccountDeletionPort {
   /**
    * El borrado entero en una transacción, con la línea de `access_audit` que la propia
    * función escribe. `retentionUntil` llega calculado por quien llama —el plazo es
-   * configuración del despliegue— y queda en la bitácora como el hecho histórico de ESTE
+   * configuración del despliegue— y queda en la auditoría como el hecho histórico de ESTE
    * borrado.
    */
   deleteMine(p: {
@@ -225,7 +225,7 @@ export interface AccountDeletionPort {
 //
 // La autorización no es un `if`: son las políticas de `patient`, `patient_link` y
 // `medical_history` sobre `practice_id`, más una función `SECURITY DEFINER` que NO recibe
-// `account_id` —con uno, una doctora podría acuñar una temporal sobre la cuenta de
+// `account_id` —con uno, una doctora podría generar una temporal sobre la cuenta de
 // cualquiera— y que saca la consulta y la región del contexto.
 // ---------------------------------------------------------------------------------------
 
@@ -241,7 +241,7 @@ export type PatientRegistrationVerdict =
   | 'duplicate_email'
   | 'referrer_not_found'
   // La función se niega a reusar la cuenta de una practicante (migración 0021), y el
-  // veredicto es OPACO: si dijera el motivo, el alta sería un directorio del personal de
+  // resultado es OPACO: si dijera el motivo, el alta sería un directorio del personal de
   // MedSkin consultable de uno en uno.
   | 'email_unavailable'
   // Esta misma petición ya se atendió: su respuesta está en `idempotency_key` y se repite
@@ -262,7 +262,7 @@ export type PatientRegistration = {
   patientId: string | null;
   accountId: string | null;
   /**
-   * «Si la cuenta ya existe en la región, el alta REUSA la cuenta»: no se le acuña ninguna
+   * «Si la cuenta ya existe en la región, el alta REUSA la cuenta»: no se le genera ninguna
    * temporal —ya tiene la suya— y la respuesta vale `via: "ya_tiene_cuenta"`. Es lo único
    * que la respuesta revela de la existencia de una cuenta, y se lo revela a la doctora que
    * acaba de escribir el correo de su propia paciente.
@@ -297,13 +297,13 @@ export interface PatientRegistrationPort {
     hash: string;
     expiresAt: Date;
     confirmDuplicate: boolean;
-    /** `correo | whatsapp | ninguna`, solo para la línea de la bitácora. */
+    /** `correo | whatsapp | ninguna`, solo para la línea de la auditoría. */
     via: string;
   }): Promise<PatientRegistration>;
 
   /**
    * La marca de envío de un vínculo RECIÉN CREADO, que es el único caso en que nulo es
-   * «nunca se le mandó» de verdad. Se escribe al entregar el correo y se deshace si el relé
+   * «nunca se le mandó» de verdad. Se escribe al entregar el correo y se deshace si el reenvío
    * falla: `patient_link.access_sent_at` solo puede afirmar un envío que ocurrió, y es la
    * columna que la consola lee para decidir si hay que reenviar.
    */
@@ -318,8 +318,8 @@ export interface PatientRegistrationPort {
  * operaciones: es lo que las hace repetibles.
  *
  * Por qué no va dentro de la transacción de la operación: estos dos endpoints mandan un
- * correo y `enviado` dice si el relé lo aceptó, así que la respuesta no es definitiva hasta
- * después del `COMMIT`. Y el relé no puede correr dentro de la transacción sin pinchar una
+ * correo y `enviado` dice si el reenvío lo aceptó, así que la respuesta no es definitiva hasta
+ * después del `COMMIT`. Y el reenvío no puede correr dentro de la transacción sin pinchar una
  * conexión del pooler mientras el SMTP piensa. Lo que sostiene la idempotencia es la RESERVA,
  * que sí va dentro.
  */
@@ -335,7 +335,7 @@ export interface IdempotencyCompletionPort {
 /**
  * El contador del `429 demasiadas_altas`: «más de 60 altas en una hora». Puerto propio y no
  * un segundo verbo en el del reenvío: son dos límites que protegen cosas distintas —ese, que
- * una doctora no acuñe temporales en bucle sobre la cuenta de su paciente; este, el ritmo de
+ * una doctora no genere temporales en bucle sobre la cuenta de su paciente; este, el ritmo de
  * altas de una consulta— y el día que uno cambie, el otro no tiene por qué moverse.
  */
 export interface PatientCreationLimitPort {
@@ -362,7 +362,7 @@ export interface PatientLinkNoticeMailPort {
 // QUIEN LLAMA NO TIENE CUENTA EN ESTA REGIÓN. No hay `AccountOwner` que construir: la
 // identidad de la plataforma vive fuera y lo único que llega del token es el `sub`, la
 // etiqueta y la región (`plataforma-acceso.md`). De ahí un actor propio y no un `Caller` con
-// nulos: un tipo que miente sobre lo que trae acaba leído como si trajera algo.
+// nulos: un tipo que informa en falso sobre lo que trae acaba leído como si trajera algo.
 //
 // El `cuenta_id` viene de la RUTA, y aquí no hay consulta que lo acote: lo que lo acota es
 // que las dos operaciones devuelven el MISMO 404 para una cuenta que no existe, una borrada y
@@ -372,7 +372,7 @@ export interface PatientLinkNoticeMailPort {
 /**
  * Quien ejecuta desde la consola. `subject` es un uuid y es lo único del token que entra en
  * la base —a `medskin.account_id` y a `access_audit.actor_account_id`—; `label` es el nombre
- * legible de esa persona y **no entra en ninguna comparación**: va a la bitácora y nada más.
+ * legible de esa persona y **no entra en ninguna comparación**: va a la auditoría y nada más.
  */
 export type ConsoleActor = {
   subject: string;
@@ -384,11 +384,11 @@ export type PlatformResendOutcome = 'acceso_renovado' | 'cuenta_no_existe' | 'ya
 
 export interface PlatformAccessPort {
   /**
-   * `medskin_platform_resend_access()`: acuña la temporal nueva, mata la anterior y revoca
+   * `medskin_platform_resend_access()`: genera la temporal nueva, invalida la anterior y revoca
    * las sesiones de esa cuenta (0020). **Devuelve dos columnas y ninguna es la contraseña.**
    *
    * Desde el 4 de noviembre de 2026 la RESPUESTA del endpoint sí lleva el PIN, por decisión
-   * del dueño, pero esto no cambia: el que viaja es el que el borde acaba de acuñar y todavía
+   * del dueño, pero esto no cambia: el que viaja es el que el borde acaba de generar y todavía
    * tiene en memoria. **De la base no sale ninguna credencial**, ni por aquí ni por ningún
    * sitio: lo que hay guardado es su hash de Argon2id, así que una contraseña YA existente
    * sigue sin poder consultarse.
@@ -404,10 +404,10 @@ export interface PlatformAccessPort {
     /**
      * `true` es el RESETEO de la consola (`POST …/access/reset`, migración 0083): la misma
      * forma y el mismo correo, pero contra `medskin_platform_reset_access`, que es la única
-     * función de la base que pisa una credencial YA elegida. Por eso con `force` el veredicto
+     * función de la base que sobrescribe una credencial YA elegida. Por eso con `force` el resultado
      * `ya_eligio_su_contrasena` no puede volver: esa pregunta no se hace.
      *
-     * Un argumento y no un segundo método porque todo lo demás es idéntico —acuñar, mandar al
+     * Un argumento y no un segundo método porque todo lo demás es idéntico —generar, mandar al
      * correo de la persona, no devolver la contraseña, revocar sus sesiones—; lo que separa a
      * las dos acciones es el PERMISO de la tabla de rutas (`plataforma:acceso:resetear`) y el
      * `GRANT EXECUTE` de cada función, que es donde tiene que vivir esa separación.
@@ -419,7 +419,7 @@ export interface PlatformAccessPort {
    * «Levantar la pausa por intentos · Vuelve a poder entrar. No cambia su contraseña.» Sin
    * función `SECURITY DEFINER`: `app_platform` tiene el `GRANT UPDATE` de esas tres columnas
    * y su política, así que es una sentencia y no hace falta más. **No toca `credential`**, que
-   * es lo que la pantalla promete y lo que este rol no puede tocar ni queriendo: esa tabla no
+   * es lo que la pantalla especifica y lo que este rol no puede tocar ni queriendo: esa tabla no
    * tiene ninguna política para él.
    *
    * `false` cuando no hay fila que levantar, que es el `404` y es el mismo para una cuenta

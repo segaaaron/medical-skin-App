@@ -31,8 +31,8 @@ export class RecoveryQueue implements RecoveryQueuePort {
   async enqueue(job: RecoveryMailJob): Promise<void> {
     const data: JobData = { email: job.email, expiresAt: job.expiresAt.toISOString() };
     // Sin `jobId` fijo, y es la decisión que el contrato pide: «el botón "Enviarme otro
-    // código" tiene que acuñar otro», así que dos peticiones son dos trabajos. La
-    // idempotencia que importa la da acuñar, que anula el código anterior: por más veces
+    // código" tiene que generar otro», así que dos peticiones son dos trabajos. La
+    // idempotencia que importa la da generar, que anula el código anterior: por más veces
     // que se corra, lo que queda vivo es un solo código, el último.
     await this.queue.add(QUEUE_NAMES.recoveryMail, data);
   }

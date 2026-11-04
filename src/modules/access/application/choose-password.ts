@@ -62,7 +62,7 @@ export class ChoosePassword {
   async run(input: unknown, caller: Caller): Promise<ChoosePasswordResponse> {
     const candidate = checkNewPassword(this.readBody(input));
 
-    // «Esa es la temporal que te mandamos. Elige una tuya.» Se compara contra el hash que
+    // «Ese es el código que te enviamos. Elige una contraseña tuya.» Se compara contra el hash que
     // `credential` no deja leer a ningún rol de aplicación: la comparación es Argon2id en
     // Node contra lo que devuelve `medskin_current_credential()`.
     const current = await this.credentials.readMine(caller.accountId, caller.practiceId);

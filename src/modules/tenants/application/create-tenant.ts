@@ -7,7 +7,7 @@
 //
 // TRES REGLAS QUE SE CUMPLEN AQUÍ Y EN NINGÚN OTRO SITIO:
 //   1. `limite_pacientes` sale del PLAN y nunca del cuerpo.
-//   2. La doctora nace con `licencia.estado = "sin_enviar"` y sin poder invitar pacientes, y
+//   2. La doctora se crea con `licencia.estado = "sin_enviar"` y sin poder invitar pacientes, y
 //      esa fila la crea la función del alta (0015): aquí no se inserta.
 //   3. `contrasena_temporal` se devuelve UNA SOLA VEZ y solo a la consola, «porque quien da
 //      el alta es una persona de MedSkin que tiene que poder leerla si el correo no llega».
@@ -113,7 +113,7 @@ export class CreateTenant {
         break;
       // La clave natural de refuerzo del contrato, `(correo_doctora, region)`. Este 409 SÍ
       // revela que el correo existe y está bien: «aquí quien llama es MedSkin sobre su propio
-      // padrón, no un desconocido sobre el de una clínica de estética».
+      // registro, no un desconocido sobre el de una clínica de estética».
       case 'email_taken':
         throw new ContractError('correo_ya_tiene_cuenta');
       // Los dos que la base distingue y el contrato no nombra: no se les inventa un error.
@@ -146,8 +146,8 @@ export class CreateTenant {
    * creado** y el fallo va a `service_failure`: la consola tiene "Reenviar la contraseña
    * temporal" para eso.»
    *
-   * Por eso este fallo NO se convierte en 500: la frase del 500 de este endpoint promete «no
-   * se creó nada», y decirlo cuando la consulta ya existe sería mentirle a quien da el alta.
+   * Por eso este fallo NO se convierte en 500: la frase del 500 de este endpoint especifica «no
+   * se creó nada», y decirlo cuando la consulta ya existe sería informar en falso a quien da el alta.
    * La salida que tiene es la contraseña del 201, que puede leer y dictar.
    *
    * En el reintento idempotente no se vuelve a mandar: el alta ya ocurrió y el correo ya
@@ -194,7 +194,7 @@ export class CreateTenant {
       id: created.practiceId,
       nombre: practice.name,
       region: practice.region,
-      // `pacientes: 0` no se consulta: una consulta que acaba de nacer no tiene ninguna, y
+      // `pacientes: 0` no se consulta: una consulta que acaba de empezar no tiene ninguna, y
       // `app_platform` no puede leer `patient` ni para contar.
       plan: { clave: practice.plan, limite_pacientes: practice.patientLimit, pacientes: 0 },
       licencia: { estado: 'sin_enviar' },

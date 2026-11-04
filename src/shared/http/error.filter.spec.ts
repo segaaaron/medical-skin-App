@@ -6,7 +6,7 @@
 // **con actor**. Una ruta de consola nunca tiene `caller` —la persona de plataforma no tiene
 // cuenta en esta región ni sesión que leer—, así que antes de hoy sus fallos entraban por el
 // camino anónimo y la fila quedaba sin `actor_id`. Y es soporte actuando sobre la cuenta de
-// una paciente: la bitácora de fallos es lo único que hace revisable lo que soporte hace.
+// una paciente: la auditoría de fallos es lo único que hace revisable lo que soporte hace.
 
 import type { ArgumentsHost } from '@nestjs/common';
 import { Pool } from 'pg';
@@ -83,7 +83,7 @@ function hostOf(route: string, context: Partial<RequestContext>): ArgumentsHost 
     },
   };
   // `header` existe porque el filtro devuelve `X-Request-Id` en toda respuesta, también en
-  // los errores: es lo que convierte «me dio error» en una línea buscable en la bitácora.
+  // los errores: es lo que convierte «me dio error» en una línea buscable en la auditoría.
   const cabeceras: Record<string, string> = {};
   const res = {
     header(nombre: string, valor: string) {

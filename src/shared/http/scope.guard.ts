@@ -53,7 +53,7 @@ export class ScopeGuard implements CanActivate {
     // EL CONTEXTO SE CUELGA LO PRIMERO, aunque esta petición vaya a ser rechazada tres
     // líneas más abajo. Antes se colgaba solo en los caminos que pasaban, así que un
     // `401 token_no_valido` salía con `peticion_id: "sin-peticion"` — es decir, el
-    // identificador para buscar en la bitácora faltaba justo en las respuestas que alguien
+    // identificador para buscar en la auditoría faltaba justo en las respuestas que alguien
     // querría buscar. Lo que sigue solo lo ENRIQUECE con quién llama.
     const base = readRequest(req);
     req.medskin = { ...base, policy: policy ?? NO_POLICY, caller: null, recovery: null, platform: null };

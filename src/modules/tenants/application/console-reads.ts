@@ -4,7 +4,7 @@
 //
 // LO QUE TIENE DE DISTINTO, y es la única razón por la que merece un comentario largo: es la
 // ÚNICA lectura de consola que devuelve más de una consulta. En la ficha, un error de campo
-// expone la consulta que quien llama ya estaba mirando; aquí expondría el padrón entero. Por
+// expone la consulta que quien llama ya estaba mirando; aquí expondría el registro entero. Por
 // eso devuelve un subconjunto EXACTO de los campos de la ficha, y `console-reads.spec.ts` lo
 // fija comparando las claves: si alguien añade un campo aquí sin añadirlo a la ficha, la
 // prueba falla.
@@ -49,7 +49,7 @@ export class SearchTenants {
     }));
 
     return {
-      // Lo de ESTA página, no el total: contar el padrón en cada búsqueda es un recuento que
+      // Lo de ESTA página, no el total: contar el registro en cada búsqueda es un recuento que
       // nadie mira y que crece con la tabla.
       cuantas: page.length,
       siguiente: next,

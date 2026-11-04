@@ -317,7 +317,7 @@ export class PhotosRepository implements PhotoPort {
         [photoId, now, reason],
       );
       // Y los objetos se van de verdad: la maestra es irreversible, y es lo que el contrato
-      // promete. Borrar del almacenamiento no bloquea la respuesta.
+      // especifica. Borrar del almacenamiento no bloquea la respuesta.
       // La firma es de `DELETE`: el método entra en la firma, y con la de un `GET` el
       // almacenamiento responde `SignatureDoesNotMatch` —y el `.catch()` se lo comía—.
       // Si alguno no se va, lo recoge la pasada `eraseDeleted()` del trabajador, que mira

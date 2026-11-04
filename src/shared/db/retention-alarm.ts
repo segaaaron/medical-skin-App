@@ -1,6 +1,6 @@
 // EL ALAMBRE DEL PLAZO DE CONSERVACIÓN · 29 de octubre de 2026.
 //
-// El 200 de `DELETE /v1/accounts/mine` promete `se_conserva.hasta: <fecha>`, y **el barrendero
+// El 200 de `DELETE /v1/accounts/mine` especifica `se_conserva.hasta: <fecha>`, y **el barrendero
 // que la cumplía está apagado**: borraba el dato de salud de seis tablas y dejaba dentro la nota
 // clínica firmada, el evento adverso, el plan de cuidados, la incidencia y las observaciones, y
 // escribía su sello igual, así que la ficha no volvía a ser candidata nunca. La decisión de qué

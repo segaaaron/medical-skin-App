@@ -397,7 +397,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
             p.zone,
             p.startsAt,
             p.endsAt,
-            // «Sin seña exigida, la cita nace confirmada.»
+            // «Sin seña exigida, la cita empieza confirmada.»
             deposit ? 'pendiente_de_sena' : 'confirmada',
             p.priceCents,
             p.promotionId,
@@ -423,7 +423,7 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       }
 
       // LA PREPARACIÓN PREVIA, encolada al agendar y no por un programador: el protocolo de
-      // «antes» ya está decidido, así que el aviso nace con su instante —24 h antes— y espera
+      // «antes» ya está decidido, así que el aviso se crea con su instante —24 h antes— y espera
       // en la tabla. Solo si el tratamiento tiene pasos de antes, y solo si esas 24 h todavía
       // no pasaron: un aviso de preparación para dentro de dos horas no prepara nada.
       await c.query(

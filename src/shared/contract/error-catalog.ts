@@ -309,7 +309,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   },
   contrasena_igual_a_la_temporal: {
     status: 400,
-    message: 'Esa es la temporal que te mandamos. Elige una tuya.',
+    message: 'Ese es el código que te enviamos. Elige una contraseña tuya.',
     field: 'nueva',
   },
   token_sin_alcance: {
@@ -440,7 +440,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   //
   // Los otros dos no estan en la tabla del contrato y existen igual: un `?estado=cualquiera`
   // NO puede caer en `activa` en silencio, porque entonces la app creeria que esta filtrando
-  // algo que no filtra y ensenaria archivadas donde promete activas. Anotado para `producto`:
+  // algo que no filtra y ensenaria archivadas donde especifica activas. Anotado para `producto`:
   // faltan en la tabla de errores de ese endpoint.
   // -------------------------------------------------------------------------------------
   // -------------------------------------------------------------------------------------
@@ -969,7 +969,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // UN SOLO 409 PARA DOS CAUSAS, Y LA FRASE NO CONFIRMA NINGUNA (28 de octubre de 2026).
   // El correo puede estar tomado porque la persona ya está en este equipo o porque ese
   // correo ya tiene cuenta en la región —una paciente de otra consulta—. Dar dos códigos
-  // sería el oráculo del padrón que §12.2.1 cierra: la dueña escribiría correos ajenos de
+  // sería la filtración del registro que §12.2.1 cierra: la dueña escribiría correos ajenos de
   // uno en uno y el segundo código le diría cuáles son pacientes de MedSkin, que es dato
   // de salud. El precio es una frase con menos filo, y se paga a propósito.
   // Y DESDE EL 28 DE OCTUBRE LO USAN DOS ENDPOINTS: el alta de equipo y el alta de una
@@ -990,7 +990,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // UN SOLO `404` PARA CUATRO SITUACIONES —no es de esta consulta, está retirada, su
   // cuenta está borrada, o es la fila de quien llama— e indistinguible de un
   // `miembro_id` inventado, como el de las pacientes. Que cubra «eres tú» es decisión:
-  // la dueña no se reenvía el acceso a sí misma, porque sería acuñarse credenciales sin
+  // la dueña no se reenvía el acceso a sí misma, porque sería generarse credenciales sin
   // saber su contraseña actual, que es justo lo que `PATCH …/contrasena` exige.
   // ---------------------------------------------------------------------------------
   miembro_no_existe: { status: 404, message: 'Esa persona no está en tu equipo.', field: null },
@@ -1173,7 +1173,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // `405 metodo_no_permitido` NO está, y es la retirada del 27 de octubre: Fastify no
   // distingue «ruta que no existe» de «método que esa ruta no admite», así que un `PUT` a
   // una ruta de solo `POST` sale como `404 ruta_no_existe`. Un código que el servidor no
-  // puede dar es peor que no prometerlo.
+  // puede dar es peor que no especificarlo.
   // ---------------------------------------------------------------------------------
   ruta_no_existe: { status: 404, message: '', field: null },
   cuerpo_no_valido: {
@@ -1261,7 +1261,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   //
   // `region_no_corresponde` lleva la región de destino dentro de la frase y la pone quien
   // lanza, con `datos.region`. Decir a qué región ir es correcto AQUÍ: es información
-  // interna para una persona de MedSkin, no un oráculo sobre una paciente.
+  // interna para una persona de MedSkin, no una filtración sobre una paciente.
   // ---------------------------------------------------------------------------------
   token_de_plataforma_no_valido: {
     status: 401,
@@ -1284,7 +1284,7 @@ export const CATALOG: Readonly<Record<ErrorCode, Entry>> = {
   // por palabra.
   //
   // `409 correo_ya_tiene_cuenta` SÍ revela que el correo existe, y está bien: «aquí quien
-  // llama es MedSkin sobre su propio padrón, no un desconocido sobre el de una clínica de
+  // llama es MedSkin sobre su propio registro, no un desconocido sobre el de una clínica de
   // estética. La regla de la respuesta idéntica protege a la paciente de un tercero, no a
   // la plataforma de sí misma.»
   //
@@ -1352,7 +1352,7 @@ export class ContractError extends Error {
     message?: string,
     /**
      * Sustituye el `campo` del catálogo. Existe por un caso concreto:
-     * `contrasena_actual_no_coincide` nació en `PATCH /v1/accounts/mine/password`, cuyo
+     * `contrasena_actual_no_coincide` empezó en `PATCH /v1/accounts/mine/password`, cuyo
      * cuerpo es `{ actual, nueva }`, y `DELETE /v1/accounts/mine` lo reusa con un cuerpo
      * cuyo campo se llama `contrasena`. El `codigo` es contrato y no se duplica por un
      * nombre de campo; lo que cambia es a qué casilla se enciende en la pantalla.
@@ -1432,8 +1432,8 @@ export const FAILURE_PHRASES = {
   sendPatientAccess:
     'No pudimos preparar el acceso. El servidor no respondió. Su ficha está intacta: puedes volver a intentarlo.',
   /**
-   * El 500 del envío, que es OTRO caso y por eso otra frase: aquí el acceso **sí** se acuñó
-   * y lo que falló fue el relé, así que la temporal anterior ya está muerta. Es la única
+   * El 500 del envío, que es OTRO caso y por eso otra frase: aquí el acceso **sí** se generó
+   * y lo que falló fue el reenvío, así que la temporal anterior ya no sirve. Es la única
    * frase del tramo que admite que algo se perdió, y lo admite porque se perdió.
    */
   sendPatientAccessMail:
@@ -1454,13 +1454,13 @@ export const FAILURE_PHRASES = {
     'No pudimos dar de alta a esa persona. El servidor no respondió: puedes volver a intentarlo.',
   /**
    * El 500 del envío del acceso del equipo, que es OTRO caso: la cuenta ya está creada y lo
-   * que falló fue el relé, así que reintentar el alta devuelve `409 correo_no_disponible` y
+   * que falló fue el reenvío, así que reintentar el alta devuelve `409 correo_no_disponible` y
    * «puedes volver a intentarlo» sería falso.
    *
    * **Ya no manda a soporte**, y es el cambio que trae
    * `POST /v1/team/{member_id}/access`: desde que ese endpoint existe hay una salida
    * dentro del producto —volver a mandarle el acceso a esa misma persona— y la frase la
-   * nombra en vez de prometer un reintento que daba 409 (`cuentas.md` · «El hueco que
+   * nombra en vez de especificar un reintento que daba 409 (`cuentas.md` · «El hueco que
    * obliga a un endpoint más»).
    */
   createTeamMemberMail:
@@ -1469,7 +1469,7 @@ export const FAILURE_PHRASES = {
    * El 500 del reenvío del acceso del equipo. **No dice «su ficha está intacta»**, al
    * contrario que el de pacientes: una recepcionista no tiene ficha, y es el mismo motivo
    * por el que el 500 del alta de equipo dejó de nombrarla. Lo que sí admite es lo que se
-   * perdió: la temporal nueva ya está acuñada y la anterior ya está muerta.
+   * perdió: la temporal nueva ya está generada y la anterior ya no sirve.
    */
   resendTeamAccess:
     'No pudimos mandarle el acceso. Su contraseña anterior ya no vale: vuelve a mandárselo.',
@@ -1612,7 +1612,7 @@ export const FAILURE_PHRASES = {
     'No pudimos crear la ficha. El servidor no respondió. Lo que llenaste está guardado en este teléfono: puedes volver a intentarlo.',
   /**
    * El 500 del envío del acceso del alta, que es OTRO caso y por eso otra frase: aquí la
-   * ficha, la cuenta y la temporal YA existen y lo que falló fue el relé, así que «puedes
+   * ficha, la cuenta y la temporal YA existen y lo que falló fue el reenvío, así que «puedes
    * volver a intentarlo» mandaría a crear una segunda ficha de la misma persona —el alta no
    * da `409` por el correo, da el aviso del duplicado— y «lo que llenaste está guardado» ya
    * no es lo que hace falta. La salida es la que existe: volver a mandarle el acceso con
@@ -1622,17 +1622,17 @@ export const FAILURE_PHRASES = {
   createPatientMail:
     'No pudimos mandarle el acceso. Su ficha ya está creada, así que no la vuelvas a dar de alta: vuelve a mandárselo desde su ficha.',
   /**
-   * Y la del aviso a quien YA TENÍA CUENTA, que es un tercer caso: no se acuñó ninguna
+   * Y la del aviso a quien YA TENÍA CUENTA, que es un tercer caso: no se generó ninguna
    * temporal, así que no hay contraseña perdida ni acceso que volver a mandar —el reenvío le
    * daría `409 ya_eligio_su_contrasena` si ya eligió la suya—. Lo que se perdió es el aviso,
    * y su camino a la app sigue intacto: la pantalla «¿Es esta tu doctora?». La frase dice las
-   * dos cosas y no promete un reintento que no existe.
+   * dos cosas y no especifica un reintento que no existe.
    */
   createPatientNotice:
     'No pudimos avisarle por correo. Su ficha ya está creada, así que no la vuelvas a dar de alta: ella ya tiene su cuenta y va a ver tu invitación cuando abra la app.',
 
   /**
-   * Las dos de `sesion.md`, y las dos prometen lo mismo: **el 500 de la sesión NO
+   * Las dos de `sesion.md`, y las dos especifican lo mismo: **el 500 de la sesión NO
    * expulsa.** «Un fallo al comprobar la sesión no es una sesión inválida»: si la app
    * mandara a la doctora al login cada vez que el servidor tose, le borraría la cola de
    * salida sin conexión (§9.3) en el peor momento posible. La app solo expulsa con un 401.
@@ -1644,9 +1644,9 @@ export const FAILURE_PHRASES = {
    * `consultas.md` · los dos de la doctora, literales de su tabla.
    *
    * La de la lectura **no es alerta**: es el estado «sin conexión» de
-   * `Plataforma.dc.html` · 4, con lo último guardado y su fecha. La del envío promete «lo
+   * `Plataforma.dc.html` · 4, con lo último guardado y su fecha. La del envío especifica «lo
    * que llenaste está guardado en este teléfono» porque `Licencia.dc.html` · 1 dibuja
-   * «Guardar y salir»: si el contrato no lo garantizara, la pantalla miente.
+   * «Guardar y salir»: si el contrato no lo garantizara, la pantalla informa en falso.
    */
   readOwnPractice:
     'No pudimos cargar tu consulta. El servidor no respondió. Te mostramos lo último guardado: puedes volver a intentarlo.',
@@ -1684,7 +1684,7 @@ export const FAILURE_PHRASES = {
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
   /**
    * Frase PROPIA y no la del reenvío, porque las dos acciones son distintas en la pantalla de
-   * soporte y «reenviar» describiría mal lo que se intentó: el reseteo pisa la contraseña que
+   * soporte y «reenviar» describiría mal lo que se intentó: el reseteo sobrescribe la contraseña que
    * la persona había elegido. Reintentar sí sirve, igual que en el reenvío.
    */
   resetPlatformAccess:

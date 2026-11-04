@@ -1,5 +1,5 @@
 // El correo. En desarrollo lo atrapa el Mailpit nativo de la máquina (SMTP 1025, panel en
-// 8025); en producción el relé que diga el despliegue.
+// 8025); en producción el reenvío que diga el despliegue.
 //
 // La regla del producto, y no es negociable: NINGÚN dato clínico sale en una notificación,
 // en el asunto de un correo, en una URL ni en un mensaje de error. El asunto es lo que se
@@ -34,7 +34,7 @@ export class SmtpMail implements MailPort {
       secure: cfg.SMTP_SECURE,
       // Los tres topes, porque hay un envío que pasa DENTRO del ciclo de la petición —el
       // acceso de una paciente por correo— y los valores por omisión de nodemailer son de
-      // un trabajador: 2 min para conectar y 10 para el socket. Un relé que acepta la
+      // un trabajador: 2 min para conectar y 10 para el socket. Un reenvío que acepta la
       // conexión y se queda callado dejaría a la doctora esperando diez minutos en vez de
       // darle el 500 con su salida. Para el trabajador de recuperación es igual de bueno:
       // falla antes y BullMQ reintenta.

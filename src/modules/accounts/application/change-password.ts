@@ -4,7 +4,7 @@
 // pide la actual porque la actual es la temporal o no existe.
 //
 // Aquí SÍ se nombra el campo que falló, al contrario que en `POST /v1/access`: quien llama
-// ya está dentro, así que no hay oráculo que cerrar. `cuentas.md`, literal.
+// ya está dentro, así que no hay filtración que cerrar. `cuentas.md`, literal.
 //
 // Y no hay interruptor de «cerrar las otras sesiones»: cambiar la contraseña revoca
 // SIEMPRE las demás y deja viva solo la que lo hizo. El interruptor existió y se quitó el

@@ -64,7 +64,7 @@ const createdAt = () => timestampTz('created_at').notNull().defaultNow();
 const updatedAt = () => timestampTz('updated_at').notNull().defaultNow();
 
 // ---------------------------------------------------------------------------------------
-// patient · la ficha. Es del INQUILINO, no de la persona (§12.2.1): dos doctoras que
+// patient · la ficha. Es del TENANT, no de la persona (§12.2.1): dos doctoras que
 // atienden a la misma paciente tienen dos fichas que no comparten nada.
 // ---------------------------------------------------------------------------------------
 
@@ -290,9 +290,9 @@ export const medicalHistory = pgTable(
 // sin excepción: «en `patient`, `medical_history`… no hay ninguna política que lo admita».
 // Esta tabla no tiene ninguna política de plataforma, igual que la tabla que audita.
 //
-// Sin claves foráneas, como las otras dos bitácoras (§12.2.8): tiene que sobrevivir al
+// Sin claves foráneas, como las otras dos auditorías (§12.2.8): tiene que sobrevivir al
 // borrado de lo que describe. Y sin `UPDATE` ni `DELETE` para nadie: lo que se puede
-// reescribir no es una bitácora.
+// reescribir no es una auditoría.
 // ---------------------------------------------------------------------------------------
 
 export const medicalHistoryAudit = pgTable(
@@ -304,7 +304,7 @@ export const medicalHistoryAudit = pgTable(
     practiceId: uuid('practice_id').notNull(),
     patientId: uuid('patient_id').notNull(),
 
-    // El nombre del campo que cambió, de lista cerrada: una bitácora con nombres de campo
+    // El nombre del campo que cambió, de lista cerrada: una auditoría con nombres de campo
     // libres no se puede consultar ni auditar.
     field: text('field').notNull(),
     // El valor ANTERIOR, con la forma que tenga ese campo: un booleano y su lista, un

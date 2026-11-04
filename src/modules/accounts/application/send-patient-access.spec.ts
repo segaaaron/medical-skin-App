@@ -1,4 +1,4 @@
-// `POST /v1/accounts/{account_id}/access` · lo que el contrato promete y es fácil romper.
+// `POST /v1/accounts/{account_id}/access` · lo que el contrato especifica y es fácil romper.
 //
 // Las dos que importan:
 //
@@ -7,7 +7,7 @@
 //   · y que la temporal en claro SOLO viaja por `whatsapp` y por `ninguna`. Por `correo` el
 //     correo lo manda MedSkin, y que la doctora la lea no aporta nada y la expone.
 //
-// Y una de orden: sin celular, el 400 llega ANTES de acuñar. Si llegara después, la doctora
+// Y una de orden: sin celular, el 400 llega ANTES de generar. Si llegara después, la doctora
 // habría matado la temporal que su paciente ya tenía para recibir un error.
 
 import { describe, expect, it } from 'vitest';
@@ -54,7 +54,7 @@ const VALERIA: PatientForDelivery = {
 
 function armar(opciones: {
   paciente?: PatientForDelivery | null;
-  veredicto?: ResendOutcome;
+  resultado?: ResendOutcome;
   demasiados?: boolean;
   correoFalla?: boolean;
   deshacerFalla?: boolean;
@@ -69,9 +69,9 @@ function armar(opciones: {
       return Promise.resolve(opciones.paciente === undefined ? VALERIA : opciones.paciente);
     },
     resend: (p) => {
-      pasos.push(`acunar:${p.via}`);
+      pasos.push(`generar:${p.via}`);
       return Promise.resolve({
-        outcome: opciones.veredicto ?? ('acceso_renovado' as const),
+        outcome: opciones.resultado ?? ('acceso_renovado' as const),
         expiresAt: p.expiresAt,
       });
     },
@@ -109,7 +109,7 @@ function armar(opciones: {
     sendAccess: (facts) => {
       pasos.push('correo:mandar');
       if (opciones.correoFalla === true) {
-        // El rechazo de un relé de VERDAD lleva la dirección dentro: «550 5.1.1
+        // El rechazo de un reenvío de VERDAD lleva la dirección dentro: «550 5.1.1
         // <carla@…> User unknown». Un doble que rechaza con `ECONNREFUSED` deja pasar una
         // aserción que dice «la causa no lleva el correo» sin comprobar nada.
         return Promise.reject(new Error(`550 5.1.1 <${VALERIA.email}> User unknown`));
@@ -154,7 +154,7 @@ describe('POST /v1/accounts/{account_id}/access · quién puede', () => {
 
     expect(error.code).toBe('paciente_no_existe');
     expect(error.status).toBe(404);
-    // Y no se acuña nada sobre una cuenta que no es de esta consulta.
+    // Y no se genera nada sobre una cuenta que no es de esta consulta.
     expect(pasos).toEqual(['ficha:leer']);
   });
 });
@@ -215,7 +215,7 @@ describe('POST /v1/accounts/{account_id}/access · la temporal en claro', () => 
 
 describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
   it('ya eligió su contraseña: 409 con su nombre, y la doctora no la resetea', async () => {
-    const { caso } = armar({ veredicto: 'ya_eligio_su_contrasena' });
+    const { caso } = armar({ resultado: 'ya_eligio_su_contrasena' });
     const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
 
     expect(error.code).toBe('ya_eligio_su_contrasena');
@@ -224,16 +224,16 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
     expect(error.userMessage).toContain('Olvidé mi contraseña');
   });
 
-  it('sin celular y con `via: whatsapp`, el 400 llega ANTES de acuñar', async () => {
+  it('sin celular y con `via: whatsapp`, el 400 llega ANTES de generar', async () => {
     const { caso, pasos } = armar({ paciente: { ...VALERIA, phone: null } });
     const error = await errorDe(() => caso.run({ via: 'whatsapp' }, CUENTA_PACIENTE, DOCTORA));
 
     expect(error.code).toBe('celular_necesario_para_whatsapp');
-    // Lo que importa: la temporal que ya tenía sigue viva, porque no se acuñó otra.
-    expect(pasos).not.toContain('acunar:whatsapp');
+    // Lo que importa: la temporal que ya tenía sigue viva, porque no se generó otra.
+    expect(pasos).not.toContain('generar:whatsapp');
   });
 
-  it('una `via` que no es ninguna de las tres no acuña nada', async () => {
+  it('una `via` que no es ninguna de las tres no genera nada', async () => {
     const { caso, pasos } = armar({});
     expect((await errorDe(() => caso.run({ via: 'sms' }, CUENTA_PACIENTE, DOCTORA))).code).toBe(
       'via_no_valida',
@@ -241,7 +241,7 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
     expect(pasos).toEqual([]);
   });
 
-  it('si el correo no sale, es 500 con la frase del contrato y no un 200 que miente', async () => {
+  it('si el correo no sale, es 500 con la frase del contrato y no un 200 que informa en falso', async () => {
     const { caso, pasos } = armar({ correoFalla: true });
     const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
 
@@ -253,7 +253,7 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
     );
     // Y la marca de envío se deshace ANTES de contestar: `access_sent_at` solo puede
     // afirmar un envío que ocurrió.
-    expect(pasos).toEqual(['ficha:leer', 'contador:reenvio', 'acunar:correo', 'correo:mandar', 'marca:deshacer']);
+    expect(pasos).toEqual(['ficha:leer', 'contador:reenvio', 'generar:correo', 'correo:mandar', 'marca:deshacer']);
 
     // LA CADENA DE CAUSAS, RECORRIDA DE VERDAD. `String(error.cause)` solo renderiza el
     // mensaje del PRIMER eslabón: no mira el `cause` encadenado, así que la aserción
@@ -266,8 +266,8 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
     expect(cadena[0]).not.toContain('@');
     expect(cadena[0]).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
 
-    // Y el rechazo del relé se CONSERVA encadenado, con su texto tal cual: es la causa real
-    // y sin ella nadie arregla el relé (§10.3). Que ahí viaje una dirección es un hecho del
+    // Y el rechazo del reenvío se CONSERVA encadenado, con su texto tal cual: es la causa real
+    // y sin ella nadie arregla el reenvío (§10.3). Que ahí viaje una dirección es un hecho del
     // mensaje del motor, y lo que lo tapa es `service_failure`, que enmascara el correo al
     // escribir la fila —en las dos rutas, con y sin sesión—.
     expect(cadena.at(-1)).toContain('550 5.1.1');
@@ -308,13 +308,13 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
     expect(pasos).not.toContain('marca:deshacer');
   });
 
-  it('el cuarto reenvío de la hora es 429 y tampoco acuña', async () => {
+  it('el cuarto reenvío de la hora es 429 y tampoco genera', async () => {
     const { caso, pasos } = armar({ demasiados: true });
     const error = await errorDe(() => caso.run({ via: 'correo' }, CUENTA_PACIENTE, DOCTORA));
 
     expect(error.code).toBe('demasiados_reenvios');
     expect(error.status).toBe(429);
-    expect(pasos).not.toContain('acunar:correo');
+    expect(pasos).not.toContain('generar:correo');
   });
 });
 
@@ -323,8 +323,8 @@ describe('POST /v1/accounts/{account_id}/access · lo que no se hace', () => {
 // =========================================================================================
 describe('POST /v1/accounts/{account_id}/access · el invariante de la entrega', () => {
   it('para CADA vía: o se entregó un mensaje, o la contraseña viaja. Nunca ninguna', async () => {
-    // Acuñar mata la temporal anterior y devuelve `temp_first_used_at` a nulo, y
-    // `medskin_recovery_mint` solo acuña si está estrenada: una vía que no entregue
+    // Generar invalida la temporal anterior y devuelve `temp_first_used_at` a nulo, y
+    // `medskin_recovery_mint` solo genera si está usada: una vía que no entregue
     // mensaje y no devuelva la contraseña deja fuera para siempre a una paciente que ya
     // entraba, sin aviso y sin salida. Si alguien vuelve a quitar el envío, falla aquí.
     const resultados: Record<string, boolean> = {};
@@ -339,7 +339,7 @@ describe('POST /v1/accounts/{account_id}/access · el invariante de la entrega',
     }
 
     // `ninguna` cumple con la contraseña en la respuesta: la doctora eligió dársela en
-    // persona, y eso es una entrega aunque no pase por ningún relé.
+    // persona, y eso es una entrega aunque no pase por ningún reenvío.
     expect(resultados).toEqual({ correo: true, whatsapp: true, ninguna: true });
   });
 

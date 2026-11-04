@@ -4,7 +4,7 @@
 //
 // Van por `cuenta_id` —o por consulta el de las altas— y no por correo, al contrario que
 // los del acceso y de la recuperación: aquí quien llama ya está dentro, así que hay una fila
-// segura que contar y no hay ningún correo desconocido al que mentirle.
+// segura que contar y no hay ningún correo desconocido al que informar en falso.
 //
 // Un fallo de Redis NO abre la puerta: lanza, y el endpoint responde 500.
 
@@ -64,7 +64,7 @@ export class ResendLimit implements ResendLimitPort {
       return { tooMany: hits.hits > RESENDS_PER_HOUR };
     } catch (cause) {
       // Un fallo de Redis no abre la puerta: aquí lo que se protege es que una doctora no
-      // acuñe temporales en bucle sobre la cuenta de su paciente.
+      // genere temporales en bucle sobre la cuenta de su paciente.
       throw new ServiceFailure(FAILURE_PHRASES.sendPatientAccess, cause);
     }
   }

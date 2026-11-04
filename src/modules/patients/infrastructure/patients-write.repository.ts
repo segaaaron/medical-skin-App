@@ -71,7 +71,7 @@ export class PatientsWriteRepository implements PatientWritePort {
                                    subject_id, data)
          values (medskin_current_practice(), $1, 'paciente.ficha_editada', 'patient', $2, $3)`,
         // Qué campos cambiaron, NUNCA sus valores: `access_audit` lo lee la consulta entera y
-        // un correo o un celular ahí convertiría la bitácora en un padrón de contacto.
+        // un correo o un celular ahí convertiría la auditoría en un registro de contacto.
         [caller.accountId, patientId, JSON.stringify({ campos: fields })],
       );
 

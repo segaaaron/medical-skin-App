@@ -62,5 +62,5 @@ export class AccountsController {
 // Un identificador que no es un uuid no tiene fila en ninguna consulta, así que responde lo
 // mismo que uno inventado y no se consulta nada. Y hace falta comprobarlo antes: con un
 // `miembro_id` así, la base muere con «invalid input syntax for type uuid» y eso sería un
-// 500 donde el contrato promete un 404. Lo comparte `team.controller.ts`.
+// 500 donde el contrato especifica un 404. Lo comparte `team.controller.ts`.
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

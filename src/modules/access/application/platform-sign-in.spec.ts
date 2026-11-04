@@ -6,11 +6,11 @@
 // Importa más aquí que en la app, no menos: esta es la única ruta de `/v1/platform/…`
 // alcanzable sin token, así que es la única que un desconocido puede golpear desde internet.
 // Un 401 que distinguiera los dos casos serviría la lista de los correos del equipo de
-// MedSkin a quien pregunte. Es un padrón.
+// MedSkin a quien pregunte. Es un registro.
 //
 // Y con ella, el ORDEN, que es lo que hace esa frase verdad: pausa → Argon2id SIEMPRE →
 // 401 → y solo después `status`. Si el `403 cuenta_suspendida` saliera antes de verificar la
-// contraseña, la suspensión sería el oráculo que el 401 cierra.
+// contraseña, la suspensión sería la filtración que el 401 cierra.
 //
 // Sin NestJS y sin base: el caso de uso recibe sus puertos.
 
@@ -26,13 +26,13 @@ import { PlatformSignIn } from './platform-sign-in';
 const AHORA = new Date('2026-10-30T18:14:00.000Z');
 const CUENTA = '55555555-5555-4555-8555-555555555555';
 
-/** El señuelo: sin fila, y un hash que hay que verificar igual. */
-const SENUELO: PlatformCredential = {
+/** El decoy: sin fila, y un hash que hay que verificar igual. */
+const DECOY: PlatformCredential = {
   platformAccountId: null,
   label: null,
   permissions: null,
   status: null,
-  hash: '$argon2id$senuelo',
+  hash: '$argon2id$decoy',
   lockedUntil: null,
   attemptsLeft: 5,
 };
@@ -133,7 +133,7 @@ async function fallo(caso: PlatformSignIn, body: unknown = { correo: 'a@b.com', 
 
 describe('POST /v1/platform/access · el 401 no dice si el correo existe', () => {
   it('correo inexistente y contraseña mal dan EXACTAMENTE la misma respuesta', async () => {
-    const inexistente = montar(SENUELO, { coincide: false });
+    const inexistente = montar(DECOY, { coincide: false });
     const malaClave = montar(SOPORTE, { coincide: false });
 
     const a = await fallo(inexistente.caso);
@@ -146,7 +146,7 @@ describe('POST /v1/platform/access · el 401 no dice si el correo existe', () =>
   });
 
   it('y los dos caminos ejecutan Argon2id, que es lo que iguala el tiempo', async () => {
-    const inexistente = montar(SENUELO, { coincide: false });
+    const inexistente = montar(DECOY, { coincide: false });
     await fallo(inexistente.caso);
     expect(inexistente.pasos).toContain('argon2id');
 
@@ -157,7 +157,7 @@ describe('POST /v1/platform/access · el 401 no dice si el correo existe', () =>
 
   it('el orden es pausa → Argon2id → 401, y el `status` NO se mira', async () => {
     // Una cuenta suspendida con la contraseña mal responde 401, no 403: si respondiera 403
-    // la suspensión sería el oráculo que el 401 cierra.
+    // la suspensión sería la filtración que el 401 cierra.
     const { caso, pasos } = montar(SUSPENDIDA, { coincide: false });
     const error = await fallo(caso);
 
@@ -167,7 +167,7 @@ describe('POST /v1/platform/access · el 401 no dice si el correo existe', () =>
   });
 
   it('la pausa se devuelve ANTES de verificar nada', async () => {
-    const { caso, pasos } = montar(SENUELO, { enPausa: true });
+    const { caso, pasos } = montar(DECOY, { enPausa: true });
     const error = await fallo(caso);
 
     expect(error.code).toBe('acceso_en_pausa');

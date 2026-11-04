@@ -7,7 +7,7 @@
 // `withTenantContext()`. En ningún momento se desactiva RLS.
 //
 // Lo que NO se repite aquí porque ya está probado en otro archivo: que la fila de `license`
-// nace con la consulta (0015) y que `app_platform` no lee `patient` ni `session.practice_id`.
+// se crea con la consulta (0015) y que `app_platform` no lee `patient` ni `session.practice_id`.
 // Lo que sí se comprueba es que ESTE código no los nombra: las dos consultas que los
 // necesitan van por la función.
 //
@@ -120,7 +120,7 @@ async function clean() {
   //
   // `Consultorio Con Matrícula` entra en la lista el 31 de octubre de 2026, y faltaba desde
   // que se escribió esa prueba: la creaba y NADIE la borraba, así que cada corrida de la suite
-  // dejaba una fila viva. Se vio al querer el padrón local vacío para probar la consola — 22
+  // dejaba una fila viva. Se vio al querer el registro local vacío para probar la consola — 22
   // consultas de ese nombre, una por corrida. Si se añade otra prueba que cree una consulta,
   // su nombre va aquí en el mismo commit.
   const { rows } = await owner.query<{ id: string }>(
@@ -269,7 +269,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
     expect(admission.served?.status).toBe(201);
 
     // La fila de `license` la creó la FUNCIÓN (0015): aquí nadie la insertó, y antes de esa
-    // migración la dueña se quedaba sin poder declarar nada y nadie se enteraba. Nace VACÍA:
+    // migración la dueña se quedaba sin poder declarar nada y nadie se enteraba. Empieza VACÍA:
     // este alta no mandó bloque de licencia, así que no hay matrícula ni fecha.
     const license = await read<{ license_number: string | null; declared_at: Date | null }>(
       ctxPlatform,
@@ -450,7 +450,7 @@ describe('POST /v1/platform/tenants · contra la función del alta', () => {
 /**
  * La respuesta tal y como la ve un cliente: `jsonb` reordena las claves y convierte las
  * fechas en cadenas, así que lo que se compara entre la original y la repetida es el
- * significado, que es lo que el contrato puede prometer.
+ * significado, que es lo que el contrato puede especificar.
  */
 function comoJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
@@ -499,7 +499,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
     // controlador con `served.replayed`, que es donde vive esa decisión.
     expect(repetidas[0]?.served?.status).toBe(201);
     // Comparadas COMO JSON, y no con `toEqual` a secas: es exactamente lo que «byte a byte»
-    // no podía prometer. La repetida vuelve de una columna `jsonb`, así que su `createdAt` es
+    // no podía especificar. La repetida vuelve de una columna `jsonb`, así que su `createdAt` es
     // la cadena ISO y no un `Date`. Idéntica en significado, que es lo que un cliente JSON
     // necesita y lo único que se puede comprobar.
     expect(comoJson(una.served?.response)).toEqual(comoJson(otra.served?.response));
@@ -521,7 +521,7 @@ describe('dos peticiones idénticas a la vez, con la misma clave', () => {
   // AQUÍ ESTABA «la decisión de licencia no da `already_decided` a la perdedora», que probaba
   // que `claim()` va DELANTE del `FOR UPDATE`: el `FOR UPDATE` serializa la licencia, no la
   // clave, así que sin la reserva por delante la segunda decisión simultánea recibía el `409`
-  // que el contrato prometía que no iba a ver. Comprobaba también los dos avisos a la dueña,
+  // que el contrato especificaba que no iba a ver. Comprobaba también los dos avisos a la dueña,
   // uno por canal, y que el aviso no llevara el motivo del rechazo.
   //
   // Se fue con la decisión. **Lo que probaba sigue probado** por la carrera del alta de
@@ -620,7 +620,7 @@ describe('GET /v1/platform/tenants/{id} · la ficha de la consola', () => {
     await expect(read(ctxPlatform, 'select practice_id from session limit 1')).rejects.toThrow(
       /permission denied for table session/i,
     );
-    // Y la credencial de la dueña no se toca: soporte no ve contraseñas, lo promete la pantalla.
+    // Y la credencial de la dueña no se toca: soporte no ve contraseñas, lo especifica la pantalla.
     await expect(read(ctxPlatform, 'select id from credential limit 1')).rejects.toThrow(
       /permission denied for table credential/i,
     );
@@ -815,14 +815,14 @@ describe('suspender, reactivar y borrar una consulta', () => {
   });
 
   /**
-   * LO QUE FALLÓ EN PRODUCCIÓN el 3 de noviembre: la consulta se borraba, el padrón decía
+   * LO QUE FALLÓ EN PRODUCCIÓN el 3 de noviembre: la consulta se borraba, el registro decía
    * «Doctores 0», y dar de alta el mismo correo seguía contestando «Ese correo ya tiene una
    * cuenta en MedSkin». `account` no cuelga de `practice` y el `CASCADE` no podía tocarla.
    *
-   * Esta prueba vigila la promesa que el dueño pidió en una frase: «si más adelante lo
+   * Esta prueba vigila la especificación que el dueño pidió en una frase: «si más adelante lo
    * tenemos que agregar, lo agregamos con el correo que se eliminó».
    */
-  it('borrar la consulta libera el correo de la dueña, y la bitácora sobrevive', async () => {
+  it('borrar la consulta libera el correo de la dueña, y la auditoría sobrevive', async () => {
     const { rows: antes } = await owner.query<{ email: string }>(
       `select email from account where id = $1`,
       [FILE.account],
@@ -839,7 +839,7 @@ describe('suspender, reactivar y borrar una consulta', () => {
     expect(borrada?.accountsReleased).toBe(1);
 
     // La fila SIGUE existiendo, y tiene que seguir: `access_audit` y `patient_link` la
-    // nombran, y una bitácora que apunta a la nada no sirve el día que alguien pregunte.
+    // nombran, y una auditoría que apunta a la nada no sirve el día que alguien pregunte.
     const { rows: despues } = await owner.query<{
       email: string;
       status: string;

@@ -88,7 +88,7 @@ beforeAll(async () => {
   );
   await owner.query('update practice set owner_account_id = $1 where id = $2', [B.account, B.practice]);
   // La licencia de B la pone la siembra, no la 0015: el relleno de la migración cubrió las
-  // consultas que ya existían y el `INSERT` de la función del alta cubre las que nacen por
+  // consultas que ya existían y el `INSERT` de la función del alta cubre las que empiezan por
   // el endpoint. Una consulta insertada a mano por el dueño del esquema —esto— no pasa por
   // ninguno de los dos, y es la diferencia que la primera prueba de este archivo mide.
   await owner.query(
@@ -123,7 +123,7 @@ afterAll(async () => {
   await app.end();
 });
 
-describe('el alta de una consulta · su licencia nace con ella (0015)', () => {
+describe('el alta de una consulta · su licencia se crea con ella (0015)', () => {
   it('la consola crea consulta, dueña y licencia VACÍA, y la doctora la declara sin que nadie inserte la fila', async () => {
     // Paso 1 y 2 de `POST /v1/platform/tenants`, tal cual los va a escribir el
     // endpoint: el `INSERT` de la consulta y la función del alta de la dueña.
@@ -240,7 +240,7 @@ describe('el plan del recuento del plan de `GET /v1/tenants/mine`', () => {
       );
     await fichas(SMALL.practice, 400);
     await fichas(BULK.practice, 4_000);
-    // Sin esto se mediría el plan de una tabla que acaba de nacer: las entradas del GIN
+    // Sin esto se mediría el plan de una tabla que acaba de empezar: las entradas del GIN
     // recién cargado están en la lista pendiente y su coste empuja al recorrido completo.
     await owner.query('vacuum analyze patient');
   }, 120_000);

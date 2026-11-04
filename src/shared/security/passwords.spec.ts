@@ -4,7 +4,7 @@
 // contraseña mal, y si no lo fuera, el 500 diría qué cuenta tiene la credencial rota— y a
 // la vez el caso tiene que ser VISIBLE: con `false` y silencio, una credencial con el hash
 // roto da `acceso_no_coincide` para siempre y nadie se entera. La persona no puede entrar y
-// tampoco recuperar si su temporal nunca se estrenó.
+// tampoco recuperar si su temporal nunca se usó por primera vez.
 //
 // Lo que se comprueba del aviso es su CONTENIDO: que nombra la cuenta y que no lleva el
 // hash. Que se llamara a algo no probaría nada.
@@ -77,7 +77,7 @@ describe('Argon2Passwords · un hash que no se puede leer', () => {
     expect(escrito).not.toContain('la-que-sea');
   });
 
-  it('sin cuenta que nombrar no se registra nada: ese hash es el del señuelo', async () => {
+  it('sin cuenta que nombrar no se registra nada: ese hash es el del decoy', async () => {
     const { passwords, avisos } = conRegistro();
 
     expect(await passwords.verify(HASH_ROTO, 'la-que-sea')).toBe(false);

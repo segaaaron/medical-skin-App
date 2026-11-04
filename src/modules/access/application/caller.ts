@@ -21,7 +21,7 @@ export type Caller = {
  * `Caller`: acertar un código de seis dígitos autoriza una pantalla, no una sesión.
  *
  * No hay `role`, no hay `practiceId` y no hay `sessionId` porque el token no los lleva
- * (`RecoveryClaims`): el rol sería el oráculo que `recuperacion.md` cierra, y la sesión
+ * (`RecoveryClaims`): el rol sería la filtración que `recuperacion.md` cierra, y la sesión
  * todavía no existe. Los tres se conocen al guardar la contraseña, y los devuelve la base
  * en esa misma transacción.
  */

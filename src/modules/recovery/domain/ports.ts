@@ -18,7 +18,7 @@ export type LiveCode = {
    * algo que firmar, y nada más.
    */
   accountId: string | null;
-  /** El hash real o el del señuelo. Nunca nulo: sin él no hay «mismo tiempo». */
+  /** El hash real o el del decoy. Nunca nulo: sin él no hay «mismo tiempo». */
   codeHash: string;
   expiresAt: Date;
   attemptsLeft: number;
@@ -28,17 +28,17 @@ export type LiveCode = {
 
 export interface RecoveryCodePort {
   /**
-   * `medskin_recovery_mint()`. Devuelve si había cuenta activa y ESTRENADA que acuñar.
+   * `medskin_recovery_mint()`. Devuelve si había cuenta activa y USADA que generar.
    * Ese booleano no sale del servidor: decide si hay correo que escribir.
    */
   mint(p: { email: string; codeHash: string; expiresAt: Date }): Promise<boolean>;
 
-  /** `medskin_recovery_live()`: el código vigente, o el señuelo. Nunca gasta un intento. */
+  /** `medskin_recovery_live()`: el código vigente, o el decoy. Nunca gasta un intento. */
   live(email: string): Promise<LiveCode>;
 
   /**
    * `medskin_recovery_miss()`: gasta un intento y anula el código al quinto. Solo se llama
-   * cuando el código SE COMPARÓ DE VERDAD: el 500 de este endpoint promete que «el código
+   * cuando el código SE COMPARÓ DE VERDAD: el 500 de este endpoint especifica que «el código
    * sigue valiendo», y un intento que se gasta por un fallo del servidor lo desmentiría.
    */
   miss(email: string): Promise<void>;
@@ -79,7 +79,7 @@ export interface RecoveryLimitsPort {
 
 // ---------------------------------------------------------------------------------------
 // La cola. Lo que se encola es A QUIÉN escribirle, nunca QUÉ escribirle: el código en
-// claro no viaja en el trabajo (`recuperacion.md`). Lo acuña el trabajador.
+// claro no viaja en el trabajo (`recuperacion.md`). Lo genera el trabajador.
 // ---------------------------------------------------------------------------------------
 
 export type RecoveryMailJob = {

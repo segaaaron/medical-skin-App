@@ -4,13 +4,13 @@
 //
 //   1. forma del cuerpo: los seis dígitos y la forma del correo
 //   2. el límite por IP
-//   3. el código vigente —el real o el señuelo— y el veredicto
-//   4. el verificado de Argon2id SIEMPRE, contra el hash real o contra el del señuelo
+//   3. el código vigente —el real o el decoy— y el resultado
+//   4. el verificado de Argon2id SIEMPRE, contra el hash real o contra el del decoy
 //   5. si no coincide → se gasta el intento y 401 `codigo_no_coincide`
 //   6. solo si coincide → el token de alcance `recuperacion`
 //
 // El intento se gasta en el paso 5 y en ningún otro, porque el 500 de este endpoint
-// promete que «el código sigue valiendo: puedes volver a intentarlo». Solo cuentan los
+// especifica que «el código sigue valiendo: puedes volver a intentarlo». Solo cuentan los
 // códigos que de verdad se compararon.
 
 import { z } from 'zod';
@@ -34,7 +34,7 @@ export type CheckCodeResponse = {
   alcance: 'recuperacion';
 };
 
-/** Lo mínimo del firmador: acuñar el token de recuperación, que no lleva rol ni sesión. */
+/** Lo mínimo del firmador: generar el token de recuperación, que no lleva rol ni sesión. */
 export interface RecoveryTokenPort {
   signRecovery(claims: {
     sub: string;
@@ -43,7 +43,7 @@ export interface RecoveryTokenPort {
   }): Promise<{ token: string; expiresAt: Date }>;
 }
 
-/** Lo mínimo del comparador: el mismo coste para el hash real y para el del señuelo. */
+/** Lo mínimo del comparador: el mismo coste para el hash real y para el del decoy. */
 export interface CodeHasher {
   verify(hash: string, code: string): Promise<boolean>;
 }
@@ -68,8 +68,8 @@ export class CheckRecoveryCode {
     const room = await this.limits.countAttemptByIp(ip);
     if (room.tooMany) throw new ContractError('demasiados_intentos');
 
-    // --- 3 · el código vigente y el veredicto. Para un correo sin cuenta la base no tiene
-    // fila que caducar ni anular, así que el veredicto se reconstruye con los contadores
+    // --- 3 · el código vigente y el resultado. Para un correo sin cuenta la base no tiene
+    // fila que caducar ni anular, así que el resultado se reconstruye con los contadores
     // —ver `verdictForUnknownAccount()`—: si no, el código de estado diría si el correo
     // existe.
     const live = await this.codes.live(email);
@@ -80,7 +80,7 @@ export class CheckRecoveryCode {
     if (verdict === 'expired') throw new ContractError('codigo_caducado');
     if (verdict === 'voided') throw this.voidedError(live.voidedReason, history.attemptsSpent);
 
-    // --- 4 · el verificado, siempre. El hash es el real o el del señuelo.
+    // --- 4 · el verificado, siempre. El hash es el real o el del decoy.
     const matched = await this.hasher.verify(live.codeHash, code);
 
     // --- 5 · si no coincide, aquí termina. El intento se gasta en los dos sitios que
@@ -94,7 +94,7 @@ export class CheckRecoveryCode {
     }
 
     // --- 6 · solo si coincide. El token NO lleva rol: «el código va antes de saber el
-    // rol», y una reclamación `rol` aquí sería un oráculo mejor que el del acceso, porque
+    // rol», y una reclamación `rol` aquí sería una filtración mejor que el del acceso, porque
     // diría QUÉ es la persona y no solo que existe.
     await this.limits.clearAttempts(email);
     const { token, expiresAt } = await this.tokens.signRecovery({

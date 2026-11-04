@@ -343,7 +343,7 @@ describe('el semáforo y «algo no va bien»', () => {
     // Una app no es un servicio de urgencias: la salida al teléfono es obligatoria.
     expect(reported.si_es_urgente).toContain('+591 3 342 1180');
 
-    // Y nace con el `practice_id` de la SESIÓN, no del cuerpo.
+    // Y se crea con el `practice_id` de la SESIÓN, no del cuerpo.
     const { rows } = await owner.query<{ practice_id: string; adverse_event_id: string | null }>(
       `select practice_id, adverse_event_id from incident where session_id = $1`,
       [session],
@@ -432,7 +432,7 @@ describe('el hilo, los dispositivos y los avisos', () => {
     });
   });
 
-  it('las preferencias nacen encendidas y se guardan campo por campo', async () => {
+  it('las preferencias empiezan encendidas y se guardan campo por campo', async () => {
     const first = (await aftercare.preferences(ana)) as Record<string, unknown>;
     expect(first).toMatchObject({
       recordatorios_de_cita: true,
@@ -559,11 +559,11 @@ describe('lo que el 29 de octubre de 2026 dejó de perderse', () => {
     );
     expect(rows[0]?.n).toBe('0');
 
-    // Y escribir sí lo crea: el hilo nace cuando alguna de las dos tiene algo que decir.
+    // Y escribir sí lo crea: el hilo empieza cuando alguna de las dos tiene algo que decir.
     await aftercare.send(
       { patient_id: patient, texto: 'Te escribo por tu control.' },
       doctor(A.practice, A.doctor),
-      key('msg-nace'),
+      key('msg-empieza'),
     );
     const { rows: after } = await owner.query<{ n: string }>(
       `select count(*)::text as n from message_thread where patient_id = $1`,

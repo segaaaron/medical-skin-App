@@ -73,7 +73,7 @@ export function whatsappText(facts: DeliveryFacts): string {
 }
 
 /**
- * El texto de quien YA TIENE CUENTA. Sin contraseña, porque no se le acuña ninguna: «ya
+ * El texto de quien YA TIENE CUENTA. Sin contraseña, porque no se le genera ninguna: «ya
  * tiene la suya», y lo que verá es la pantalla «¿Es esta tu doctora?».
  */
 export function whatsappTextForExistingAccount(facts: {
@@ -103,7 +103,7 @@ export function accessMailBody(facts: DeliveryFacts): string {
 
 /**
  * Lo que necesita el AVISO de quien ya tiene cuenta: a quién se le escribe y quién la dio de
- * alta. Sin contraseña, porque no se le acuña ninguna, y sin un dato clínico.
+ * alta. Sin contraseña, porque no se le genera ninguna, y sin un dato clínico.
  */
 export type LinkNoticeFacts = {
   patientEmail: string;

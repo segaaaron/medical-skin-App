@@ -87,7 +87,7 @@ export class Business {
       moneda: currency,
       periodo: { desde: text(query.desde), hasta: text(query.hasta) },
       filas: rows.map((row) => marginView(row, currency)),
-      // EXISTE PARA NO MENTIR: las sesiones de un lote sin costo registrado NO entran en el
+      // EXISTE PARA NO INFORMAR EN FALSO: las sesiones de un lote sin costo registrado NO entran en el
       // margen y se cuentan aparte. «Asumir costo cero daría un margen del 100 % y una decisión
       // de negocio tomada sobre un número inventado.»
       sin_costo_conocido:

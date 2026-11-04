@@ -5,12 +5,12 @@
 //      tramo que escribe en tres tablas de consulta a la vez (`patient`, `patient_link`,
 //      `medical_history`), y lo que las acota son sus políticas, no un `where` del código.
 //   2. **La función del alta no recibe `account_id`**: si el correo ya tiene cuenta la REUSA
-//      y no acuña nada, así que `credential` se queda intacta —incluido
+//      y no genera nada, así que `credential` se queda intacta —incluido
 //      `temp_first_used_at`, que es un hecho del pasado y no se des-ocurre (0017)—.
 //   3. **Cada campo de los antecedentes guarda quién lo escribió**, y lo que nadie contestó
 //      se queda en nulo y sin fuente: `null` no es `false`.
-//   4. **`access_sent_at` solo afirma un envío que ocurrió**: nace puesto cuando la vía es
-//      el correo y vuelve a nulo si el relé falla.
+//   4. **`access_sent_at` solo afirma un envío que ocurrió**: empieza puesto cuando la vía es
+//      el correo y vuelve a nulo si el reenvío falla.
 //
 // Siembra el dueño del esquema, que es quien migra; todo lo que se comprueba del endpoint
 // pasa por `withTenantContext()` con el rol y la consulta de verdad. En ningún momento se
@@ -115,7 +115,7 @@ function caso(mail: Correo = CORREO_QUE_SALE): RegisterPatient {
 /**
  * Una clave por llamada, distinta: la misma dos veces es una repetición a propósito, y eso
  * tiene su propio caso al final. `fingerprintOf` es la huella de verdad del cuerpo, para que
- * la misma clave con otro cuerpo dé el `409` que el contrato promete.
+ * la misma clave con otro cuerpo dé el `409` que el contrato especifica.
  */
 let clavesDadas = 0;
 function clave(body: unknown): IdempotencyRecord {
@@ -143,8 +143,8 @@ const CUERPO = {
 
 /**
  * El cupo del plan de ESTA consulta. Sustituye a `licencia(status)`, que movía el estado de la
- * revisión manual para probar los veredictos que no crean nada: ese bloqueo se fue el 30 de
- * octubre de 2026 —MedSkin no verifica licencias— y el cupo es el veredicto que queda.
+ * revisión manual para probar los resultados que no crean nada: ese bloqueo se fue el 30 de
+ * octubre de 2026 —MedSkin no verifica licencias— y el cupo es el resultado que queda.
  */
 async function cupo(limite: number): Promise<void> {
   await owner.query('update practice set patient_limit = $2 where id = $1', [CONSULTA, limite]);
@@ -297,7 +297,7 @@ describe('el alta escribe las tres filas de la consulta, y nada más', () => {
     // Por WhatsApp manda la doctora con el dedo: MedSkin no afirma ningún envío.
     expect(vinculos[0]?.access_sent_at).toBeNull();
 
-    // La cuenta nació con su temporal, hasheada con Argon2id y sin estrenar.
+    // La cuenta empezó con su temporal, hasheada con Argon2id y sin usar.
     const { rows: credenciales } = await owner.query<{
       hash: string;
       is_temporary: boolean;
@@ -354,7 +354,7 @@ describe('el alta escribe las tres filas de la consulta, y nada más', () => {
       notes: 'Pide empezar por la zona periocular.',
       notes_source: 'doctor',
       // Lo que nadie contestó: nulo y SIN autor, que es «nadie preguntó todavía» y no «no
-      // tiene». Es lo que deja a la paciente escribirlo desde su app sin pisar nada.
+      // tiene». Es lo que deja a la paciente escribirlo desde su app sin sobrescribir nada.
       pregnancy_or_lactation: null,
       pregnancy_or_lactation_source: null,
       past_conditions: [],
@@ -391,7 +391,7 @@ describe('el alta escribe las tres filas de la consulta, y nada más', () => {
     expect(fila).not.toContain('lidocaína');
   });
 
-  it('por correo nace la marca de envío puesta, y el relé caído la deja en nulo otra vez', async () => {
+  it('por correo empieza la marca de envío puesta, y el reenvío caído la deja en nulo otra vez', async () => {
     const salio = await caso().run({ ...CUERPO, enviar_acceso_por: 'correo' }, DOCTORA, clave({ ...CUERPO, enviar_acceso_por: 'correo' }));
     const { rows: conEnvio } = await owner.query<{ access_sent_at: Date | null }>(
       'select access_sent_at from patient_link where patient_id = $1',
@@ -421,7 +421,7 @@ describe('lo que la base decide, y el otra consulta', () => {
   it('con el cupo del plan agotado no se crea ni la ficha ni la cuenta', async () => {
     // ERA «con la licencia sin verificar», el `409 licencia_sin_verificar`: se fue el 30 de
     // octubre de 2026 con la revisión manual. Lo que esta prueba vigila de verdad sigue vivo
-    // —que un veredicto que no crea no deje una cuenta suelta— y el cupo es el veredicto que
+    // —que un resultado que no crea no deje una cuenta suelta— y el cupo es el resultado que
     // queda para comprobarlo.
     await cupo(0);
     const fallo = await caso().run(CUERPO, DOCTORA, clave(CUERPO)).catch((e: unknown) => e);
@@ -460,7 +460,7 @@ describe('lo que la base decide, y el otra consulta', () => {
     ]);
   });
 
-  it('EL OTRO INQUILINO NO VE NADA: ni la ficha, ni el vínculo, ni los antecedentes', async () => {
+  it('EL OTRO TENANT NO VE NADA: ni la ficha, ni el vínculo, ni los antecedentes', async () => {
     const creada = await caso().run(CUERPO, DOCTORA, clave(CUERPO));
 
     const visto = await withTenantContext(
@@ -483,19 +483,19 @@ describe('lo que la base decide, y el otra consulta', () => {
           'select id from medical_history where patient_id = $1',
           [creada.paciente_id],
         );
-        const bitacora = await c.query('select id from access_audit where subject_id = $1', [
+        const auditoria = await c.query('select id from access_audit where subject_id = $1', [
           creada.cuenta_id,
         ]);
         return {
           fichas: ficha.rowCount,
           vinculos: vinculo.rowCount,
           historias: historia.rowCount,
-          bitacora: bitacora.rowCount,
+          auditoria: auditoria.rowCount,
         };
       },
     );
 
-    expect(visto).toEqual({ fichas: 0, vinculos: 0, historias: 0, bitacora: 0 });
+    expect(visto).toEqual({ fichas: 0, vinculos: 0, historias: 0, auditoria: 0 });
   });
 
   it('la cuenta de una practicante no se reusa, y el 409 no dice por qué (0021)', async () => {
@@ -639,7 +639,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
       caso().run(cuerpo, DOCTORA, misma),
     ]);
 
-    // Una gana y la otra se entera ANTES de crear: su 500 no promete un alta nueva.
+    // Una gana y la otra se entera ANTES de crear: su 500 no especifica un alta nueva.
     const cumplidas = [una, otra].filter((r) => r.status === 'fulfilled');
     const rechazadas = [una, otra].filter((r) => r.status === 'rejected');
     expect(cumplidas).toHaveLength(1);
@@ -692,8 +692,8 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
     expect(primera.paciente_id).toBeTruthy();
   });
 
-  it('un veredicto que no crea SUELTA la clave, y el reintento vuelve a intentarlo', async () => {
-    // El veredicto es el del cupo y no el de la licencia: el `licencia_sin_verificar` que
+  it('un resultado que no crea SUELTA la clave, y el reintento vuelve a intentarlo', async () => {
+    // El resultado es el del cupo y no el de la licencia: el `licencia_sin_verificar` que
     // servía de vehículo se fue con la revisión manual. Lo que se prueba es el mecanismo de la
     // reserva, que no cambió.
     await cupo(0);
@@ -732,8 +732,8 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
     expect(rows[0]?.total).toBe('1');
   });
 
-  it('una RESERVA sin cerrar no se vuelve a ejecutar: 500 con la frase que no miente', async () => {
-    // Es lo que queda cuando el relé se cae: la ficha está creada y la respuesta no se
+  it('una RESERVA sin cerrar no se vuelve a ejecutar: 500 con la frase que no informa en falso', async () => {
+    // Es lo que queda cuando el reenvío se cae: la ficha está creada y la respuesta no se
     // escribió. Volver a ejecutar en silencio es exactamente el defecto que esto cierra.
     const misma = clave(CUERPO);
     const caido = await caso(CORREO_CAIDO)
@@ -762,7 +762,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
     expect(rows[0]?.total).toBe('1');
   });
 
-  it('la repetición deja su propia línea en la bitácora, y la primera también', async () => {
+  it('la repetición deja su propia línea en la auditoría, y la primera también', async () => {
     const misma = clave(CUERPO);
     await caso().run(CUERPO, DOCTORA, misma);
     await caso().run(CUERPO, DOCTORA, misma);
@@ -796,7 +796,7 @@ describe('la repetición sale de la base, y de ningún otro sitio', () => {
 });
 
 describe('la cuenta que ya existe no se toca', () => {
-  it('se reusa, no se acuña ninguna temporal y `temp_first_used_at` sigue donde estaba', async () => {
+  it('se reusa, no se genera ninguna temporal y `temp_first_used_at` sigue donde estaba', async () => {
     const { rows: antes } = await owner.query<{ hash: string; temp_first_used_at: Date | null }>(
       'select hash, temp_first_used_at from credential where account_id = $1',
       [YA_TIENE_CUENTA],
@@ -813,8 +813,8 @@ describe('la cuenta que ya existe no se toca', () => {
       'select hash, temp_first_used_at from credential where account_id = $1',
       [YA_TIENE_CUENTA],
     );
-    // Ni el hash ni la marca de primera entrada: acuñarle credenciales no deshace que ya
-    // probó su correo, y aquí no se le acuña ninguna (napkin §1.10).
+    // Ni el hash ni la marca de primera entrada: generarle credenciales no deshace que ya
+    // probó su correo, y aquí no se le genera ninguna (napkin §1.10).
     expect(despues[0]?.hash).toBe(antes[0]?.hash);
     expect(despues[0]?.temp_first_used_at?.toISOString()).toBe(
       antes[0]?.temp_first_used_at?.toISOString(),
@@ -843,7 +843,7 @@ describe('la cuenta que ya existe no se toca', () => {
     );
     expect(rows[0]?.access_sent_at).toBeInstanceOf(Date);
 
-    // Y su credencial sigue intacta: no se acuñó nada que mandar.
+    // Y su credencial sigue intacta: no se generó nada que mandar.
     const { rows: cred } = await owner.query<{ hash: string }>(
       'select hash from credential where account_id = $1',
       [YA_TIENE_CUENTA],

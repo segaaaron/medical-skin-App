@@ -40,7 +40,7 @@ export class PatientCatalogRepository implements PatientCatalogPort {
     if (link === null) return null;
     if (link.status !== 'vinculada') return 'invitada';
 
-    // 2 · El catálogo. `app_patient` NO FIJA INQUILINO —`withTenantContext()` lo prohíbe y
+    // 2 · El catálogo. `app_patient` NO FIJA TENANT —`withTenantContext()` lo prohíbe y
     // tiene razón: la paciente no pertenece a ninguno—, así que el `practice_id` de su vínculo
     // va como FILTRO de la consulta y la garantía la pone la política, que es «existe un
     // vínculo mío y aceptado con esa consulta» (0026). El parámetro solo elige cuál.

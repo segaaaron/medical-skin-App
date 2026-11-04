@@ -200,7 +200,7 @@ describe('la lectura de la sesión', () => {
     expect(snapshot?.refreshExpiresAt?.toISOString()).toBe(REFRESCO_CADUCA);
     expect(snapshot?.practice).toEqual({ id: MIA.practice, name: 'Clínica Paz' });
     expect(snapshot?.licenseDeclared).toBe(true);
-    // Las tres tareas nacen sin hacer y la lista sin cerrar: `siguiente_paso` es
+    // Las tres tareas empiezan sin hacer y la lista sin cerrar: `siguiente_paso` es
     // `primer_dia`, y eso lo decide el caso de uso con este dato.
     expect(snapshot?.firstDayDone).toBe(false);
     // Nulo significa «los de su rol», y el 100 % de las filas de la primera entrega.
@@ -295,7 +295,7 @@ async function filaDeSesion(sessionId: string) {
 }
 
 describe('la rotación del refresco', () => {
-  it('rota y devuelve el veredicto con el rol de la consulta y los tres hechos del paso', async () => {
+  it('rota y devuelve el resultado con el rol de la consulta y los tres hechos del paso', async () => {
     const rotated = await repo.rotate({
       digest: RESUMEN_DOCTORA,
       newDigest: RESUMEN_NUEVO,
@@ -382,8 +382,8 @@ describe('la rotación del refresco', () => {
     );
   });
 
-  it('las dos vidas al revés no dejan a una doctora con 30 días: la base pone la cota', async () => {
-    // La cota vive en la base (31 días y 13 h) y el número en el contrato. Es lo que
+  it('las dos vidas al revés no dejan a una doctora con 30 días: la base pone el límite', async () => {
+    // El límite vive en la base (31 días y 13 h) y el número en el contrato. Es lo que
     // convierte un cambio de orden de los dos argumentos en un fallo a gritos.
     await expect(
       repo.rotate({

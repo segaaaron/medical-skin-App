@@ -6,7 +6,7 @@
 //   1. `antes_de_atenderla` SE RECHAZA, no se ignora. Quien lo manda cree que se guardó.
 //   2. El motivo de la lectura de historia es OBLIGATORIO y de 10 a 300. Sin motivo no hay
 //      lectura, y eso lo vuelve a comprobar la función de base: dos puertas para lo mismo, a
-//      propósito, porque es la que sostiene la promesa de §4.
+//      propósito, porque es la que sostiene la especificación de §4.
 
 import { ContractError } from '../../shared/contract/error-catalog';
 
@@ -58,8 +58,8 @@ export function readPatientSearch(params: Record<string, unknown>): PatientSearc
   if (raw !== undefined && raw !== null && raw !== '') {
     if (typeof raw !== 'string') invalid();
     const trimmed = raw.trim();
-    // Menos de dos caracteres con `LIKE %a%` no es una búsqueda: es el padrón con un filtro
-    // decorativo, y aquí el padrón son pacientes.
+    // Menos de dos caracteres con `LIKE %a%` no es una búsqueda: es el registro con un filtro
+    // decorativo, y aquí el registro son pacientes.
     if (trimmed.length < QUERY_MIN || trimmed.length > QUERY_MAX) invalid();
     query = trimmed;
   }

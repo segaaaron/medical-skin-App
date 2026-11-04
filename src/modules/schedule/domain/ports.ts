@@ -61,7 +61,7 @@ export type BookingFacts = {
     priceCents: number;
     currency: string;
   };
-  /** `null` si no hay promoción pedida; el veredicto lo pone el caso de uso. */
+  /** `null` si no hay promoción pedida; el resultado lo pone el caso de uso. */
   promotion: {
     id: string;
     name: string;

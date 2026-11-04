@@ -315,7 +315,7 @@ describe('la nota: dos personas escribiendo, y la firma', () => {
     expect(first.en_conflicto).toEqual([]);
 
     // La asistente venía mirando la nota de ANTES: su `visto_en` es anterior al guardado de
-    // arriba, así que su `procedimiento` no pisa el de la doctora.
+    // arriba, así que su `procedimiento` no sobrescribe el de la doctora.
     const second = (await sessions.saveDraft(
       session,
       {

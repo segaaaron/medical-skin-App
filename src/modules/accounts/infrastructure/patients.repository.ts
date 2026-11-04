@@ -5,7 +5,7 @@
 // —invisible para la doctora, que no tiene política de `SELECT` sobre `account`— o una ficha
 // sin vínculo, que es una paciente a la que nadie puede mandarle su acceso.
 //
-// NI UNA CONSULTA LLEVA UN IDENTIFICADOR DE INQUILINO DEL CLIENTE. El `practice_id` sale
+// NI UNA CONSULTA LLEVA UN IDENTIFICADOR DE TENANT DEL CLIENTE. El `practice_id` sale
 // siempre de `medskin_current_practice()`, que lo fija `withTenantContext()` con el del
 // token, y las políticas de `patient`, `patient_link` y `medical_history` lo exigen en el
 // `WITH CHECK`: un alta no puede caer en otra consulta ni por error de programación. Lo que
@@ -36,7 +36,7 @@ function contextFor(owner: AccountOwner): TenantContext {
   return { role: 'app_practitioner', accountId: owner.accountId, practiceId: owner.practiceId };
 }
 
-/** La acción de la bitácora, la MISMA del reenvío: `acceso_pedido`, no `acceso_enviado`. */
+/** La acción de la auditoría, la MISMA del reenvío: `acceso_pedido`, no `acceso_enviado`. */
 const AUDIT_ACTION = 'cuenta.acceso_pedido';
 
 type Preconditions = {
@@ -89,7 +89,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
       }
 
       const registration = await this.write(c, p);
-      // Un veredicto que no creó nada SUELTA la clave: un `403`, un `409` o un `404` no son
+      // Un resultado que no creó nada SUELTA la clave: un `403`, un `409` o un `404` no son
       // una respuesta que repetir, y el reintento —cuando le aprueben la licencia, o cuando
       // confirme el duplicado— tiene que poder volver a intentarlo de verdad.
       if (registration.verdict !== 'created') {
@@ -101,7 +101,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
 
   /**
    * El alta en sí, con la clave ya reclamada: preconditions, cuenta, ficha, vínculo,
-   * antecedentes y bitácora. Si algo lanza, la transacción entera se deshace y con ella la
+   * antecedentes y auditoría. Si algo lanza, la transacción entera se deshace y con ella la
    * reserva, que es lo correcto: no hubo alta y la clave queda libre.
    */
   private async write(
@@ -119,7 +119,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     },
   ): Promise<PatientRegistration> {
       const limits = await this.preconditions(c);
-      // Los veredictos que se deciden ANTES de crear nada, en el orden del contrato.
+      // Los resultados que se deciden ANTES de crear nada, en el orden del contrato.
       //
       // AQUÍ ESTABA LA GUARDA DE LA LICENCIA —`status !== 'verificada'` →
       // `license_unverified`— y se fue el 30 de octubre de 2026 con la revisión manual: MedSkin
@@ -145,8 +145,8 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
       const practitionerName = await this.practitionerName(c);
 
       // La cuenta, por la función `SECURITY DEFINER`. NO recibe `account_id` y es la
-      // decisión de seguridad de esta ruta: con uno, una doctora podría acuñar una temporal
-      // sobre la cuenta de cualquiera. Si ese correo ya tiene cuenta, la REUSA y no acuña
+      // decisión de seguridad de esta ruta: con uno, una doctora podría generar una temporal
+      // sobre la cuenta de cualquiera. Si ese correo ya tiene cuenta, la REUSA y no genera
       // nada —«ya tiene la suya»—, y entonces `temp_first_used_at` tampoco se toca: es un
       // hecho del pasado y no se des-ocurre (0017).
       const account = await this.accountFor(c, p);
@@ -156,7 +156,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
 
       // EL «vuelve_si», QUE HASTA HOY NADIE LEÍA. El borrado de cuenta suelta el vínculo y
       // conserva el correo a propósito —«es la llave del vuelve_si», 0014:247—, y el 200 de
-      // ese borrado le promete a la paciente que su doctora puede traerla de vuelta con ese
+      // ese borrado le especifica a la paciente que su doctora puede traerla de vuelta con ese
       // mismo correo. Si hay un vínculo suelto con este correo en ESTA consulta, es la misma
       // persona: se reengancha su ficha y su expediente en vez de crear una segunda.
       const returned = await this.relink(c, p.ficha.email, account.accountId);
@@ -176,13 +176,13 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
         city: limits.city,
         // `access_sent_at` solo puede afirmar un envío que ocurrió, y el único que MedSkin
         // hace es el correo —el del acceso si la cuenta es nueva, el del aviso si se reusó—.
-        // Por WhatsApp y en persona manda la doctora con el dedo: ahí nace en nulo, y si el
-        // relé falla, quien llama lo devuelve a nulo.
+        // Por WhatsApp y en persona manda la doctora con el dedo: ahí empieza en nulo, y si el
+        // reenvío falla, quien llama lo devuelve a nulo.
         markSent: p.via === 'correo',
       });
       // Los antecedentes: una fila nueva en el alta normal, y en el regreso se MEZCLAN por
       // campo sobre los que ya estaban —solo los que la doctora nombró ahora—. Un alta que
-      // pisara el expediente de vuelta sería peor que no reengancharlo (lección del `[]`).
+      // sobrescribiera el expediente de vuelta sería peor que no reengancharlo (lección del `[]`).
       if (returned === null) await this.insertHistory(c, patientId, p.history, p.written);
       else await this.mergeHistory(c, patientId, p.history, p.written);
       await this.audit(c, p.owner, account.accountId, {
@@ -192,7 +192,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
       });
 
       // La clave ya está reservada desde el principio de la transacción; su respuesta se
-      // escribe con `complete()` cuando sea verdad, porque `enviado` dice si el relé aceptó
+      // escribe con `complete()` cuando sea verdad, porque `enviado` dice si el reenvío aceptó
       // el correo y eso pasa después del `COMMIT`.
       return {
         verdict: 'created',
@@ -383,7 +383,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
     if (row === undefined) {
       throw new ServiceFailure(
         FAILURE_PHRASES.createPatient,
-        new Error('medskin_create_patient_account no devolvió veredicto'),
+        new Error('medskin_create_patient_account no devolvió resultado'),
       );
     }
     if (row.verdict === 'email_unavailable') return null;
@@ -393,7 +393,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
         new Error(`medskin_create_patient_account devolvió '${row.verdict}' sin cuenta`),
       );
     }
-    // `created` ↔ `false` y `ya_tiene_cuenta` ↔ `true`: el veredicto manda, y
+    // `created` ↔ `false` y `ya_tiene_cuenta` ↔ `true`: el resultado manda, y
     // `already_existed` se conservó para no romper lo que ya se leía.
     return { accountId: row.account_id, alreadyExisted: row.verdict === 'ya_tiene_cuenta' };
   }
@@ -609,7 +609,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
   /**
    * «La entrega de la contraseña temporal queda en `access_audit` con quién la pidió»
    * (`cuentas.md`). `acceso_pedido` Y NO `acceso_enviado`: la fila se escribe en la misma
-   * transacción que acuña y el envío pasa después, así que lo único que puede afirmar es que
+   * transacción que genera y el envío pasa después, así que lo único que puede afirmar es que
    * alguien pidió el acceso, cuándo y por dónde. NI LA CONTRASEÑA NI UN DATO CLÍNICO entran
    * en `data`: identificadores y etiquetas cerradas, nada más (§10.3).
    */
@@ -628,7 +628,7 @@ export class PatientsRepository implements PatientRegistrationPort, IdempotencyC
   }
 }
 
-/** Un veredicto que no creó nada. Los campos opcionales los pone quien lo necesita. */
+/** Un resultado que no creó nada. Los campos opcionales los pone quien lo necesita. */
 function no(verdict: PatientRegistrationVerdict): PatientRegistration {
   return {
     verdict,
@@ -643,7 +643,7 @@ function no(verdict: PatientRegistrationVerdict): PatientRegistration {
 }
 
 /**
- * La cuenta de la respuesta guardada, para la línea de bitácora de la repetición. Se lee de
+ * La cuenta de la respuesta guardada, para la línea de auditoría de la repetición. Se lee de
  * la respuesta y no de una consulta nueva: es la cuenta a la que se entregó aquella vez.
  * Nulo si la respuesta guardada no la trae, que no puede pasar con un `201` de este endpoint
  * y aun así no se inventa un identificador.

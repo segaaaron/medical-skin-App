@@ -4,7 +4,7 @@
 //     devolvía `null` y los cuatro controladores hacían `if (key !== null)`, así que el
 //     mecanismo entero se apagaba en silencio mientras la petición se atendía igual —y el
 //     contrato la exige en «todo `POST` que crea algo»—. Que no se ejecute nada no es una
-//     promesa de este archivo: la clave es el ARGUMENTO con el que se llama al caso de uso
+//     especificación de este archivo: la clave es el ARGUMENTO con el que se llama al caso de uso
 //     (`return this.register.run(body, callerOf(req), readIdempotencyKey(req, body))`), así
 //     que no hay camino que llegue al caso de uso sin ella;
 //   · el `mensaje` va **vacío**, como `ruta_no_existe` y `formato_no_admitido`: es un error

@@ -24,7 +24,7 @@ import { PlatformTokens } from './shared/platform/platform-token';
 import { Tokens } from './shared/security/tokens';
 import { CONFIG, SharedModule } from './shared/shared.module';
 
-// El guardia de alcance es GLOBAL y por lista blanca de rutas: una ruta nueva nace cerrada.
+// El guardia de alcance es GLOBAL y por lista blanca de rutas: una ruta nueva empieza cerrada.
 // El filtro es global también: una sola forma de error en toda la API.
 //
 // Los dos se cablean por FÁBRICA y no por tipo del constructor, y no es un gusto: esbuild

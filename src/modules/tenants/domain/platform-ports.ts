@@ -20,7 +20,7 @@ import type { Region } from '../../../shared/contract/session';
  * fila en `account` detrás**, y por eso esa columna no tiene clave foránea.
  *
  * `label` es el nombre legible y NO entra en ninguna comparación: solo en
- * `access_audit.actor_label`, que la bitácora exige por escrito.
+ * `access_audit.actor_label`, que la auditoría exige por escrito.
  */
 export type PlatformActor = {
   subject: string;
@@ -76,7 +76,7 @@ export type NewOwner = {
   expiresAt: Date;
 };
 
-/** Los cuatro veredictos de `medskin_create_practice_owner()` (migraciones 0002 y 0015). */
+/** Los cuatro resultados de `medskin_create_practice_owner()` (migraciones 0002 y 0015). */
 export type AdmissionVerdict =
   'created' | 'email_taken' | 'practice_has_owner' | 'practice_not_found';
 
@@ -98,7 +98,7 @@ export interface TenantAdmissionPort {
    * aquí reventaría contra `license_practice_uq`, y si no la creara nadie la dueña se
    * quedaría sin poder enviar su licencia y nadie se enteraría.
    *
-   * Un veredicto que no es `created` deshace el `INSERT` de `practice`: una consulta sin
+   * Un resultado que no es `created` deshace el `INSERT` de `practice`: una consulta sin
    * dueña no existe, así que no se queda una fila huérfana que la consola vería como una
    * consulta real.
    *
@@ -198,7 +198,7 @@ export interface WelcomeMailPort {
 // GET /v1/platform/tenants · buscar · `consultas.md`, 30 oct 2026
 //
 // Devuelve MÁS DE UNA fila, que es lo que la hace distinta de la ficha: un error de campo en
-// la ficha expone la consulta que ya se estaba mirando; aquí expondría el padrón. Por eso el
+// la ficha expone la consulta que ya se estaba mirando; aquí expondría el registro. Por eso el
 // renglón es un subconjunto EXACTO de la ficha, y una prueba lo fija comparando las claves.
 //
 // **AQUÍ VIVÍA TAMBIÉN `GET /v1/platform/licenses`**, la bandeja de lo que esperaba revisión,
@@ -216,12 +216,12 @@ export type TenantRow = {
   /**
    * SOLO EL CORREO, y es lo que la consola puede leer: `app_platform` tiene `SELECT` sobre
    * cinco columnas de `account` y NINGUNA sobre `practitioner`, que es donde vive el nombre.
-   * La ficha tampoco lo devuelve, por lo mismo. Prometerlo aquí habría sido prometer un campo
+   * La ficha tampoco lo devuelve, por lo mismo. Especificarlo aquí habría sido añadir un campo
    * que la base niega — lo cazó la prueba contra la base con «permission denied».
    */
   ownerEmail: string | null;
   /**
-   * `activa` | `suspendida`. Va en el PADRÓN y no solo en la ficha porque es donde se ve de un
+   * `activa` | `suspendida`. Va en el REGISTRO y no solo en la ficha porque es donde se ve de un
    * vistazo cuál está parada: sin él la consola puede suspender y no puede DECIR que algo está
    * suspendido, que es un interruptor con la luz apagada.
    */

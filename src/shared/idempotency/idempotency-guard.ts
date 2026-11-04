@@ -1,6 +1,6 @@
 // LA CLAVE DE UNA OPERACIÓN QUE NO TIENE DÓNDE RESERVARLA.
 //
-// `POST /v1/sync` promete en su contrato «idempotente **por la clave de cada operación del
+// `POST /v1/sync` especifica en su contrato «idempotente **por la clave de cada operación del
 // lote**», y de sus cuatro operaciones solo una —`cita.crear`— pasaba por un endpoint que
 // reserva la clave: mover, cancelar y asistencia iban sin ella. Las tres son idempotentes por
 // su EFECTO hoy, y aun así `cita.mover` reaplicada deshace un cambio posterior: un lote

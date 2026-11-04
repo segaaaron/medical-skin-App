@@ -1,7 +1,7 @@
-// El trabajador de la cola: acuña el código y manda el correo. NO es un endpoint.
+// El trabajador de la cola: genera el código y manda el correo. NO es un endpoint.
 //
 // Está aquí y no en el ciclo de la petición por la razón del contrato: el 202 tiene que
-// tardar lo mismo exista o no el correo, y acuñar escribe dos filas cuando la cuenta
+// tardar lo mismo exista o no el correo, y generar escribe dos filas cuando la cuenta
 // existe y ninguna cuando no. Movido aquí, el camino de la petición es idéntico y el
 // trabajo asimétrico pasa donde nadie puede cronometrarlo.
 //
@@ -24,7 +24,7 @@ export class SendRecoveryCode {
   ) {}
 
   /**
-   * Un reintento de este trabajo ACUÑA OTRO CÓDIGO, y es correcto: acuñar anula el
+   * Un reintento de este trabajo GENERA OTRO CÓDIGO, y es correcto: generar anula el
    * anterior, así que sigue habiendo uno vivo por cuenta y es el último. Lo que un
    * reintento puede producir es un segundo correo cuando el primero sí se mandó y el
    * acuse se perdió; de los dos, el que vale es el del segundo, que es el que ella acaba
@@ -36,7 +36,7 @@ export class SendRecoveryCode {
     const codeHash = await this.hasher.hash(code);
 
     // El booleano no sale nunca del servidor. Aquí decide si hay correo que escribir: una
-    // cuenta que no existe, que está suspendida o que NUNCA ESTRENÓ su temporal no recibe
+    // cuenta que no existe, que está suspendida o que NUNCA USÓ POR PRIMERA VEZ su temporal no recibe
     // nada, y la paciente de ese último caso tiene su camino —la temporal que ya tiene, o
     // que la doctora le reenvíe el acceso—.
     const minted = await this.codes.mint({

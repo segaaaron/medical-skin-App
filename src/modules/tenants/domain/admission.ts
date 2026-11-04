@@ -44,7 +44,7 @@ export type AdmissionForm = {
   /**
    * Los tres datos de la licencia que la consola puede recoger, o `null` si el formulario
    * no los pidió. Opcional a propósito: el alta tiene que poder hacerse sin ellos —una
-   * doctora que todavía no tiene la matrícula a mano— y la fila de `license` nace igual.
+   * doctora que todavía no tiene la matrícula a mano— y la fila de `license` empieza igual.
    */
   license: ConsoleLicenseDraft | null;
 };

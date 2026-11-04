@@ -58,7 +58,7 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   // un `account_id` puesto aquí sería un identificador que nadie ha probado todavía, y
   // habilitaría políticas por fila con el único rol que no debería disparar ninguna. No
   // tiene un solo privilegio de tabla; lo único que puede hacer es ejecutar las funciones
-  // `SECURITY DEFINER` del acceso, que validan sus argumentos y devuelven el veredicto.
+  // `SECURITY DEFINER` del acceso, que validan sus argumentos y devuelven el resultado.
   if (ctx.role === 'app_anonymous') {
     if (practiceId || accountId) {
       throw new Error('app_anonymous no fija ningún contexto: cuando llega la petición no hay sesión.');

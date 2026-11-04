@@ -9,7 +9,7 @@
 // IDEMPOTENTE POR NATURALEZA: levantar una pausa levantada deja lo mismo y responde lo mismo.
 // Por eso no lleva `Idempotency-Key` ni la necesita.
 //
-// Y NO TOCA LA CONTRASEÑA. No es una promesa del código: `app_platform` no tiene ni política
+// Y NO TOCA LA CONTRASEÑA. No es una especificación del código: `app_platform` no tiene ni política
 // ni grant sobre `credential`, así que soporte no puede tocarla ni queriendo.
 
 import { ContractError } from '../../../shared/contract/error-catalog';

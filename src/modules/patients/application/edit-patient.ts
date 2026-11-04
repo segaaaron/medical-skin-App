@@ -5,7 +5,7 @@
 //
 // HAY DOS CORREOS Y NO SE UNIFICAN, NUNCA. `patient.email` es el de la ficha, el que este
 // `PATCH` cambia; `patient_link.email` es el del acceso, con el que se creó o se reusó la
-// cuenta. Nacen iguales y se separan en el primer `PATCH`. Si la ficha ya está vinculada, la
+// cuenta. Empiezan iguales y se separan en el primer `PATCH`. Si la ficha ya está vinculada, la
 // respuesta lleva `aviso_correo: true` para que la app lo diga: el correo con el que ella entra
 // a MedSkin no cambió, y eso solo lo cambia ella.
 

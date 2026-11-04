@@ -14,7 +14,7 @@
 //   · el `desde` en la zona del despliegue: con el UTC de la conexión, un vínculo creado a
 //     las 22:00 en La Paz se mostraría al día siguiente;
 //   · `POST /v1/team` con el nombre de la consulta leído en la MISMA transacción y su
-//     línea de bitácora, y el `email_taken` de un correo que ya tiene cuenta en la región.
+//     línea de auditoría, y el `email_taken` de un correo que ya tiene cuenta en la región.
 //
 // Siembra el DUEÑO del esquema, que es quien migra; todo lo que se comprueba pasa por
 // `withTenantContext()` con el rol y el contexto de verdad. En ningún momento se desactiva

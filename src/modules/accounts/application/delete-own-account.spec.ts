@@ -1,10 +1,10 @@
-// `DELETE /v1/accounts/mine` · el orden, los cuatro noes y lo que el 200 promete.
+// `DELETE /v1/accounts/mine` · el orden, los cuatro noes y lo que el 200 especifica.
 //
 // Lo que se fija aquí:
 //   · la contraseña se comprueba ANTES de llamar al borrado, y un fallo no escribe nada;
 //   · los tres `409` llevan su frase literal, con el número y la fecha que devuelve la
 //     función interpolados —son parte de la frase, no un adorno—;
-//   · «recepción y asistente, no» es un veredicto de la base, no un `if` del controlador;
+//   · «recepción y asistente, no» es un resultado de la base, no un `if` del controlador;
 //   · borrar lo ya borrado devuelve el mismo 200, con la fecha del borrado DE VERDAD, y por
 //     eso `se_conserva.hasta` se calcula sobre ESA fecha: lo que se le prometió a quien ya
 //     se borró no se reinterpreta;
@@ -43,7 +43,7 @@ const BORRADA: DeletionResult = {
   planRenewsOn: null,
 };
 
-function armar(opciones: { coincide?: boolean; veredicto?: DeletionResult }) {
+function armar(opciones: { coincide?: boolean; resultado?: DeletionResult }) {
   const pasos: string[] = [];
   let recibido: { retentionUntil: string; reason: string | null } | null = null;
 
@@ -67,7 +67,7 @@ function armar(opciones: { coincide?: boolean; veredicto?: DeletionResult }) {
     deleteMine: (p) => {
       pasos.push('borrado');
       recibido = { retentionUntil: p.retentionUntil, reason: p.reason };
-      return Promise.resolve(opciones.veredicto ?? BORRADA);
+      return Promise.resolve(opciones.resultado ?? BORRADA);
     },
   };
 
@@ -105,7 +105,7 @@ describe('DELETE /v1/accounts/mine', () => {
         vuelve_si: 'Tu doctora te da de alta otra vez con este mismo correo.',
       },
     });
-    // El plazo que viaja a la base es el que la bitácora guarda como hecho histórico.
+    // El plazo que viaja a la base es el que la auditoría guarda como hecho histórico.
     expect(recibido()).toEqual({ retentionUntil: '2033-10-27', reason: 'ya_no_la_uso' });
     expect(pasos).toEqual(['credencial:mia', 'argon2:comparar', 'borrado']);
   });
@@ -133,7 +133,7 @@ describe('DELETE /v1/accounts/mine', () => {
   it('borrar lo ya borrado devuelve el mismo 200, con la fecha del borrado de verdad', async () => {
     const PRIMERO = new Date('2026-09-01T10:00:00.000Z');
     const { caso } = armar({
-      veredicto: { ...BORRADA, verdict: 'already_deleted', deletedAt: PRIMERO },
+      resultado: { ...BORRADA, verdict: 'already_deleted', deletedAt: PRIMERO },
     });
     const respuesta = await caso.run({ contrasena: 'la-mía' }, PACIENTE);
 
@@ -144,7 +144,7 @@ describe('DELETE /v1/accounts/mine', () => {
 
   it('recepción y asistente no pueden borrarse desde aquí, y lo dice la base', async () => {
     const { caso } = armar({
-      veredicto: { ...BORRADA, verdict: 'not_allowed', deletedAt: null },
+      resultado: { ...BORRADA, verdict: 'not_allowed', deletedAt: null },
     });
     const fallo = await errorDe(() => caso.run({ contrasena: 'la-mía' }, PACIENTE));
 
@@ -156,7 +156,7 @@ describe('DELETE /v1/accounts/mine', () => {
 
   it('la dueña con equipo: primero saca a su equipo', async () => {
     const { caso } = armar({
-      veredicto: { ...BORRADA, verdict: 'practice_has_team', deletedAt: null },
+      resultado: { ...BORRADA, verdict: 'practice_has_team', deletedAt: null },
     });
     const fallo = await errorDe(() => caso.run({ contrasena: 'la-mía' }, PACIENTE));
 
@@ -170,7 +170,7 @@ describe('DELETE /v1/accounts/mine', () => {
 
   it('la dueña con fichas: el número sale de la función y la frase lo interpola', async () => {
     const { caso } = armar({
-      veredicto: {
+      resultado: {
         verdict: 'practice_has_patients',
         deletedAt: null,
         patientCount: 148,
@@ -188,7 +188,7 @@ describe('DELETE /v1/accounts/mine', () => {
 
   it('con una sola ficha la frase concuerda en singular', async () => {
     const { caso } = armar({
-      veredicto: {
+      resultado: {
         verdict: 'practice_has_patients',
         deletedAt: null,
         patientCount: 1,
@@ -202,7 +202,7 @@ describe('DELETE /v1/accounts/mine', () => {
 
   it('la dueña con plan vigente: la fecha sale de plan_renews_on, escrita en palabras', async () => {
     const { caso } = armar({
-      veredicto: {
+      resultado: {
         verdict: 'subscription_active',
         deletedAt: null,
         patientCount: null,

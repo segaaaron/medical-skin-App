@@ -62,7 +62,7 @@ async function aplicar() {
       `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${QUEUE_SCHEMA} TO ${appRole}`,
     );
     await pool.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${QUEUE_SCHEMA} TO ${appRole}`);
-    // Lo que BullMQ cree después, en su próxima versión de esquema, nace ya concedido.
+    // Lo que BullMQ cree después, en su próxima versión de esquema, empieza ya concedido.
     await pool.query(
       `ALTER DEFAULT PRIVILEGES IN SCHEMA ${QUEUE_SCHEMA}
          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${appRole}`,

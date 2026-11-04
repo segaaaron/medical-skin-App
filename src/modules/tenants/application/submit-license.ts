@@ -2,8 +2,8 @@
 //
 // LO QUE ESTE ARCHIVO ERA HASTA HOY, porque explica por qué es tan corto ahora: mandaba la
 // licencia a revisión manual, devolvía `202` —«lo que se creó es un caso de revisión humana,
-// no un hecho»—, traducía ocho veredictos de una máquina de estados a cuatro códigos del
-// contrato y prometía una fecha de respuesta calculada con «24 h hábiles».
+// no un hecho»—, traducía ocho resultados de una máquina de estados a cuatro códigos del
+// contrato y especificaba una fecha de respuesta calculada con «24 h hábiles».
 //
 // Nada de eso existe. El dueño lo descartó el 30 de octubre de 2026 y su razón es la que
 // manda: **MedSkin no es una asociación médica ni un inspector de salud.** Es una herramienta

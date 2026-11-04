@@ -3,7 +3,7 @@
 // Lo que se fija aquí, y las dos primeras son las que justifican el archivo:
 //   · **el correo es EXACTO**: nada que parezca una búsqueda parcial llega a la base;
 //   · **«no existe» es un 200 con lista vacía**, nunca un 404 — un 404 diría «ese correo no
-//     está en MedSkin» por el código de estado, que es el oráculo que el acceso cierra;
+//     está en MedSkin» por el código de estado, que es la filtración que el acceso cierra;
 //   · el renglón lleva CINCO campos, y el teléfono no está aunque el rol ya pueda leerlo.
 //
 // Sin base y sin NestJS: el caso de uso recibe su puerto.
@@ -60,7 +60,7 @@ describe('readAccountLookup · el correo es exacto, no una búsqueda', () => {
 
   it('LO QUE PARECE UNA BÚSQUEDA PARCIAL NO PASA, y es la razón de esta validación', () => {
     // Un `%paz%` sobre `account` devolvería un listado de personas de MedSkin con dos
-    // caracteres, y ahí dentro hay pacientes: ese es el padrón que §12.2.1 cierra.
+    // caracteres, y ahí dentro hay pacientes: ese es el registro que §12.2.1 cierra.
     for (const parcial of ['paz', '%paz%', 'paz@', '@clinicapaz.bo', 'andrea paz']) {
       expect(codigoDe(() => readAccountLookup({ correo: parcial })), parcial).toBe(
         'cuerpo_no_valido',
@@ -104,7 +104,7 @@ describe('GET /v1/platform/accounts', () => {
 
   it('UN CORREO QUE NO EXISTE ES 200 CON LISTA VACÍA, nunca un 404', async () => {
     // Un 404 aquí diría «ese correo no está en MedSkin» por el código de estado, que es
-    // exactamente el oráculo que la respuesta idéntica del acceso cierra en la app.
+    // exactamente la filtración que la respuesta idéntica del acceso cierra en la app.
     const { caso } = armar([]);
     await expect(
       caso.run(readAccountLookup({ correo: 'nadie@ejemplo.com' }), ACTOR),

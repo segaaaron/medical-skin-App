@@ -2,7 +2,7 @@
 //
 // CAMPO POR CAMPO, Y EL ÁRBITRO ES LA FUENTE: se escribe si está vacío (`fuente` nula) o si lo
 // escribió ella (`fuente = 'patient'`). Lo que escribió la doctora se devuelve en
-// `no_guardado`, no se pisa.
+// `no_guardado`, no se sobrescribe.
 //
 // NADA SE BORRA: cada campo que cambia deja su valor anterior en `medical_history_audit`, con
 // quién y cuándo. «Son antecedentes médicos: el valor de ayer puede ser lo que explique una

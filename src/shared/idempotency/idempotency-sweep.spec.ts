@@ -124,7 +124,7 @@ describe('el barrido de `idempotency_key`', () => {
     expect(await claves()).toEqual([]);
   });
 
-  it('la cota de la función es el contrato del bucle, y la del bucle es mía', () => {
+  it('el límite de la función es el contrato del bucle, y la del bucle es mía', () => {
     // No se prueban 10 000 filas: se fija que los dos números son los que el trabajo dice
     // que son, porque de ellos sale cuánta deuda limpia una corrida (200 000 filas) y cuánto
     // puede durar sin monopolizar la tabla.
@@ -134,7 +134,7 @@ describe('el barrido de `idempotency_key`', () => {
 });
 
 describe('un barrido que falla deja su fila', () => {
-  it('va por el camino sin sesión, con la causa real y sin reintento prometido', async () => {
+  it('va por el camino sin sesión, con la causa real y sin reintento especificado', async () => {
     const cause = new Error('la función no respondió', {
       cause: new Error('ECONNREFUSED 127.0.0.1:6432'),
     });

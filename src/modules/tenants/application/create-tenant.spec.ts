@@ -2,7 +2,7 @@
 //
 // Lo que se fija aquí:
 //   · el 201 completo, con la temporal y su caducidad, y `licencia.estado = "sin_enviar"`;
-//   · `email_taken` es el `409` del contrato y los otros dos veredictos son 500 con su causa;
+//   · `email_taken` es el `409` del contrato y los otros dos resultados son 500 con su causa;
 //   · el correo del alta que falla NO tira el alta: deja una fila de fallo y el 201 sale;
 //   · el reintento idempotente devuelve la misma respuesta y NO manda un segundo correo.
 
@@ -83,7 +83,7 @@ function armar(opciones: Opciones = {}) {
       sendOwnerWelcome: (facts: { email: string; temporaryPassword: string }) => {
         enviados.push({ email: facts.email, temporaryPassword: facts.temporaryPassword });
         return opciones.mailFalla === true
-          ? Promise.reject(new Error('el relé no contestó'))
+          ? Promise.reject(new Error('el reenvío no contestó'))
           : Promise.resolve();
       },
     },
@@ -125,7 +125,7 @@ describe('POST /v1/platform/tenants', () => {
         cuenta_id: CREADO.accountId,
         correo: 'andrea.paz@clinicapaz.bo',
         contrasena_temporal: respuesta.doctora.contrasena_temporal,
-        // 72 h desde el alta, y la cota la comprueba además la base.
+        // 72 h desde el alta, y el límite lo comprueba además la base.
         contrasena_temporal_caduca_en: '2026-10-30T13:12:00.000Z',
       },
     });
@@ -156,7 +156,7 @@ describe('POST /v1/platform/tenants', () => {
     expect(enviados).toEqual([]);
   });
 
-  it('los dos veredictos que el contrato no nombra son 500 con su causa', async () => {
+  it('los dos resultados que el contrato no nombra son 500 con su causa', async () => {
     for (const verdict of ['practice_has_owner', 'practice_not_found'] as const) {
       const fallo = await armar({ verdict })
         .caso.run(CUERPO, ACTOR, CLAVE, TRACE)
@@ -173,8 +173,8 @@ describe('POST /v1/platform/tenants', () => {
   it('si el correo falla, la consulta QUEDA CREADO y el fallo se registra', async () => {
     const { caso, registrados } = armar({ mailFalla: true });
 
-    // El 201 sale: la frase del 500 de este endpoint promete «no se creó nada», y decirlo
-    // cuando la consulta ya existe sería mentirle a quien da el alta. Su salida es la
+    // El 201 sale: la frase del 500 de este endpoint especifica «no se creó nada», y decirlo
+    // cuando la consulta ya existe sería informar en falso a quien da el alta. Su salida es la
     // contraseña del 201, que puede leer y dictar.
     const served = await caso.run(CUERPO, ACTOR, CLAVE, TRACE);
     expect(served.status).toBe(201);
@@ -197,7 +197,7 @@ describe('POST /v1/platform/tenants', () => {
     expect(enviados).toEqual([]);
   });
 
-  it('un cuerpo mal formado no llega a la base ni acuña ninguna contraseña', async () => {
+  it('un cuerpo mal formado no llega a la base ni genera ninguna contraseña', async () => {
     const { caso, hasheadas } = armar();
 
     await expect(caso.run({ ...CUERPO, nombre: '' }, ACTOR, CLAVE, TRACE)).rejects.toMatchObject({

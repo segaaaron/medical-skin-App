@@ -35,7 +35,7 @@ export function resolveNextStep(role: Role, facts: NextStepInput): NextStep {
   if (role === 'patient') return 'inicio';
   // «¿Declaró su matrícula?», y NO «¿en qué estado está su revisión?». Era
   // `licenseStatus === 'sin_enviar'`, y ese estado se fue con la revisión manual (0072).
-  // El paso se queda porque lo que promete sigue siendo verdad: quien no la declaró acaba en
+  // El paso se queda porque lo que especifica sigue siendo verdad: quien no la declaró acaba en
   // esa pantalla. Lo que ya no pasa es que una doctora que SÍ la declaró se quede ahí
   // esperando a que alguien la apruebe.
   if (!facts.licenseDeclared) return 'licencia';

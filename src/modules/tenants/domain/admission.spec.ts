@@ -57,7 +57,7 @@ describe('el alta de una consulta · el cuerpo del contrato', () => {
     expect(form.practice.patientLimit).toBe(PLAN_LIMITS.consultorio);
   });
 
-  it('la nota interna es opcional y nace nula', () => {
+  it('la nota interna es opcional y empieza nula', () => {
     expect(
       readAdmission({ ...ALTA, nota_interna: undefined }, 'latam', readEmail).practice.internalNote,
     ).toBeNull();

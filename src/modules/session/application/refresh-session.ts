@@ -15,8 +15,8 @@
 //     equipo 12 h— y por eso la elige quien conoce el rol antes de escribir. Desde aquí
 //     viajan las dos vidas en segundos; la que vuelve es la buena, y no se recalcula.
 //
-// Lo que sí es de aquí: validar el cuerpo, traducir el veredicto al error del contrato,
-// acuñar el token con las reclamaciones que manda `sesion.md` y resolver `siguiente_paso`
+// Lo que sí es de aquí: validar el cuerpo, traducir el resultado al error del contrato,
+// generar el token con las reclamaciones que manda `sesion.md` y resolver `siguiente_paso`
 // con la MISMA función que `POST /v1/access`.
 
 import { z } from 'zod';
@@ -41,7 +41,7 @@ import type {
 
 const bodySchema = z.object({ refresco: z.string().optional() });
 
-/** Los cuatro veredictos que no son una rotación, y su 401. Uno a uno, sin `default`. */
+/** Los cuatro resultados que no son una rotación, y su 401. Uno a uno, sin `default`. */
 const ERROR_BY_VERDICT: Readonly<Record<Exclude<RefreshVerdict, 'rotated'>, ErrorCode>> = {
   reused: 'refresco_reutilizado',
   revoked: 'sesion_revocada',
@@ -99,7 +99,7 @@ export class RefreshSession {
     const session = this.checked(rotated);
 
     // El refresco YA se rotó cuando se descubre la suspensión, y se deja así: lo que la
-    // rotación hizo fue matar la credencial de una cuenta suspendida, que es el lado
+    // rotación hizo fue invalidar la credencial de una cuenta suspendida, que es el lado
     // seguro. No se le devuelve el par nuevo.
     if (session.accountStatus !== 'activa') throw new ContractError('cuenta_suspendida');
 

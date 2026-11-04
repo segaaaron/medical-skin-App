@@ -21,7 +21,7 @@ export type FailureContext = {
    * `access_audit.actor_account_id`: esas columnas no tienen clave foránea, a propósito.
    *
    * Existe porque **un 500 de la consola tiene que decir quién lo pidió**: es soporte
-   * actuando sobre la cuenta de una paciente, y la bitácora es lo único que hace revisable
+   * actuando sobre la cuenta de una paciente, y la auditoría es lo único que hace revisable
    * lo que soporte hace. Sin esto el fallo entraba por el camino anónimo y la fila quedaba
    * sin actor, que es justamente el caso que alguien querría no dejar registrado.
    */
@@ -47,7 +47,7 @@ export type Failure = {
  * EL CORREO SE TAPA EN LAS DOS RUTAS, no solo en la anónima. El mensaje del motor es la
  * causa real y por eso se guarda; lo que no puede guardarse es una dirección dentro de él, y
  * las hay en los dos lados: «Key (email)=(…) already exists» en la ruta sin sesión, y el
- * rechazo de un relé —«550 5.1.1 <carla@…> User unknown»— en la ruta CON sesión, que es la
+ * rechazo de un reenvío —«550 5.1.1 <carla@…> User unknown»— en la ruta CON sesión, que es la
  * del envío del acceso. El patrón es el MISMO que el de `medskin_record_anonymous_failure`
  * (migraciones 0004 y 0005), y se aplica donde se aplica allí: el mensaje, la cadena de
  * causas y la pila.

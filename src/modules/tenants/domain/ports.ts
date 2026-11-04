@@ -79,7 +79,7 @@ export interface OwnPracticePort {
 // ---------------------------------------------------------------------------------------
 // POST /v1/tenants/mine/license · «el doctor declara su matrícula»
 //
-// LO QUE ESTE PUERTO ERA Y YA NO: `Submission` con ocho veredictos —`already_in_review`,
+// LO QUE ESTE PUERTO ERA Y YA NO: `Submission` con ocho resultados —`already_in_review`,
 // `already_verified`, `invalid_transition`, `incomplete`…— era la máquina de estados de la
 // revisión manual, y `medskin_license_to_review()` la que la movía. No queda nada de eso: es
 // un formulario, el último `POST` gana, y lo único que puede salir mal aparte de un fallo del
@@ -94,7 +94,7 @@ export type LicenseForm = {
 };
 
 /**
- * Tres, y ninguno más: la máquina de ocho veredictos de la revisión manual se fue entera
+ * Tres, y ninguno más: la máquina de ocho resultados de la revisión manual se fue entera
  * (migración 0072).
  *
  * · `saved` · se escribió.
@@ -114,7 +114,7 @@ export type Submission = {
   declaredAt: Date | null;
 };
 
-/** Lo que se guarda para repetir, o `null` si ese veredicto no se repite. */
+/** Lo que se guarda para repetir, o `null` si ese resultado no se repite. */
 export type RememberedResponse = { status: number; response: unknown } | null;
 
 export interface LicenseSubmissionPort {
@@ -131,7 +131,7 @@ export interface LicenseSubmissionPort {
     /**
      * La clave de la petición, OBLIGATORIA. Se comprueba al abrir la transacción y se guarda
      * al cerrarla, en `idempotency_key` y no en Redis: una fila escrita después del `COMMIT`
-     * no es idempotencia, porque un fallo entre las dos devuelve un 500 que miente y un
+     * no es idempotencia, porque un fallo entre las dos devuelve un 500 que informa en falso y un
      * reintento que vuelve a ejecutar. Y aquí además protege el cupo: un reintento no gasta
      * uno de los cinco del día.
      */

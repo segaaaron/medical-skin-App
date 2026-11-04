@@ -1,6 +1,6 @@
 // LA LISTA BLANCA DE RUTAS. `sesion.md`: «El alcance se comprueba en un guardia global,
 // antes de cualquier módulo, y POR LISTA BLANCA DE RUTAS. No por lista negra: una ruta
-// nueva nace CERRADA para los alcances restringidos, no abierta».
+// nueva empieza CERRADA para los alcances restringidos, no abierta».
 //
 // Es lo que hace cumplible la regla de la contraseña temporal: con un `siguiente_paso`
 // solo, una app con un error de navegación —o un cliente escrito a mano— se la salta.
@@ -391,7 +391,7 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
 
 
   // El reenvío del acceso del equipo, que es el endpoint que cierra el hueco del alta: si el
-  // relé falla, la cuenta ya existe y reintentar el alta da `409 correo_no_disponible`. Solo
+  // reenvío falla, la cuenta ya existe y reintentar el alta da `409 correo_no_disponible`. Solo
   // `completo`, igual que el alta y que el reenvío de pacientes.
 
   'GET /v1/access/sessions': {
@@ -483,8 +483,8 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:consultas:borrar',
     failurePhrase: FAILURE_PHRASES.readTenant,
   },
-  // Permiso PROPIO y no `plataforma:consultas:leer`: quien mira el padrón responde «qué
-  // consultas hay», y esto responde «esta persona tiene cuenta en MedSkin» — otro oráculo y
+  // Permiso PROPIO y no `plataforma:consultas:leer`: quien mira el registro responde «qué
+  // consultas hay», y esto responde «esta persona tiene cuenta en MedSkin» — otra filtración y
   // sobre otra clase de sujeto, porque una cuenta puede ser de una paciente.
   'GET /v1/platform/accounts': {
     platformPermission: 'plataforma:cuentas:buscar',
@@ -522,7 +522,7 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     failurePhrase: FAILURE_PHRASES.resendPlatformAccess,
   },
   // El reseteo del PIN, 4 de noviembre de 2026. Ruta y permiso PROPIOS: es la única acción de
-  // la casa que pisa una credencial ya elegida (migración 0083).
+  // la casa que sobrescribe una credencial ya elegida (migración 0083).
   'POST /v1/platform/accounts/:account_id/access/reset': {
     platformPermission: 'plataforma:acceso:resetear',
     failurePhrase: FAILURE_PHRASES.resetPlatformAccess,

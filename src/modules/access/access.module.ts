@@ -52,7 +52,7 @@ import { PlatformAccessController } from './platform-access.controller';
     },
     {
       // La entrada de la consola. Comparte `Argon2Passwords` y `AccessPause` con la de la
-      // app a propósito: el señuelo y los contadores son los mismos, que es lo que hace que
+      // app a propósito: el decoy y los contadores son los mismos, que es lo que hace que
       // un correo sin fila responda igual aquí y allá.
       provide: PlatformSignIn,
       useFactory: (

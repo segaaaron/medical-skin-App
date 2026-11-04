@@ -6,8 +6,8 @@
 // que es el mismo agujero que la búsqueda de consultas tapó en `consultas.md`.
 //
 // PERMISO PROPIO —`plataforma:cuentas:buscar`— y no `plataforma:consultas:leer`: quien mira el
-// padrón responde «qué consultas hay», y esto responde «esta persona tiene cuenta en MedSkin»,
-// que es otro oráculo y sobre otra clase de sujeto, porque una cuenta puede ser de una paciente.
+// registro responde «qué consultas hay», y esto responde «esta persona tiene cuenta en MedSkin»,
+// que es otra filtración y sobre otra clase de sujeto, porque una cuenta puede ser de una paciente.
 // El permiso no se comprueba aquí: si este caso de uso corre, el guardia ya lo verificó contra
 // el token firmado.
 
@@ -36,7 +36,7 @@ export class SearchAccounts {
 
     // LISTA Y NO OBJETO, con cero o una fila —nunca más, lo garantiza `account_email_uq`—, y es
     // para que «no existe» sea un `200` con lista vacía y NO un 404: un 404 aquí diría «ese
-    // correo no está en MedSkin» por el código de estado, que es el oráculo que el acceso
+    // correo no está en MedSkin» por el código de estado, que es la filtración que el acceso
     // cierra en la app.
     return { cuentas: rows.map(view) };
   }

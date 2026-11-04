@@ -2,7 +2,7 @@
 //
 // La prueba que importa es la última de la primera tanda: UNA RUTA QUE NO ESTÁ EN LA TABLA
 // SE DENIEGA. `sesion.md` lo pide así —lista blanca, no lista negra— porque con una lista
-// negra la ruta que alguien añada mañana nace abierta para la sesión restringida, y
+// negra la ruta que alguien añada mañana empieza abierta para la sesión restringida, y
 // entonces «mientras la contraseña siga siendo la temporal, no se abre ninguna otra
 // pantalla» deja de ser verdad sin que nadie lo note.
 
@@ -29,7 +29,7 @@ const cfg: Config = loadConfig({
   JWT_PUBLIC_KEY_PATH: join(carpeta, 'jwt.pub'),
   // El par del servicio de plataforma, que es OTRA llave: aquí solo hace falta para
   // construir el guardia. Las rutas de consola se prueban en
-  // `platform/platform-token.spec.ts`, que es donde vive la privada con la que se acuñan.
+  // `platform/platform-token.spec.ts`, que es donde vive la privada con la que se generan.
   PLATFORM_JWT_PRIVATE_KEY_PATH: join(carpeta, 'plataforma.key'),
   PLATFORM_JWT_PUBLIC_KEY_PATH: join(carpeta, 'plataforma.pub'),
 });
@@ -205,7 +205,7 @@ describe('GuardiaDeAlcance · el alcance restringido', () => {
   it('un token de recuperación CON rol no se atiende: esa forma no existe', async () => {
     // El contrato es explícito —«el token no lleva rol»— porque el cuerpo de un JWT lo lee
     // el cliente: un `rol` aquí le diría a quien acertó seis dígitos si la cuenta es de
-    // doctora o de paciente, y sería un oráculo mejor que el que el acceso cierra.
+    // doctora o de paciente, y sería una filtración mejor que el que el acceso cierra.
     const error = await denegar(
       'POST',
       '/v1/access/new-password',

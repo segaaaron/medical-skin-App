@@ -45,7 +45,7 @@ import type {
 export const SUBMISSIONS_PER_DAY = 5;
 
 /**
- * La acción con la que cada declaración firma en la bitácora. Era `license.to_review` cuando
+ * La acción con la que cada declaración firma en la auditoría. Era `license.to_review` cuando
  * esto mandaba la licencia a revisión; ahora dice lo que de verdad pasó.
  *
  * **Es el registro que sostiene «responde quien lo declaró»**, que es la razón entera por la
@@ -102,7 +102,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       );
       const row = rows[0];
       // Sin fila no hay consulta legible para este contexto, o le falta la fila de `license`
-      // que la 0015 garantiza. El `join` y no un `left join` a propósito: esa fila nace con la
+      // que la 0015 garantiza. El `join` y no un `left join` a propósito: esa fila se crea con la
       // consulta, así que su ausencia es una inconsistencia del servidor y no un caso normal
       // —servirla con nulos la escondería—. Quien llama lo convierte en 500 con su causa.
       if (row === undefined) return null;
@@ -133,7 +133,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
   // POST /v1/tenants/mine/license · una transacción, cuatro pasos y en este orden.
   //
   // TENÍA UN PASO MÁS Y UNA FUNCIÓN DE BASE: `medskin_license_to_review()` movía el estado a
-  // `en_revision`, comprobaba la transición y dejaba su fila de bitácora. Se fue con la
+  // `en_revision`, comprobaba la transición y dejaba su fila de auditoría. Se fue con la
   // revisión manual (migración 0072) y lo que hacía está aquí, en SQL que se lee de una vez:
   // el doctor ya tiene `GRANT UPDATE (practice_country, specialty, license_number,
   // updated_at)` sobre `license` y su política lo acota a su consulta, así que la
@@ -168,7 +168,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       // «vuelve a intentarlo mañana» es verdad. Se cuenta sobre `access_audit` y no sobre
       // Redis (decisión 39): el dato ya existe con su índice y un contador aparte para un
       // acto que ocurre cinco veces al año es un segundo estado que puede desacordarse con
-      // la bitácora. Sin nombrar la consulta: lo pone la política, y así la consulta entra
+      // la auditoría. Sin nombrar la consulta: lo pone la política, y así la consulta entra
       // por `access_audit_practice_idx (practice_id, occurred_at DESC)`.
       //
       // SE QUEDÓ A PROPÓSITO al quitar la revisión: es un límite de escritura en un borde
@@ -192,7 +192,7 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
       // doctor tiene `SELECT (owner_account_id)` sobre `practice` desde la 0002, así que esto
       // corre con su propio rol y bajo su propia política.
       //
-      // CERO FILAS AQUÍ SÍ SE INTERPRETA, y es el cambio: antes el veredicto lo daba la
+      // CERO FILAS AQUÍ SÍ SE INTERPRETA, y es el cambio: antes el resultado lo daba la
       // función y este `update` no se miraba. Ahora cero filas es `not_owner` —la fila de
       // `license` existe siempre (0015) y la política ya no mira ningún estado, así que lo
       // único que puede tocar cero filas es que quien llama no sea la dueña—.
@@ -213,9 +213,9 @@ export class TenantsRepository implements OwnPracticePort, LicenseSubmissionPort
         return { submission: empty('not_owner'), replay: null };
       }
 
-      // 3 · LA BITÁCORA, en la misma transacción que la escritura. `actor_label` es el nombre
+      // 3 · LA AUDITORÍA, en la misma transacción que la escritura. `actor_label` es el nombre
       // del doctor, leído de `practitioner` por la pareja (consulta, cuenta), y es nulo si no
-      // tiene fila ahí: una bitácora sin nombre sigue sirviendo, y caerse por una etiqueta
+      // tiene fila ahí: una auditoría sin nombre sigue sirviendo, y caerse por una etiqueta
       // dejaría la declaración sin guardar.
       //
       // En `data` NO va la matrícula: ya vive en su columna bajo la política de la licencia, y

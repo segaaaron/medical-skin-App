@@ -1,6 +1,6 @@
 // Las reglas del código, sin NestJS, sin base y sin Redis.
 //
-// La prueba que importa es la última: EL VEREDICTO DE UN CORREO QUE NO TIENE CUENTA. Si se
+// La prueba que importa es la última: EL RESULTADO DE UN CORREO QUE NO TIENE CUENTA. Si se
 // rompe, el código de estado de `POST /v1/recovery/code` dice si un correo existe
 // —410 para los reales, 401 para los inventados—, y eso es dato de salud.
 
@@ -58,7 +58,7 @@ describe('el correo · forma, nunca existencia', () => {
   });
 });
 
-describe('el veredicto de un correo sin cuenta · el oráculo que cierra', () => {
+describe('el resultado de un correo sin cuenta · la filtración que cierra', () => {
   it('cinco intentos gastados son `voided`, igual que el código real al quinto', () => {
     expect(
       verdictForUnknownAccount({ attemptsSpent: 5, codeIsLive: true, codeWasAsked: true }),
@@ -71,9 +71,9 @@ describe('el veredicto de un correo sin cuenta · el oráculo que cierra', () =>
     ).toBe('expired');
   });
 
-  it('nunca se pidió nada: `live`, y la comparación contra el señuelo falla con un 401', () => {
+  it('nunca se pidió nada: `live`, y la comparación contra el decoy falla con un 401', () => {
     // Es el caso de una cuenta REAL que nunca pidió código: la función de la base devuelve
-    // también `live` con el señuelo. Los dos caminos tienen que coincidir aquí.
+    // también `live` con el decoy. Los dos caminos tienen que coincidir aquí.
     expect(
       verdictForUnknownAccount({ attemptsSpent: 0, codeIsLive: false, codeWasAsked: false }),
     ).toBe('live');

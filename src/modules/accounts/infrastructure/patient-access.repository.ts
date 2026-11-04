@@ -35,7 +35,7 @@ export class PatientAccessRepository implements PatientAccessPort {
       // ponen, y el índice compuesto empieza por `practice_id` (§7.3, regla 5).
       // Se leen CINCO columnas: el nombre, el correo, el celular, el nombre de quien la
       // atiende y la marca de envío de ahora —que no es del mensaje: es lo que hace falta
-      // para poder deshacerla si el envío falla, porque acuñar la sobreescribe—. Ni una
+      // para poder deshacerla si el envío falla, porque generar la sobreescribe—. Ni una
       // clínica más, y nada del expediente.
       const { rows } = await c.query<{
         first_name: string;
@@ -81,11 +81,11 @@ export class PatientAccessRepository implements PatientAccessPort {
       if (row === undefined) {
         throw new ServiceFailure(
           FAILURE_PHRASES.sendPatientAccess,
-          new Error('medskin_resend_patient_access no devolvió veredicto'),
+          new Error('medskin_resend_patient_access no devolvió resultado'),
         );
       }
 
-      // La línea de la bitácora la escribe el endpoint, que es quien sabe quién la pidió:
+      // La línea de la auditoría la escribe el endpoint, que es quien sabe quién la pidió:
       // «una contraseña entregada dos veces es un hecho que alguien puede querer
       // reconstruir» (_convenciones.md · Idempotencia). La contraseña NO entra en la fila.
       if (row.outcome === 'acceso_renovado') {
@@ -108,7 +108,7 @@ export class PatientAccessRepository implements PatientAccessPort {
       // `UPDATE` cuyo alcance depende solo de RLS deja de estar acotado el día que algo
       // corra con `BYPASSRLS`.
       //
-      // `$2` es el valor que la ficha tenía antes de acuñar: la fecha del último envío que
+      // `$2` es el valor que la ficha tenía antes de generar: la fecha del último envío que
       // SÍ ocurrió, o nulo si nunca hubo ninguno.
       const undone = await c.query(
         `update patient_link set access_sent_at = $2, updated_at = now()
@@ -130,8 +130,8 @@ export class PatientAccessRepository implements PatientAccessPort {
   /**
    * `cuenta.acceso_pedido` Y NO `cuenta.acceso_enviado`, y el nombre es el arreglo.
    *
-   * La fila se escribe al ACUÑAR, dentro de la misma transacción, y el envío pasa después:
-   * cuando el relé falla, «enviado» era falso y `access_audit` es inmutable a propósito
+   * La fila se escribe al GENERAR, dentro de la misma transacción, y el envío pasa después:
+   * cuando el reenvío falla, «enviado» era falso y `access_audit` es inmutable a propósito
    * —ningún rol tiene `UPDATE` ni `DELETE`—, así que no hay nada que compensar. Lo que esta
    * línea puede afirmar es lo que de verdad ocurrió en su transacción: que alguien pidió el
    * acceso, cuándo y por dónde. Si el envío salió o no, lo dice el 200 o el 500 de la

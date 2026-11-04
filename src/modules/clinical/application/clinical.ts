@@ -239,7 +239,7 @@ export class Consents {
       version: text.version,
       texto: text.body,
       // `correcta` viaja en NULL siempre, y además la columna que la guarda no la puede leer el
-      // rol de la paciente: la promesa está en los dos sitios.
+      // rol de la paciente: la especificación está en los dos sitios.
       preguntas: text.questions.map((question) => ({ ...question, correcta: null })),
     };
   }

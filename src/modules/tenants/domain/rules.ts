@@ -7,7 +7,7 @@
 // las dos aceptaciones, `isOwnCredentialKey()` y `estimatedResponseAt()` con su cálculo de
 // «24 h hábiles». Se fueron con la revisión manual, que el dueño descartó: MedSkin no verifica
 // licencias porque no es una asociación médica. No hay estado, no hay documento que validar y
-// no hay plazo que prometer, porque no hay nadie esperando al otro lado.
+// no hay plazo que especificar, porque no hay nadie esperando al otro lado.
 
 import { ContractError } from '../../../shared/contract/error-catalog';
 
@@ -140,7 +140,7 @@ export type LicenseFormInput = {
  * pide. El consentimiento al tratamiento de datos **no se pierde con esto**: no vivía aquí,
  * vive en `consent` y en el alta de la cuenta, que es donde la persona lo da.
  *
- * `practiceId` ya no entra: existía para acotar la clave del objeto al inquilino del token
+ * `practiceId` ya no entra: existía para acotar la clave del objeto al tenant del token
  * (OWASP A01), y sin clave de objeto no hay nada del cliente que apunte a otra consulta. Lo
  * que escribe esto son tres campos de texto sobre la fila de SU consulta, que es lo que su
  * política de `UPDATE` y su `GRANT` de tres columnas ya acotan en la base.

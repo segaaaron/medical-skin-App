@@ -86,7 +86,7 @@ export class SetConsolePatientStatus {
  * EL RENGLÓN DE LA LISTA · un subconjunto EXACTO de la ficha, y ni un campo más.
  *
  * Es la única lectura de consola que devuelve más de una paciente, así que es la única que
- * puede filtrar el padrón entero por un error de campo. Sin teléfono, sin fecha de nacimiento
+ * puede filtrar el registro entero por un error de campo. Sin teléfono, sin fecha de nacimiento
  * y sin nada clínico: eso se pide de una en una.
  */
 function renglon(row: PatientRow) {

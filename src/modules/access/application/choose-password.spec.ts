@@ -1,6 +1,6 @@
-// POST /v1/access/new-password · las reglas y el 409 que prometen las dos frases.
+// POST /v1/access/new-password · las reglas y el 409 que especifican las dos frases.
 //
-// Lo que esta prueba fija y no se puede perder: el 500 y el 410 de este endpoint prometen
+// Lo que esta prueba fija y no se puede perder: el 500 y el 410 de este endpoint especifican
 // por escrito que «todavía puedes entrar con la temporal», y eso solo es verdad porque la
 // temporal se consume AL GUARDAR la nueva. Aquí se comprueba que un fallo antes de guardar
 // no toca nada, y que las cinco escrituras del guardado van en una sola llamada.
@@ -64,7 +64,7 @@ const DISPOSITIVO: Device = {
 function armar(opciones: {
   actual?: AccessCredential | null;
   esLaTemporal?: boolean;
-  veredicto?: SavePasswordVerdict;
+  resultado?: SavePasswordVerdict;
   guardadoComo?: { accountRole: 'doctor' | 'patient'; practiceId: string | null };
 }) {
   const pasos: string[] = [];
@@ -79,7 +79,7 @@ function armar(opciones: {
     saveFinalPassword: (p) => {
       pasos.push(`guardar:${p.via}:${p.currentSessionId}:${p.refreshDigest}`);
       return Promise.resolve({
-        verdict: opciones.veredicto ?? ('saved' as const),
+        verdict: opciones.resultado ?? ('saved' as const),
         accountRole: opciones.guardadoComo?.accountRole ?? ('patient' as const),
         practiceId: opciones.guardadoComo?.practiceId ?? null,
         permissions: null,
@@ -269,16 +269,16 @@ describe('POST /v1/access/new-password · el guardado', () => {
     );
   });
 
-  it('el veredicto `already_chosen` es 409 contrasena_ya_elegida', async () => {
-    const { caso } = armar({ actual: null, veredicto: 'already_chosen' });
+  it('el resultado `already_chosen` es 409 contrasena_ya_elegida', async () => {
+    const { caso } = armar({ actual: null, resultado: 'already_chosen' });
     const error = await errorDe(() => caso.run({ nueva: 'tejado-nuevo-07' }, PACIENTE));
 
     expect(error.code).toBe('contrasena_ya_elegida');
     expect(error.status).toBe(409);
   });
 
-  it('el veredicto `no_code` también: para quien lo lee es el mismo hecho', async () => {
-    const { caso } = armar({ actual: null, veredicto: 'no_code' });
+  it('el resultado `no_code` también: para quien lo lee es el mismo hecho', async () => {
+    const { caso } = armar({ actual: null, resultado: 'no_code' });
     const error = await errorDe(() =>
       caso.run({ nueva: 'tejado-nuevo-07' }, { ...PACIENTE, scope: 'recuperacion' }),
     );
@@ -290,7 +290,7 @@ describe('POST /v1/access/new-password · el guardado', () => {
     // La fila de credencial no está, y eso no lo hizo ella: contestarle «ya elegiste tu
     // contraseña, entra con ella» es decirle algo falso sobre una cuenta con la que no
     // puede entrar, y además dejaba la inconsistencia sin una línea en ningún sitio.
-    const porTemporal = armar({ actual: null, veredicto: 'no_credential' });
+    const porTemporal = armar({ actual: null, resultado: 'no_credential' });
     const error = await errorDe(() =>
       porTemporal.caso.run({ nueva: 'tejado-nuevo-07' }, PACIENTE),
     );
@@ -303,7 +303,7 @@ describe('POST /v1/access/new-password · el guardado', () => {
   });
 
   it('`no_credential` por recuperación tampoco se disfraza de 409', async () => {
-    const { caso } = armar({ actual: null, veredicto: 'no_credential' });
+    const { caso } = armar({ actual: null, resultado: 'no_credential' });
     const error = await errorDe(() =>
       caso.runFromRecovery(
         { nueva: 'tejado-nuevo-07' },
@@ -315,7 +315,7 @@ describe('POST /v1/access/new-password · el guardado', () => {
     expect(error.code).toBe('fallo_de_servicio');
   });
 
-  it('el refresco se acuña ANTES de guardar: la sesión se asciende en la misma transacción', async () => {
+  it('el refresco se genera ANTES de guardar: la sesión se asciende en la misma transacción', async () => {
     const { caso, pasos } = armar({ actual: null });
     await caso.run({ nueva: 'tejado-nuevo-07' }, PACIENTE);
 

@@ -11,7 +11,7 @@
 // sesión HTTP/2 y se reabre sola cuando el proveedor la cierra.
 //
 // EL TOKEN DE AUTORIZACIÓN SE REUSA UNA HORA. Apple admite hasta 60 minutos y rechaza al
-// remitente que acuña uno por mensaje (`TooManyProviderTokenUpdates`), que es el error que más
+// remitente que genera uno por mensaje (`TooManyProviderTokenUpdates`), que es el error que más
 // desconcierta la primera vez.
 
 import { connect, constants, type ClientHttp2Session } from 'node:http2';
@@ -133,7 +133,7 @@ export class ApnsPush implements PushPort {
     return session;
   }
 
-  /** El JWT ES256 de Apple, acuñado una vez cada 50 minutos. */
+  /** El JWT ES256 de Apple, generado una vez cada 50 minutos. */
   private async authorization(): Promise<string> {
     const now = Date.now();
     if (this.token !== null && this.token.until > now) return this.token.value;

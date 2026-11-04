@@ -3,8 +3,8 @@
 // prueba contra el motor:
 //
 //   · el cuerpo vacío no llega a tocar la base;
-//   · los cuatro veredictos se traducen a sus cuatro 401, con sus frases distintas;
-//   · el token nuevo se acuña con el `rol` de la consulta —nunca `practitioner`—, el
+//   · los cuatro resultados se traducen a sus cuatro 401, con sus frases distintas;
+//   · el token nuevo se genera con el `rol` de la consulta —nunca `practitioner`—, el
 //     consulta de la FILA y los permisos resueltos;
 //   · la paciente recibe 30 días y la doctora 12 h;
 //   · el límite se cuenta DENTRO de la transacción, y `graced` se mide y no se devuelve.
@@ -61,7 +61,7 @@ const PACIENTE: RotatedRefresh = {
 };
 
 function noRotado(verdict: Exclude<RefreshVerdict, 'rotated'>): RotatedRefresh {
-  // Así llega de la función: todo en nulo menos el veredicto. Lo que no vale no autoriza a
+  // Así llega de la función: todo en nulo menos el resultado. Lo que no vale no autoriza a
   // saber de quién era.
   return {
     verdict,
@@ -195,7 +195,7 @@ describe('POST /v1/session/refresh · el 200', () => {
     expect(visto.rotaciones[0]?.newDigest).toBe('resumen_nuevo');
   });
 
-  it('acuña el token con el rol de la consulta, la consulta de la fila y los permisos resueltos', async () => {
+  it('genera el token con el rol de la consulta, la consulta de la fila y los permisos resueltos', async () => {
     const { caso, visto } = armar({});
 
     await caso.run({ refresco: 'rfr_viejo' });
@@ -232,7 +232,7 @@ describe('POST /v1/session/refresh · el 200', () => {
     await caso.run({ refresco: 'rfr_viejo' });
 
     // Paciente primero, consulta después (migración 0020). El orden importa: la base le
-    // pone cota a cada hueco —31 días y 13 h—, así que invertirlos revienta en vez de
+    // pone límite a cada hueco —31 días y 13 h—, así que invertirlos revienta en vez de
     // dejar a una doctora con un refresco de 30 días. Aquí se fija el orden para que no
     // haga falta que lo cace la base.
     expect(visto.rotaciones[0]?.patientSeconds).toBe(30 * 24 * 60 * 60);
@@ -273,7 +273,7 @@ describe('POST /v1/session/refresh · el 200', () => {
 });
 
 describe('POST /v1/session/refresh · los errores', () => {
-  it('los cuatro veredictos que no son rotación son sus cuatro 401, con cuatro frases', async () => {
+  it('los cuatro resultados que no son rotación son sus cuatro 401, con cuatro frases', async () => {
     const esperado = {
       reused: { code: 'refresco_reutilizado', message: 'Cerramos tu sesión por seguridad. Entra otra vez.' },
       revoked: { code: 'sesion_revocada', message: 'Cerramos tu sesión en este teléfono.' },
@@ -291,7 +291,7 @@ describe('POST /v1/session/refresh · los errores', () => {
       expect(error.code).toBe(esperada.code);
       expect(error.status).toBe(401);
       expect(error.userMessage).toBe(esperada.message);
-      // Un veredicto que no vale no gasta cuota de nadie: no hay `sid` que contar.
+      // Un resultado que no vale no gasta cuota de nadie: no hay `sid` que contar.
       expect(visto.contados).toEqual([]);
       expect(visto.firmas).toEqual([]);
     }
@@ -304,7 +304,7 @@ describe('POST /v1/session/refresh · los errores', () => {
 
     expect(error.code).toBe('cuenta_suspendida');
     expect(error.status).toBe(403);
-    // Y no se le devuelve par nuevo: la rotación mató la credencial, que es el lado seguro.
+    // Y no se le devuelve par nuevo: la rotación invalidó la credencial, que es el lado seguro.
     expect(visto.firmas).toEqual([]);
   });
 

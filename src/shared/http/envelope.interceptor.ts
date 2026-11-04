@@ -6,7 +6,7 @@
 //
 //   1. NO HABÍA DÓNDE PONER LA TRAZA. El servidor genera un `requestId` y un `traceId` por
 //      petición, los escribe en `service_failure`… y no se los decía a nadie. Cuando una app
-//      reportaba un fallo no había identificador que cruzar con la bitácora: se buscaba por
+//      reportaba un fallo no había identificador que cruzar con la auditoría: se buscaba por
 //      hora y a ojo. Ahora vuelve en `meta` y en la cabecera `X-Request-Id`.
 //   2. NO HABÍA RELOJ DEL SERVIDOR. Esta API devuelve pausas y caducidades —`pausa_hasta`,
 //      `token_caduca_en`, `caduca_en`— que la app compara contra SU reloj. Un teléfono con la
@@ -75,7 +75,7 @@ export class EnvelopeInterceptor implements NestInterceptor {
         const meta = metaOf(req, this.region, new Date());
 
         // La traza también por cabecera: una app que falla al decodificar el cuerpo —o un
-        // 204 sin cuerpo— sigue teniendo con qué buscar en la bitácora.
+        // 204 sin cuerpo— sigue teniendo con qué buscar en la auditoría.
         void res.header('X-Request-Id', meta.peticion_id);
 
         // Un cuerpo vacío no se envuelve: un 204 con `{datos: undefined}` es peor que un 204.

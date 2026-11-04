@@ -121,7 +121,7 @@ export class PhotoWorker {
     const now = new Date();
     for (const photo of photos) {
       const master = await this.download(KEYS.master(photo.id), now);
-      // Sin maestra no hay nada que regenerar, y marcarla como lista sería mentir. Se queda
+      // Sin maestra no hay nada que regenerar, y marcarla como lista sería informar en falso. Se queda
       // como está: la foto sigue `lista` sin derivadas, y eso se ve en la pantalla.
       if (master === null) continue;
 

@@ -1,5 +1,5 @@
 // LA PUERTA DE LA CONSOLA. Casi todo lo que hace esta frontera es decir no, así que lo que
-// hay que probar es cada no. Desde el 30 de octubre de 2026 también acuña —ver el bloque
+// hay que probar es cada no. Desde el 30 de octubre de 2026 también genera —ver el bloque
 // «PlatformTokens · lo que firma» al final—, y eso añade una prueba que antes no tenía
 // sentido: que lo que firma lo acepte su propio verificador.
 //
@@ -10,7 +10,7 @@
 //     la frase de la consola.
 //
 // El guardia se prueba aquí y no en `scope.guard.spec.ts` porque quien tiene la llave privada
-// con la que se acuñan estos tokens es este archivo: el servicio que firma de verdad vive
+// con la que se generan estos tokens es este archivo: el servicio que firma de verdad vive
 // fuera de la región.
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -98,7 +98,7 @@ type Partes = {
   edad?: number;
 };
 
-async function acunar(partes: Partes = {}): Promise<string> {
+async function generar(partes: Partes = {}): Promise<string> {
   const ahora = Math.floor(Date.now() / 1000);
   const emitido = ahora - (partes.edad ?? 0);
   return new SignJWT({
@@ -126,7 +126,7 @@ async function rechazo(token: string): Promise<ContractError> {
 
 describe('PlatformTokens · lo que pasa', () => {
   it('un token del servicio de plataforma deja `sub`, `etiqueta` y sus permisos', async () => {
-    const quien = await plataforma.verify(await acunar());
+    const quien = await plataforma.verify(await generar());
     expect(quien).toEqual({
       via: 'plataforma',
       subject: SUB,
@@ -137,25 +137,25 @@ describe('PlatformTokens · lo que pasa', () => {
   });
 
   it('un token sin permisos es válido y no abre nada', async () => {
-    const quien = await plataforma.verify(await acunar({ permisos: [] }));
+    const quien = await plataforma.verify(await generar({ permisos: [] }));
     expect(quien.permissions).toEqual([]);
   });
 });
 
 describe('PlatformTokens · la firma y el `kid`', () => {
   it('OTRA LLAVE NO PASA, aunque el `kid` y las reclamaciones sean las buenas', async () => {
-    // El caso que justifica que este archivo exista: cualquiera puede acuñar un JWT con
+    // El caso que justifica que este archivo exista: cualquiera puede generar un JWT con
     // `iss: medskin-plataforma`, el `kid` correcto y los cinco permisos. Lo que no puede es
     // firmarlo con una llave que esta región acepte.
     const ajena = await generateKeyPair('Ed25519', { extractable: true });
-    const error = await rechazo(await acunar({ clave: ajena.privateKey }));
+    const error = await rechazo(await generar({ clave: ajena.privateKey }));
     expect(error.code).toBe('token_de_plataforma_no_valido');
     expect(error.status).toBe(401);
     expect(error.userMessage).toBe('Tu sesión de consola no es válida. Vuelve a entrar.');
   });
 
   it('un `kid` desconocido no pasa ni con la firma buena', async () => {
-    const error = await rechazo(await acunar({ kid: 'el-kid-del-ano-que-viene' }));
+    const error = await rechazo(await generar({ kid: 'el-kid-del-ano-que-viene' }));
     expect(error.code).toBe('token_de_plataforma_no_valido');
   });
 
@@ -196,17 +196,17 @@ describe('PlatformTokens · la firma y el `kid`', () => {
 
     const kidNuevo = await calculateJwkThumbprint(await exportJWK(nueva.publicKey));
     // El de la llave VIEJA sigue entrando: es el que ya está en los teléfonos de soporte.
-    await expect(conVentana.verify(await acunar())).resolves.toMatchObject({ subject: SUB });
+    await expect(conVentana.verify(await generar())).resolves.toMatchObject({ subject: SUB });
     // Y el de la NUEVA también: el servicio de plataforma ya puede empezar a firmar con ella.
     await expect(
-      conVentana.verify(await acunar({ clave: nueva.privateKey, kid: kidNuevo })),
+      conVentana.verify(await generar({ clave: nueva.privateKey, kid: kidNuevo })),
     ).resolves.toMatchObject({ subject: SUB });
 
     // Lo que no cambia: una llave que no está en la ventana no entra.
     const ajena = await generateKeyPair('Ed25519', { extractable: true });
     const kidAjeno = await calculateJwkThumbprint(await exportJWK(ajena.publicKey));
     await expect(
-      conVentana.verify(await acunar({ clave: ajena.privateKey, kid: kidAjeno })),
+      conVentana.verify(await generar({ clave: ajena.privateKey, kid: kidAjeno })),
     ).rejects.toMatchObject({ code: 'token_de_plataforma_no_valido' });
   });
 
@@ -217,13 +217,13 @@ describe('PlatformTokens · la firma y el `kid`', () => {
 
 describe('PlatformTokens · las reclamaciones', () => {
   it('`iss` que no es el servicio de plataforma: 401', async () => {
-    expect((await rechazo(await acunar({ iss: 'medskin-api' }))).code).toBe(
+    expect((await rechazo(await generar({ iss: 'medskin-api' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
 
   it('`exp` pasado: 401 token_de_plataforma_caducado, y sin frase', async () => {
-    const error = await rechazo(await acunar({ vida: -30 }));
+    const error = await rechazo(await generar({ vida: -30 }));
     expect(error.code).toBe('token_de_plataforma_caducado');
     expect(error.status).toBe(401);
     // LLEVA FRASE desde el 31 de octubre de 2026. Antes iba vacía, porque el contrato decía
@@ -239,12 +239,12 @@ describe('PlatformTokens · las reclamaciones', () => {
     // un año. 16 minutos de antigüedad y `exp` dentro de una hora, y sale CADUCADO —que es
     // lo que es— así que la consola pide otro token y repite, sin sacar a nadie de la
     // pantalla por un error de quien firma.
-    const error = await rechazo(await acunar({ edad: 16 * 60, vida: 60 * 60 }));
+    const error = await rechazo(await generar({ edad: 16 * 60, vida: 60 * 60 }));
     expect(error.code).toBe('token_de_plataforma_caducado');
   });
 
   it('`aud` de otra región: 403 region_no_corresponde, y dice a cuál ir', async () => {
-    const error = await rechazo(await acunar({ aud: 'eu' }));
+    const error = await rechazo(await generar({ aud: 'eu' }));
     expect(error.code).toBe('region_no_corresponde');
     expect(error.status).toBe(403);
     expect(error.userMessage).toBe('Ese token es de otra región. Abre la consola de eu.');
@@ -254,7 +254,7 @@ describe('PlatformTokens · las reclamaciones', () => {
   it('`aud` que no es ninguna de las tres regiones: 401, no 403', async () => {
     // Una audiencia inventada no es «otra región»: es una reclamación que no cuadra con nada,
     // y mandarla al 403 pondría texto del token en una frase.
-    expect((await rechazo(await acunar({ aud: 'bo-1' }))).code).toBe(
+    expect((await rechazo(await generar({ aud: 'bo-1' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
@@ -264,21 +264,21 @@ describe('PlatformTokens · las reclamaciones', () => {
     // `license.reviewed_by`, `access_audit.actor_account_id`, las tres `uuid`—, así que la
     // forma se comprueba en la puerta. Un `usr_plt_…` es un token de otra versión del
     // sistema, no una petición que esta región pueda atender.
-    expect((await rechazo(await acunar({ sub: 'usr_plt_01HQZZ8K3M4N5P6Q7R8S9T0V' }))).code).toBe(
+    expect((await rechazo(await generar({ sub: 'usr_plt_01HQZZ8K3M4N5P6Q7R8S9T0V' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
-    expect((await rechazo(await acunar({ sub: '' }))).code).toBe('token_de_plataforma_no_valido');
+    expect((await rechazo(await generar({ sub: '' }))).code).toBe('token_de_plataforma_no_valido');
     // Un uuid con basura pegada tampoco: el patrón está anclado por los dos lados.
-    expect((await rechazo(await acunar({ sub: `${SUB} ` }))).code).toBe(
+    expect((await rechazo(await generar({ sub: `${SUB} ` }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
 
   it('sin `etiqueta` no pasa: la auditoría la necesita y no se inventa', async () => {
-    expect((await rechazo(await acunar({ etiqueta: undefined }))).code).toBe(
+    expect((await rechazo(await generar({ etiqueta: undefined }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
-    expect((await rechazo(await acunar({ etiqueta: '   ' }))).code).toBe(
+    expect((await rechazo(await generar({ etiqueta: '   ' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
@@ -288,16 +288,16 @@ describe('PlatformTokens · las reclamaciones', () => {
     // un token con permisos que este backend no entiende es un token de otra versión del
     // sistema».
     const error = await rechazo(
-      await acunar({ permisos: ['plataforma:consultas:leer', 'plataforma:todo'] }),
+      await generar({ permisos: ['plataforma:consultas:leer', 'plataforma:todo'] }),
     );
     expect(error.code).toBe('token_de_plataforma_no_valido');
   });
 
   it('`permisos` que no es una lista, o con algo que no es cadena: 401', async () => {
-    expect((await rechazo(await acunar({ permisos: 'plataforma:consultas:leer' }))).code).toBe(
+    expect((await rechazo(await generar({ permisos: 'plataforma:consultas:leer' }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
-    expect((await rechazo(await acunar({ permisos: [7] }))).code).toBe(
+    expect((await rechazo(await generar({ permisos: [7] }))).code).toBe(
       'token_de_plataforma_no_valido',
     );
   });
@@ -351,7 +351,7 @@ describe('ScopeGuard · las rutas de la consola', () => {
   it('cada ruta abre con SU permiso y deja `platform`, sin `caller` ni `recovery`', async () => {
     for (const [clave, permiso] of Object.entries(CONSOLA)) {
       const [metodo, ruta] = clave.split(' ') as [string, string];
-      const req = peticion(metodo, ruta, `Bearer ${await acunar({ permisos: [permiso] })}`);
+      const req = peticion(metodo, ruta, `Bearer ${await generar({ permisos: [permiso] })}`);
 
       expect(await guardia.canActivate(contexto(req)), clave).toBe(true);
       expect(req.medskin?.platform?.subject, clave).toBe(SUB);
@@ -366,7 +366,7 @@ describe('ScopeGuard · las rutas de la consola', () => {
       const [metodo, ruta] = clave.split(' ') as [string, string];
       // Todos los permisos menos el que esta ruta pide: ni la suma de los otros cuatro abre.
       const otros = PLATFORM_PERMISSIONS.filter((p) => p !== permiso);
-      const error = await denegar(metodo, ruta, `Bearer ${await acunar({ permisos: otros })}`);
+      const error = await denegar(metodo, ruta, `Bearer ${await generar({ permisos: otros })}`);
 
       expect(error.code, clave).toBe('sin_permiso');
       expect(error.status, clave).toBe(403);
@@ -394,7 +394,7 @@ describe('ScopeGuard · las rutas de la consola', () => {
     const error = await denegar(
       'GET',
       '/v1/access/sessions',
-      `Bearer ${await acunar()}`,
+      `Bearer ${await generar()}`,
     );
     expect(error.code).toBe('token_no_valido');
   });
@@ -405,7 +405,7 @@ describe('ScopeGuard · las rutas de la consola', () => {
     const error = await denegar(
       'POST',
       '/v1/session/suplantacion',
-      `Bearer ${await acunar({ permisos: ['plataforma:suplantar'] })}`,
+      `Bearer ${await generar({ permisos: ['plataforma:suplantar'] })}`,
     );
     expect(error.code).toBe('fallo_de_servicio');
     expect(error.status).toBe(500);

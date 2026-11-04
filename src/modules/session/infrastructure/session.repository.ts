@@ -141,7 +141,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
    *
    * LAS DOS VIDAS VAN EN SEGUNDOS Y EN ESTE ORDEN: paciente primero, consulta después
    * (migración 0020). El número vive en el contrato y en `REFRESH_LIFETIME_MS`, no
-   * duplicado en la base; lo que vive en la base es la COTA —31 días y 13 h—, y por eso
+   * duplicado en la base; lo que vive en la base es el límite —31 días y 13 h—, y por eso
    * invertir los dos argumentos no deja a una doctora con un refresco de 30 días: revienta
    * con `invalid_parameter_value`. La caducidad buena la calcula la función con el rol en
    * la mano y vuelve en `refresh_expires_at`.
@@ -162,7 +162,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
       if (row === undefined) {
         throw new ServiceFailure(
           FAILURE_PHRASES.refreshSession,
-          new Error('medskin_session_refresh no devolvió veredicto'),
+          new Error('medskin_session_refresh no devolvió resultado'),
         );
       }
 
@@ -177,7 +177,7 @@ export class SessionRepository implements SessionSnapshotPort, RefreshPort {
 }
 
 /**
- * La fila de la función, traducida. Los veredictos que no son `rotated` llegan con todo en
+ * La fila de la función, traducida. Los resultados que no son `rotated` llegan con todo en
  * nulo y se quedan así: lo que no vale no autoriza a saber de quién era.
  */
 function toRotatedRefresh(row: RefreshRow): RotatedRefresh {

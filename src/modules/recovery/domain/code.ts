@@ -68,21 +68,21 @@ export function readCode(value: unknown): string {
 export type CodeVerdict = 'live' | 'expired' | 'voided';
 
 /**
- * EL VEREDICTO DE UN CORREO QUE NO TIENE CUENTA, y es la pieza que cierra el último
- * oráculo de este flujo.
+ * EL RESULTADO DE UN CORREO QUE NO TIENE CUENTA, y es la pieza que cierra el último
+ * filtración de este flujo.
  *
- * `medskin_recovery_live()` devuelve `live` con el señuelo cuando no hay cuenta y cuando
+ * `medskin_recovery_live()` devuelve `live` con el decoy cuando no hay cuenta y cuando
  * no hay código: no tiene fila que caducar ni que anular. Si el endpoint se quedara ahí,
  * los dos 410 del contrato solo le saldrían a los correos reales, y entonces el CÓDIGO DE
  * ESTADO diría si un correo existe —que es exactamente lo que `_convenciones.md` prohíbe
  * «ni con el código de estado, ni con la frase, ni con el tiempo de respuesta»—. Bastaría
  * pedir un código, gastar cinco intentos y mirar si el sexto responde 410 o 401.
  *
- * Así que para el señuelo el veredicto se reconstruye con lo único que cuenta igual exista
+ * Así que para el decoy el resultado se reconstruye con lo único que cuenta igual exista
  * o no la cuenta: los contadores de Redis.
  *   · cinco intentos gastados      → `voided`, igual que el código real al quinto;
  *   · se pidió un código y ya no está vivo → `expired`, igual que el real a los 10 min;
- *   · en cualquier otro caso       → `live`, y la comparación contra el señuelo falla.
+ *   · en cualquier otro caso       → `live`, y la comparación contra el decoy falla.
  */
 export function verdictForUnknownAccount(history: {
   attemptsSpent: number;

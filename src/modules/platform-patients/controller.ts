@@ -11,7 +11,7 @@
 //
 // LA HISTORIA ES `POST` Y NO `GET`, y no es un capricho: deja una fila en el registro que el
 // doctor lee, y el motivo no puede viajar en la URL —acabaría en los registros de Traefik, en
-// el historial del navegador y en el `Referer`—. Lo que deja rastro en la bitácora de otro no
+// el historial del navegador y en el `Referer`—. Lo que deja rastro en la auditoría de otro no
 // es un `GET`.
 
 import { Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';

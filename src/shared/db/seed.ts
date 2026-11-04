@@ -8,7 +8,7 @@
 // función.
 //
 // Lo único que escribe el DUEÑO del esquema es lo que ningún rol de aplicación puede
-// escribir: el señuelo del acceso (que no tiene un solo grant, a propósito), la fila de
+// escribir: el decoy del acceso (que no tiene un solo grant, a propósito), la fila de
 // `practice` con su licencia y la cuenta de plataforma que hace de operador.
 
 import { randomBytes } from 'node:crypto';
@@ -61,9 +61,9 @@ async function seed(): Promise<void> {
     ]);
     await owner.query('delete from practice where id = $1', [PRACTICE]);
 
-    // 1 · El señuelo. Un hash de Argon2id de una contraseña aleatoria que NO se guarda:
+    // 1 · El decoy. Un hash de Argon2id de una contraseña aleatoria que NO se guarda:
     // sin él `medskin_access_credential()` falla a propósito, porque sin «mismo tiempo» el
-    // `401 acceso_no_coincide` miente. Se siembra con el MISMO coste que usa el proceso.
+    // `401 acceso_no_coincide` informa en falso. Se siembra con el MISMO coste que usa el proceso.
     const decoy = await passwords.hash(randomBytes(32).toString('base64url'));
     await owner.query(
       `insert into access_decoy (only_row, hash) values (true, $1)
@@ -113,7 +113,7 @@ async function seed(): Promise<void> {
       },
     );
     if (ownerRow === undefined) {
-      throw new Error('medskin_create_practice_owner no devolvió veredicto');
+      throw new Error('medskin_create_practice_owner no devolvió resultado');
     }
 
     const practitionerAccount = ownerRow.account_id;
@@ -150,7 +150,7 @@ async function seed(): Promise<void> {
     //
     // `patient_link` copia el nombre de la consulta, el de la doctora y la ciudad (la
     // pregunta 7): la paciente no tiene política en `practice` ni en `practitioner`.
-    // `medical_history` nace con todo en nulo —«puedes atenderla hoy y llenar esto
+    // `medical_history` se crea con todo en nulo —«puedes atenderla hoy y llenar esto
     // después»—, y nulo no es `false`: es «nadie preguntó todavía».
     const ficha = await withTenantContext(
       app,

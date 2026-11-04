@@ -32,14 +32,14 @@ export class PlatformAccessRepository implements PlatformCredentialPort {
         [email],
       );
       const row = rows[0];
-      // Una fila y un hash, siempre. Si no, el señuelo no está sembrado y la entrada no se
-      // puede servir sin abrir el oráculo del reloj: antes un 500 con su causa que un 401
+      // Una fila y un hash, siempre. Si no, el decoy no está sembrado y la entrada no se
+      // puede servir sin abrir la filtración del reloj: antes un 500 con su causa que un 401
       // que llega más rápido.
       if (rows.length !== 1 || row === undefined || !row.hash) {
         throw new ServiceFailure(
           FAILURE_PHRASES.platformSignIn,
           new Error(
-            `medskin_platform_credential devolvió ${rows.length} filas o sin hash señuelo`,
+            `medskin_platform_credential devolvió ${rows.length} filas o sin hash decoy`,
           ),
         );
       }

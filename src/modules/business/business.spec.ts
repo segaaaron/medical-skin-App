@@ -1,6 +1,6 @@
 // El tramo 8 contra la base real, en un solo archivo.
 //
-// Lo que se prueba: que el margen usa el COSTO DEL LOTE APLICADO y no miente cuando no lo sabe,
+// Lo que se prueba: que el margen usa el COSTO DEL LOTE APLICADO y no informa en falso cuando no lo sabe,
 // que un cobro se anula con otra fila en vez de borrarse, que el inventario no queda negativo,
 // que un informe de menos de cinco pacientes no se devuelve, y que la paciente ve el importe de
 // sus cobros pero no el medio ni la referencia de la consulta.
@@ -81,7 +81,7 @@ const ana: Caller = {
 
 const key = (k: string) => ({ key: k, bodyHash: `huella-${k}` });
 
-/** El almacenamiento de desarrollo —LocalStack— y un buzón de mentira que guarda lo que sale. */
+/** El almacenamiento de desarrollo —LocalStack— y un buzón de falsedad que guarda lo que sale. */
 const storage: StorageConfig = {
   endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:4566',
   region: process.env.S3_REGION ?? 'us-east-1',
@@ -383,7 +383,7 @@ describe('el margen, con el costo del lote', () => {
     const margins = (await business.margins({}, staff(B.doctor))) as {
       sin_costo_conocido: { sesiones: number; por_que: string } | null;
     };
-    // EXISTE PARA NO MENTIR: asumir costo cero daría un margen del 100 %.
+    // EXISTE PARA NO INFORMAR EN FALSO: asumir costo cero daría un margen del 100 %.
     expect(margins.sin_costo_conocido).toMatchObject({
       sesiones: 1,
       por_que: 'lotes sin costo registrado',

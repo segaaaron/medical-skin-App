@@ -68,7 +68,7 @@ export class ReadSession {
     // sesión?», y la respuesta es que no. La suspensión la vuelve a encontrar al entrar,
     // que es donde el 403 tiene pantalla. Y es el único sitio del tramo donde
     // `session.revoked_at` se mira: el guardia no lo consulta a propósito, porque el token
-    // vive 15 min y eso es la cota que `sesion.md` eligió en vez de un viaje a la base por
+    // vive 15 min y eso es el límite que `sesion.md` eligió en vez de un viaje a la base por
     // petición.
     if (snapshot.revokedAt !== null) throw new ContractError('sesion_revocada');
     if (snapshot.accountStatus !== 'activa') throw new ContractError('cuenta_suspendida');

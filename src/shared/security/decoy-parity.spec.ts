@@ -1,4 +1,4 @@
-// La comprobación de arranque del señuelo (0007). Dos mitades:
+// La comprobación de arranque del decoy (0007). Dos mitades:
 //
 //   · la comparación, pura y determinista, con el caso que importa —uno que divergió—, que
 //     contra la base no se puede montar sin resembrar la fila que mide todo lo demás;
@@ -6,8 +6,8 @@
 //     en Docker: es exactamente lo que `main.ts` hace antes de `app.listen()`.
 //
 // Lo que esta prueba defiende: alguien sube `memoryCost` en `passwords.ts` —endurecer
-// Argon2 es mantenimiento rutinario—, no escribe la migración que resiembra el señuelo, y
-// el oráculo del reloj del 27 de octubre vuelve sin que `tsc` ni `eslint` digan nada.
+// Argon2 es mantenimiento rutinario—, no escribe la migración que resiembra el decoy, y
+// la filtración del reloj del 27 de octubre vuelve sin que `tsc` ni `eslint` digan nada.
 
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -24,14 +24,14 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe('la paridad del señuelo · la comparación', () => {
+describe('la paridad del decoy · la comparación', () => {
   it('coincide: no hay problema que contar', () => {
     expect(decoyParityProblem(appCost())).toBeNull();
   });
 
-  it('un `memoryCost` endurecido sin resembrar el señuelo se nombra con los dos números', () => {
-    // El señuelo se quedó donde estaba y la aplicación subió: es el escenario exacto del
-    // oráculo. El valor sale de `appCost()` y no de un número fijo, para que el caso siga
+  it('un `memoryCost` endurecido sin resembrar el decoy se nombra con los dos números', () => {
+    // El decoy se quedó donde estaba y la aplicación subió: es el escenario exacto del
+    // filtración. El valor sale de `appCost()` y no de un número fijo, para que el caso siga
     // probando lo mismo el día que el perfil de OWASP cambie.
     const atrasado = { ...appCost(), memoryCost: appCost().memoryCost - 1024 };
     const problema = decoyParityProblem(atrasado);
@@ -54,18 +54,18 @@ describe('la paridad del señuelo · la comparación', () => {
     expect(problema).toContain('parallelism');
   });
 
-  it('sin fila de señuelo tampoco se sirve: no hay nada contra lo que medir', () => {
+  it('sin fila de decoy tampoco se sirve: no hay nada contra lo que medir', () => {
     expect(decoyParityProblem(null)).toContain('access_decoy');
   });
 });
 
-describe('la paridad del señuelo · contra la base real', () => {
+describe('la paridad del decoy · contra la base real', () => {
   it('la fila sembrada cuesta lo que cuesta una contraseña real, y el arranque pasa', async () => {
     expect(await readDecoyParams(pool)).toEqual(appCost());
     await expect(assertDecoyParity(pool)).resolves.toBeUndefined();
   });
 
-  it('el hash del señuelo NO se lee: la función devuelve parámetros y nada más', async () => {
+  it('el hash del decoy NO se lee: la función devuelve parámetros y nada más', async () => {
     const params = await readDecoyParams(pool);
     expect(Object.keys(params ?? {}).sort()).toEqual([
       'algorithm',

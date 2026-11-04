@@ -55,11 +55,11 @@ export interface SessionSnapshotPort {
 // Ninguna de esas tres reglas se vuelve a escribir en TypeScript.
 // ---------------------------------------------------------------------------------------
 
-/** Los cinco veredictos de la función, tal cual. */
+/** Los cinco resultados de la función, tal cual. */
 export type RefreshVerdict = 'rotated' | 'reused' | 'revoked' | 'expired' | 'invalid';
 
 /**
- * El veredicto completo. Todo lo que no es `rotated` llega con los campos de la cuenta en
+ * El resultado completo. Todo lo que no es `rotated` llega con los campos de la cuenta en
  * nulo —la función no los devuelve, y es correcto: un refresco que no vale no autoriza a
  * saber de quién era—, así que quien lo lee resuelve el 401 y no mira nada más.
  */
@@ -89,9 +89,9 @@ export interface RefreshPort {
    * `medskin_session_refresh()` con `app_anonymous`: cuando llega esta petición no hay
    * sesión que leer, y por eso no se fija ningún contexto.
    *
-   * `withinTransaction` corre DENTRO de la transacción de la rotación, con el veredicto ya
+   * `withinTransaction` corre DENTRO de la transacción de la rotación, con el resultado ya
    * en mano. Si lanza, el `ROLLBACK` deshace la rotación y **el refresco que llegó sigue
-   * valiendo**. Es lo que hace cumplible el `429`: su frase promete «espera y reintenta
+   * valiendo**. Es lo que hace cumplible el `429`: su frase especifica «espera y reintenta
    * con retroceso», y eso solo es verdad si el intento denegado no se gastó el refresco.
    */
   rotate(p: {
@@ -100,7 +100,7 @@ export interface RefreshPort {
     /**
      * Las dos vidas del contrato en SEGUNDOS, y la función elige con el rol en la mano
      * (migración 0020): paciente 30 días, doctora y equipo 12 h. El número viaja desde
-     * aquí para que no esté duplicado en la base; la base le pone la cota, que es lo que
+     * aquí para que no esté duplicado en la base; la base le pone el límite, que es lo que
      * convierte un cambio de orden de los dos argumentos en un fallo a gritos en vez de
      * en un refresco de 30 días para una doctora.
      */
@@ -123,8 +123,8 @@ export interface RefreshLimitsPort {
 }
 
 /**
- * El acuñador, visto desde este endpoint. Es el `TokenPort` del acceso **más**
- * `digestRefresh`, que el refresco necesita y el acceso no: ahí el refresco se acuña
+ * El generador de tokens, visto desde este endpoint. Es el `TokenPort` del acceso **más**
+ * `digestRefresh`, que el refresco necesita y el acceso no: ahí el refresco se genera
  * —y el resumen sale con él—, aquí llega uno de fuera y hay que resumirlo para buscarlo.
  *
  * Puerto propio y no un método más en el del acceso: añadírselo obligaría a cambiar todos

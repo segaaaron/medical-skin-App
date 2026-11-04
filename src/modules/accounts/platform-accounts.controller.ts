@@ -20,9 +20,9 @@
 // controlador corre, el permiso de esta ruta ya estaba en el token firmado y lo verificó el
 // guardia. Comprobarlo dos veces son dos autorizaciones que se pueden desacordar.
 //
-// NINGUNA DE LAS DOS LLEVA `Idempotency-Key`: el reenvío porque cada llamada acuña una
-// contraseña nueva y mata la anterior —repetir la primera respuesta diría que vale una
-// contraseña muerta—, y la pausa porque es idempotente por naturaleza.
+// NINGUNA DE LAS DOS LLEVA `Idempotency-Key`: el reenvío porque cada llamada genera una
+// contraseña nueva y invalida la anterior —repetir la primera respuesta diría que vale una
+// contraseña invalidada—, y la pausa porque es idempotente por naturaleza.
 
 import { Controller, Delete, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 
@@ -75,9 +75,9 @@ export class PlatformAccountsController {
    * el que ya podía reenviar, sin que nadie lo decidiera. El permiso lo verificó el guardia con
    * la tabla de rutas y aquí NO se vuelve a comprobar.
    *
-   * Tampoco lleva `Idempotency-Key`, por lo mismo que el reenvío: cada llamada acuña una
-   * contraseña nueva y mata la anterior, así que repetir la primera respuesta diría que vale
-   * una contraseña muerta.
+   * Tampoco lleva `Idempotency-Key`, por lo mismo que el reenvío: cada llamada genera una
+   * contraseña nueva y invalida la anterior, así que repetir la primera respuesta diría que vale
+   * una contraseña invalidada.
    */
   @Post(':account_id/access/reset')
   @HttpCode(200)

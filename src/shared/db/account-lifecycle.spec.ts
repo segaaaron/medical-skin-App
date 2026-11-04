@@ -329,7 +329,7 @@ describe('el borrado de la propia cuenta', () => {
     expect(fichas[0]?.n).toBe(2);
   });
 
-  it('el plazo con el que se borró queda en la bitácora, que es el dato que una variable de entorno no cuenta hacia atrás', async () => {
+  it('el plazo con el que se borró queda en la auditoría, que es el dato que una variable de entorno no cuenta hacia atrás', async () => {
     const { rows } = await owner.query(
       `select data->>'retention_until' as until, data->>'reason' as reason,
               (data->>'practice_deleted')::boolean as practice_deleted
@@ -340,7 +340,7 @@ describe('el borrado de la propia cuenta', () => {
 
     // Y LA FECHA QUEDA TAMBIÉN EN EL VÍNCULO SUELTO, que es la única fila desde la que un
     // barrendero puede volver a la ficha: en `access_audit` no sirve, porque el correo de la
-    // cuenta se anonimiza y desde la bitácora ya no se llega a nadie.
+    // cuenta se anonimiza y desde la auditoría ya no se llega a nadie.
     const { rows: vinculos } = await owner.query<{ retention_until: string | null }>(
       `select to_char(retention_until, 'YYYY-MM-DD') as retention_until
          from patient_link where patient_id = any($1::uuid[])`,
@@ -423,7 +423,7 @@ describe('el borrado de la propia cuenta', () => {
     ]);
     expect(again?.verdict).toBe('already_deleted');
     expect(again?.deleted_at).toEqual(before[0]?.deleted_at);
-    // Y ni una segunda línea de bitácora: un reintento no es un segundo borrado.
+    // Y ni una segunda línea de auditoría: un reintento no es un segundo borrado.
     const { rows: audit } = await owner.query<{ n: number }>(
       `select count(*)::int as n from access_audit where action = 'account.delete' and subject_id = $1`,
       [LEAVING.account],
@@ -532,7 +532,7 @@ describe('el reenvío de acceso de la consola', () => {
       expires(),
     ]);
 
-  it('acuña una temporal nueva y no devuelve ni el hash ni el correo', async () => {
+  it('genera una temporal nueva y no devuelve ni el hash ni el correo', async () => {
     const [result] = await resend(ctxPlatform, WAITING.account);
     expect(result?.outcome).toBe('acceso_renovado');
     // «Soporte no la ve»: la función devuelve dos columnas y ninguna es la contraseña.

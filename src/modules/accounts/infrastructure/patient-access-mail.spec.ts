@@ -24,7 +24,7 @@ const VALERIA: DeliveryFacts = {
   expiryText: 'Caduca el jueves 30 a las 18:24',
 };
 
-/** La misma persona, cuando su correo YA tenía cuenta: no se le acuña contraseña ninguna. */
+/** La misma persona, cuando su correo YA tenía cuenta: no se le genera contraseña ninguna. */
 const YA_TIENE: LinkNoticeFacts = {
   patientFirstName: 'Valeria',
   patientEmail: 'valeria.antelo@gmail.com',
@@ -81,12 +81,12 @@ describe('el correo del acceso', () => {
 // porque esa persona tiene que enterarse de que una consulta la dio de alta: es su identidad
 // la que queda vinculada (decisión del dueño, 28 de octubre de 2026).
 describe('el correo de quien ya tiene cuenta', () => {
-  it('no nombra ninguna contraseña, porque no se le acuñó ninguna', () => {
+  it('no nombra ninguna contraseña, porque no se le generó ninguna', () => {
     const cuerpo = linkNoticeMailBody(YA_TIENE);
 
     expect(cuerpo).toContain('soy la Dra. Andrea Paz');
     expect(cuerpo).toContain('Entra con tu cuenta de siempre');
-    // Ni una contraseña con la forma de las temporales, ni la promesa de que algo caduca.
+    // Ni una contraseña con la forma de las temporales, ni la especificación de que algo caduca.
     expect(cuerpo).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
     expect(cuerpo).not.toContain('Caduca');
   });

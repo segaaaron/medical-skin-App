@@ -50,7 +50,7 @@ export type TenantFileResponse = {
     pausa_hasta: string | null;
     sesiones_activas: number;
     /**
-     * `true` = su PIN sigue sin estrenar, así que `…/access/resend` le funciona. `false` = ya
+     * `true` = su PIN sigue sin usar, así que `…/access/resend` le funciona. `false` = ya
      * eligió su contraseña y solo le vale `…/access/reset`. La consola pinta el botón que
      * corresponde SIN tener que descubrirlo provocando un `409`, que costaba un PIN cada vez.
      */

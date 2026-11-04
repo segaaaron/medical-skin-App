@@ -1,11 +1,11 @@
 // POST /v1/accounts/{account_id}/access · mandar —o volver a mandar— el acceso de una
 // paciente, con contraseña temporal nueva.
 //
-// «Cada llamada acuña una contraseña nueva y mata la anterior», y por eso NO es idempotente
+// «Cada llamada genera una contraseña nueva y invalida la anterior», y por eso NO es idempotente
 // y no lleva `Idempotency-Key`: dos llamadas son dos temporales, y la que vale es la última.
 //
 // El orden importa por una razón concreta: el `celular_necesario_para_whatsapp` se
-// comprueba ANTES de acuñar. Si se acuñara primero, una doctora que elige WhatsApp sobre
+// comprueba ANTES de generar. Si se generara primero, una doctora que elige WhatsApp sobre
 // una ficha sin celular habría matado la temporal que su paciente ya tenía para recibir un
 // 400.
 //
@@ -13,8 +13,8 @@
 // contraseña viaja en la respuesta. Nunca ninguna de las dos. `via: "correo"` incumplía las
 // dos mitades a la vez —`contrasena_temporal: null` y nadie mandando el correo—, y el
 // resultado era una paciente que entraba y, tras un reenvío, se quedaba fuera para
-// siempre: la temporal anterior muerta, `temp_first_used_at` de vuelta a nulo y
-// «Olvidé mi contraseña» acuñando nada, porque exige una temporal estrenada.
+// siempre: la temporal anterior invalidada, `temp_first_used_at` de vuelta a nulo y
+// «Olvidé mi contraseña» generando nada, porque exige una temporal usada.
 
 import { z } from 'zod';
 
@@ -55,8 +55,8 @@ export type AccessBlock = {
   via: DeliveryChannel;
   /**
    * EL INVARIANTE DEL ENDPOINT: o se entregó un mensaje, o la contraseña viaja en la
-   * respuesta. Nunca ninguna de las dos, porque acuñar mata la temporal que la paciente ya
-   * tenía y «Olvidé mi contraseña» no sirve con una temporal sin estrenar.
+   * respuesta. Nunca ninguna de las dos, porque generar invalida la temporal que la paciente ya
+   * tenía y «Olvidé mi contraseña» no sirve con una temporal sin usar.
    *
    * `correo`: lo manda MedSkin, aquí mismo, y `enviado` dice si salió de verdad.
    * `whatsapp` y `ninguna`: lo manda la doctora con el dedo, así que `false` y la
@@ -99,7 +99,7 @@ export class SendPatientAccess {
     const patient = await this.patients.forDelivery(owner, accountId);
     if (patient === null) throw new ContractError('paciente_no_existe');
 
-    // --- Antes de acuñar: sin celular no hay WhatsApp que abrir, y matar la temporal que
+    // --- Antes de generar: sin celular no hay WhatsApp que abrir, y invalidar la temporal que
     // ya tenía para después devolver un 400 sería cobrarle el error a la paciente.
     if (via === 'whatsapp' && (patient.phone === null || patient.phone.trim() === '')) {
       throw new ContractError('celular_necesario_para_whatsapp');
@@ -135,19 +135,19 @@ export class SendPatientAccess {
       expiryText,
     };
 
-    // EN LÍNEA Y NO POR COLA, y la razón es una: por aquí la temporal ya está acuñada, así
+    // EN LÍNEA Y NO POR COLA, y la razón es una: por aquí la temporal ya está generada, así
     // que encolar obliga a meter la contraseña EN CLARO en Redis para que el trabajador la
-    // escriba. El trabajador de recuperación se libra de eso porque acuña él el código
-    // («la cola recibe a quién escribirle, no qué escribirle»); aquí no se puede acuñar
-    // dos veces, porque la segunda mataría la primera. Y en línea `enviado` puede decir la
+    // escriba. El trabajador de recuperación se libra de eso porque genera él el código
+    // («la cola recibe a quién escribirle, no qué escribirle»); aquí no se puede generar
+    // dos veces, porque la segunda invalidaría la primera. Y en línea `enviado` puede decir la
     // verdad en la misma respuesta, que es lo que le da a la doctora su salida cuando el
-    // relé está caído. No hay oráculo de tiempo que cerrar: quien llama ya está dentro.
+    // reenvío está caído. No hay filtración de tiempo que cerrar: quien llama ya está dentro.
     const sent = via === 'correo' ? await this.sendMail(owner, accountId, facts, patient) : false;
 
     return this.block(via, temporary, expiresAt, patient, facts, sent);
   }
 
-  /** Un envío que falla es un 500 con la frase del contrato, nunca un 200 que miente. */
+  /** Un envío que falla es un 500 con la frase del contrato, nunca un 200 que informa en falso. */
   private async sendMail(
     owner: AccountOwner,
     accountId: string,
@@ -159,7 +159,7 @@ export class SendPatientAccess {
       return true;
     } catch (cause) {
       // Ni el correo de la paciente ni la contraseña entran en la causa: solo la cuenta.
-      // La causa real del relé viaja encadenada y acaba en `service_failure` (§10.3).
+      // La causa real del reenvío viaja encadenada y acaba en `service_failure` (§10.3).
       await this.undoSentMark(owner, accountId, patient.accessSentAt);
       throw new ServiceFailure(
         FAILURE_PHRASES.sendPatientAccessMail,
@@ -169,7 +169,7 @@ export class SendPatientAccess {
   }
 
   /**
-   * La función escribe `access_sent_at = now()` AL ACUÑAR, así que un envío fallido dejaba
+   * La función escribe `access_sent_at = now()` AL GENERAR, así que un envío fallido dejaba
    * en la base la afirmación «ya se le mandó» siendo falsa, y es la columna que la consola
    * lee para decidir si hay que reenviar. Se le devuelve SU VALOR ANTERIOR en la misma
    * llamada —la fecha del último envío que sí ocurrió, o nulo si no hubo ninguno—: esa

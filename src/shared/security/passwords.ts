@@ -2,10 +2,10 @@
 // dependencia de C en el motor para hacer lo que el proceso ya hace.
 //
 // El parámetro que importa aquí no es el coste, es que sea EL MISMO en los dos caminos: el
-// hash real y el del señuelo se verifican con la misma llamada y el mismo trabajo, porque
-// si el señuelo tardara menos, el cronómetro sería el oráculo que el
-// `401 acceso_no_coincide` existe para cerrar. Y el señuelo se siembra con estos mismos
-// parámetros (`seed.ts`): si divergen, el oráculo vuelve por la puerta del reloj.
+// hash real y el del decoy se verifican con la misma llamada y el mismo trabajo, porque
+// si el decoy tardara menos, el cronómetro sería la filtración que el
+// `401 acceso_no_coincide` existe para cerrar. Y el decoy se siembra con estos mismos
+// parámetros (`seed.ts`): si divergen, la filtración vuelve por la puerta del reloj.
 
 import argon2 from 'argon2';
 
@@ -40,7 +40,7 @@ export class Argon2Passwords {
    *
    * PERO LA CAUSA NO SE TIRA. Devolver `false` y callar deja una credencial con el hash
    * roto dando `acceso_no_coincide` para siempre sin que nadie se entere: la persona no
-   * puede entrar, no puede recuperar si su temporal nunca se estrenó, y en la base no hay
+   * puede entrar, no puede recuperar si su temporal nunca se usó por primera vez, y en la base no hay
    * una línea que lo diga. Va una fila de aviso a `service_failure` con la cuenta y SIN EL
    * HASH, que es un secreto y además es lo que no hace falta para arreglarlo. La respuesta
    * de quien llama no cambia en nada.
@@ -48,7 +48,7 @@ export class Argon2Passwords {
   async verify(hash: string, password: string, who?: FailureContext): Promise<boolean> {
     try {
       // Sin opciones: los parámetros van DENTRO del hash codificado, y por eso el
-      // verificado del señuelo cuesta lo mismo que el real mientras el señuelo se siembre
+      // verificado del decoy cuesta lo mismo que el real mientras el decoy se siembre
       // con `hash()` de aquí mismo. `seed.ts` lo hace, y es la mitad del «mismo tiempo».
       return await argon2.verify(hash, password);
     } catch (cause) {
@@ -61,7 +61,7 @@ export class Argon2Passwords {
    * Sin `await` a propósito: el registro no puede cambiar lo que tarda el camino del 401.
    * `FailureLog.record()` nunca lanza (§10.3, regla 6).
    *
-   * Y solo con cuenta conocida: sin ella el hash es el del SEÑUELO, que no tiene dueño y
+   * Y solo con cuenta conocida: sin ella el hash es el del DECOY, que no tiene dueño y
    * cuya forma ya la garantiza `access_decoy_hash_ck`. Registrarlo escribiría una fila por
    * cada intento fallido de cualquiera, que es inundar el registro gratis.
    */

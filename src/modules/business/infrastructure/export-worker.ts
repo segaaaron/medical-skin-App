@@ -1,6 +1,6 @@
 // EL TRABAJADOR QUE ARMA LA EXPORTACIÓN DE DATOS · `negocio.md` · hallazgo H-01.
 //
-// La respuesta de `POST /v1/my-data/exports` promete «te llega por correo, con un enlace de 24
+// La respuesta de `POST /v1/my-data/exports` especifica «te llega por correo, con un enlace de 24
 // horas», y hasta hoy la fila nacía `pedida` y nadie la miraba.
 //
 // LA DECISIÓN QUE DA FORMA A ESTE ARCHIVO, y es del contrato: **la exportación se arma bajo las
@@ -26,7 +26,7 @@
 // Y EL ENLACE ES DE 24 H PERO NO DE UN SOLO USO: el contrato dice «un solo uso» y una URL
 // firmada de S3 no lo puede garantizar —quien la tenga, la usa—. Hacerlo de verdad pide un
 // endpoint propio delante del almacenamiento que marque `downloaded_at`, y eso es una ruta
-// nueva y una decisión de contrato. Queda dicho aquí y en `negocio.md` en vez de prometerlo.
+// nueva y una decisión de contrato. Queda dicho aquí y en `negocio.md` en vez de especificarlo.
 
 import type { Pool, PoolClient } from 'pg';
 
@@ -34,7 +34,7 @@ import { withTenantContext, type TenantContext } from '../../../shared/db/tenant
 import type { FailureLog } from '../../../shared/failures/service-failure';
 import { signUrl, type StorageConfig } from '../../../shared/storage/signed-url';
 
-/** Veinticuatro horas, que es lo que el contrato promete. */
+/** Veinticuatro horas, que es lo que el contrato especifica. */
 const LIFE_SECONDS = 24 * 60 * 60;
 
 export type ExportMailPort = {
@@ -177,7 +177,7 @@ export class ExportWorker {
       });
 
       // Y A PARTIR DE AQUÍ **EL ARCHIVO YA ESTÁ**, así que lo que falle no puede marcar la
-      // exportación como fallida. Antes el correo estaba dentro de este mismo `try`: un relé
+      // exportación como fallida. Antes el correo estaba dentro de este mismo `try`: un reenvío
       // caído dejaba la fila en `fallida` con el archivo hecho y, como solo se puede pedir una
       // al día, la paciente recibía `429` el resto del día y se quedaba sin su copia. Un efecto
       // a medias sellado como fallo y sin salida para la persona.
@@ -207,7 +207,7 @@ export class ExportWorker {
    * que se lee en la pantalla bloqueada del teléfono» (§11.1), así que no dice de quién son los
    * datos ni de qué consulta.
    *
-   * Si el relé falla, la fila se queda `lista` —el archivo está y el enlace vive 24 h— y el
+   * Si el reenvío falla, la fila se queda `lista` —el archivo está y el enlace vive 24 h— y el
    * fallo queda registrado con su causa. Lo que NO pasa es que la exportación se marque fallida
    * por algo que ocurrió después de estar lista.
    */

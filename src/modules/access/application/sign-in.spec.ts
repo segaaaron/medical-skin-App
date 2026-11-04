@@ -3,7 +3,7 @@
 // No comprueba que un doble fue llamado: comprueba la SECUENCIA, porque la secuencia es la
 // regla. `acceso.md` · «El orden de las comprobaciones, que es parte del contrato»: la
 // pausa primero, el verificado de Argon2id siempre —contra el hash real o contra el
-// señuelo—, y solo si la contraseña coincide se miran la suspensión y el estado de la
+// decoy—, y solo si la contraseña coincide se miran la suspensión y el estado de la
 // temporal. Hecho al revés, una petición con contraseña inventada distingue un correo con
 // cuenta de uno sin cuenta, y eso es dato de salud.
 //
@@ -30,13 +30,13 @@ const CUENTA = '11111111-1111-4111-8111-111111111111';
 const CONSULTA = '22222222-2222-4222-8222-222222222222';
 const SESION = '33333333-3333-4333-8333-333333333333';
 
-/** El señuelo: `accountId` nulo y un hash que verificar igual. */
-const SENUELO: AccessCredential = {
+/** El decoy: `accountId` nulo y un hash que verificar igual. */
+const DECOY: AccessCredential = {
   accountId: null,
   accountRole: null,
   accountStatus: null,
   region: null,
-  hash: '$argon2id$senuelo',
+  hash: '$argon2id$decoy',
   isTemporary: false,
   tempExpiresAt: null,
   tempUsedAt: null,
@@ -200,15 +200,15 @@ describe('POST /v1/access · el orden de las comprobaciones', () => {
     );
   });
 
-  it('un correo que no existe ejecuta el MISMO verificado de Argon2id, contra el señuelo', async () => {
-    const { caso, pasos } = armar({ credencial: SENUELO, coincide: false });
+  it('un correo que no existe ejecuta el MISMO verificado de Argon2id, contra el decoy', async () => {
+    const { caso, pasos } = armar({ credencial: DECOY, coincide: false });
 
     const error = await errorDe(() => caso.run(PETICION));
 
     expect(error.code).toBe('acceso_no_coincide');
     // El verificado se ejecutó: sin esto, la respuesta inmediata del caso «no existe» es
-    // el oráculo que la frase niega.
-    expect(pasos).toContain('argon2:$argon2id$senuelo');
+    // la filtración que la frase niega.
+    expect(pasos).toContain('argon2:$argon2id$decoy');
     // Y el contador se movió aunque no haya cuenta: «la pausa cuenta igual para un correo
     // que no existe».
     expect(pasos).toContain('pausa:fallo');
@@ -216,7 +216,7 @@ describe('POST /v1/access · el orden de las comprobaciones', () => {
 
   it('una contraseña que no coincide da el MISMO 401 que un correo que no existe', async () => {
     const inventada = await errorDe(() =>
-      armar({ credencial: SENUELO, coincide: false }).caso.run(PETICION),
+      armar({ credencial: DECOY, coincide: false }).caso.run(PETICION),
     );
     const equivocada = await errorDe(() =>
       armar({ credencial: PACIENTE, coincide: false }).caso.run(PETICION),
@@ -372,7 +372,7 @@ describe('POST /v1/access · la pausa', () => {
     );
     const sinCuenta = await errorDe(() =>
       armar({
-        credencial: SENUELO,
+        credencial: DECOY,
         coincide: false,
         pausa: { paused: true, pausedUntil: hasta, attemptsLeft: 0 },
       }).caso.run(PETICION),
@@ -399,7 +399,7 @@ describe('POST /v1/access · la pausa', () => {
       campos: ['correo', 'contrasena'],
       intentos_restantes: 3,
       pausa_minutos: 15,
-      aviso: 'Te quedan 3 intentos antes de una pausa de 15 minutos.',
+      aviso: 'Te quedan 3 intentos. Después tendrás que esperar 15 minutos para volver a entrar.',
     });
     // No nombra cuál de los dos campos falló.
     expect(error.field).toBeNull();
@@ -414,7 +414,7 @@ describe('POST /v1/access · la pausa', () => {
       }).caso.run(PETICION),
     );
 
-    expect(error.data?.aviso).toBe('Te quedan 1 intento antes de una pausa de 15 minutos.');
+    expect(error.data?.aviso).toBe('Te quedan 1 intento. Después tendrás que esperar 15 minutos para volver a entrar.');
   });
 
   it('el quinto fallo devuelve el 429, no el 401', async () => {

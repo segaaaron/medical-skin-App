@@ -153,7 +153,7 @@ export class AccountsRepository
   }
 
   /**
-   * `doctoras` · LA ÚNICA LECTURA DEL SISTEMA QUE CRUZA INQUILINOS, y cruza solo las fichas
+   * `doctoras` · LA ÚNICA LECTURA DEL SISTEMA QUE CRUZA TENANTS, y cruza solo las fichas
    * de quien pregunta: la política `patient_link_patient_select` es
    * `account_id = medskin_current_account()`, así que no lleva `where` y no puede llevar un
    * `practice_id` del cliente.
@@ -216,7 +216,7 @@ export class AccountsRepository
       if (row === undefined) {
         throw new ServiceFailure(
           FAILURE_PHRASES.deleteOwnAccount,
-          new Error('medskin_delete_own_account no devolvió veredicto'),
+          new Error('medskin_delete_own_account no devolvió resultado'),
         );
       }
       return {
@@ -228,7 +228,7 @@ export class AccountsRepository
     });
   }
 
-  /** La bitácora. Identificadores sí, contenido no (§10.3, regla 1). */
+  /** La auditoría. Identificadores sí, contenido no (§10.3, regla 1). */
   private async audit(c: PoolClient, owner: AccountOwner): Promise<void> {
     await c.query(
       `insert into access_audit (practice_id, actor_account_id, action, subject_type,

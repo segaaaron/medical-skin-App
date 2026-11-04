@@ -111,7 +111,7 @@ export class SyncBatch {
 
     // Las otras tres no tienen dónde reservarla —su endpoint no lleva clave, porque por la
     // puerta de la app un `PATCH` o un `DELETE` son idempotentes por naturaleza—, y aquí sí
-    // hace falta: el contrato del lote promete la clave de CADA operación, y `cita.mover`
+    // hace falta: el contrato del lote especifica la clave de CADA operación, y `cita.mover`
     // reaplicada deshace un cambio posterior.
     await this.guard.run(
       {

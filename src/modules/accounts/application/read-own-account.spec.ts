@@ -1,4 +1,4 @@
-// `GET /v1/accounts/mine` · lo que el contrato promete de la pantalla de arranque.
+// `GET /v1/accounts/mine` · lo que el contrato especifica de la pantalla de arranque.
 //
 // Lo que se fija aquí:
 //   · el `rol` de doctora y equipo sale de `practitioner.role` DE ESTA CONSULTA, no de

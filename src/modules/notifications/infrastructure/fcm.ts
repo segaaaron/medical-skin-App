@@ -1,7 +1,7 @@
 // EL REMITENTE DE ANDROID · FCM HTTP v1.
 //
 // `servicios.md:73` prescribía `google-auth-library`, y NO SE AÑADE: lo único que esa
-// biblioteca hace aquí es acuñar un JWT y cambiarlo por un token de acceso, y las dos cosas ya
+// biblioteca hace aquí es generar un JWT y cambiarlo por un token de acceso, y las dos cosas ya
 // están en el proyecto —`jose` firma los tokens de sesión y `fetch` es de Node—. Son treinta
 // líneas contra una dependencia con su propio árbol, y la decisión queda anotada en
 // `servicios.md`. Si algún día hace falta algo más de Google (Cloud Storage, Pub/Sub), esa es
@@ -9,7 +9,7 @@
 //
 // El flujo es el estándar de una cuenta de servicio: se firma un JWT con el `scope` de FCM, se
 // cambia en `oauth2.googleapis.com/token` por un token de acceso de una hora, y ese token va
-// en la cabecera de cada envío. El token se reusa; acuñar uno por mensaje es gastar una ida y
+// en la cabecera de cada envío. El token se reusa; generar uno por mensaje es gastar una ida y
 // vuelta a Google por push.
 
 import { readFileSync } from 'node:fs';

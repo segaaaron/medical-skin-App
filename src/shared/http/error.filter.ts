@@ -143,7 +143,7 @@ export class ErrorFilter implements ExceptionFilter {
  * `platform` ES EL CASO QUE IMPORTA MÁS, y el que faltaba: una ruta de consola nunca tiene
  * `caller` —la persona de plataforma no tiene cuenta en esta región ni sesión que leer—, así
  * que sus 500 entraban por el camino anónimo y la fila quedaba **sin actor**. Y es soporte
- * actuando sobre la cuenta de una paciente: la bitácora de fallos es lo único que hace
+ * actuando sobre la cuenta de una paciente: la auditoría de fallos es lo único que hace
  * revisable lo que soporte hace, y un 500 sin quién lo pidió es justo el que alguien querría
  * no dejar registrado.
  *

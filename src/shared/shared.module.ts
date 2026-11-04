@@ -39,9 +39,9 @@ export const QUEUES = Symbol('QUEUES');
 const IDEMPOTENCY_SWEEP = Symbol('IDEMPOTENCY_SWEEP');
 
 /**
- * Y EL BARRIDO DEL PLAZO DE CONSERVACIÓN, diario. Vive aquí por lo mismo: la promesa es de la
+ * Y EL BARRIDO DEL PLAZO DE CONSERVACIÓN, diario. Vive aquí por lo mismo: la especificación es de la
  * cuenta —«se conserva hasta 2036»— y lo que cumple el plazo no es de ningún módulo de
- * recurso. Es el trabajo más delicado del sistema y por eso tiene sus dos cotas dentro.
+ * recurso. Es el trabajo más delicado del sistema y por eso tiene sus dos límites dentro.
  */
 const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
 

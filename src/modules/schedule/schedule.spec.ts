@@ -226,7 +226,7 @@ describe('los horarios y los huecos', () => {
   it('y por el BORDE da un 400 con su frase, no el 500 del CHECK', async () => {
     // La prueba de arriba escribe con el dueño: comprueba el `CHECK` y no el camino de la app.
     // Por el camino de la app, el `CHECK` que salta es una excepción de `pg` —un 500— y lo que
-    // la paciente tiene que leer es «es muy largo», que es lo que el contrato promete.
+    // la paciente tiene que leer es «es muy largo», que es lo que el contrato especifica.
     await expect(
       appointments.book(
         {
@@ -375,7 +375,7 @@ describe('la seña y la cancelación', () => {
     await owner.query(`delete from appointment where practice_id = $1`, [MINE.practice]);
   });
 
-  it('con seña exigida la cita nace pendiente, y solo la consulta la confirma', async () => {
+  it('con seña exigida la cita empieza pendiente, y solo la consulta la confirma', async () => {
     await owner.query(
       `insert into schedule_settings (practice_id, deposit_percent, deposit_min_cents,
                                       deposit_hours, gap_minutes, slot_minutes)

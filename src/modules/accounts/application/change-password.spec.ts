@@ -1,4 +1,4 @@
-// `PATCH /v1/accounts/mine/password` · el orden y lo que el contrato promete.
+// `PATCH /v1/accounts/mine/password` · el orden y lo que el contrato especifica.
 //
 // Lo que se fija aquí: que la nueva pasa las MISMAS reglas que `contrasena-nueva`, que el
 // 429 se mira antes de comparar, que un fallo de `actual` gasta intento y un acierto lo

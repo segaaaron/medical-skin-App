@@ -74,7 +74,7 @@ export const practice = pgTable(
     // `status` es la pausa de PATCH /v1/platform/tenants/{id}, no la licencia.
     status: text('status').notNull().default('activa'),
 
-    // Los cuatro de «Datos de la consulta» de PrimerDia: nacen vacíos.
+    // Los cuatro de «Datos de la consulta» de PrimerDia: empiezan vacíos.
     address: text('address'),
     city: text('city'),
     phone: text('phone'),
@@ -280,7 +280,7 @@ export const credential = pgTable(
       .notNull()
       .references(() => account.id, { onDelete: 'cascade' }),
 
-    // Argon2id (acceso.md). Una fila por cuenta: acuñar una temporal mata la anterior
+    // Argon2id (acceso.md). Una fila por cuenta: generar una temporal invalida la anterior
     // (cuentas.md · POST /v1/accounts/{id}/access).
     hash: text('hash').notNull(),
 
@@ -314,13 +314,13 @@ export const credential = pgTable(
 // conoce. Es lo que `medskin_access_credential()` devuelve cuando el correo no existe,
 // para que el camino de «no existe» ejecute el MISMO verificado de Argon2id que el de
 // «contraseña mal» y tarde lo mismo (acceso.md: «Sin eso, la respuesta inmediata del caso
-// "no existe" es el oráculo que la frase niega»).
+// "no existe" es la filtración que la frase niega»).
 //
 // No es dato de consulta y no hace falta que lo sea: no tiene un solo GRANT para ningún
 // rol de aplicación. Lo lee la función del acceso y nadie más. Está en una tabla en vez de
 // dentro de la función para poder volver a sembrarlo sin una migración el día que cambien
-// los parámetros de Argon2id del servidor: si divergen, el señuelo tarda distinto y el
-// oráculo vuelve por la puerta del reloj.
+// los parámetros de Argon2id del servidor: si divergen, el decoy tarda distinto y el
+// filtración vuelve por la puerta del reloj.
 // ---------------------------------------------------------------------------------------
 
 export const accessDecoy = pgTable(
@@ -393,7 +393,7 @@ export const session = pgTable(
       // `order by x desc` significa `DESC NULLS FIRST`. Para el planificador son dos
       // ordenaciones distintas, así que el índice NO sirve para el `ORDER BY` y la consulta
       // acaba ordenando todo lo que la consulta tenga. Medido con el rol de la aplicación
-      // sobre 20 000 líneas de bitácora: 421 bloques y 9,8 ms antes, 4 bloques y 0,06 ms
+      // sobre 20 000 líneas de auditoría: 421 bloques y 9,8 ms antes, 4 bloques y 0,06 ms
       // después. Las columnas son `not null`, así que no hay un nulo que cambie de sitio.
       // Corregido en la migración 0012.
       .on(t.accountId, t.lastSeenAt.desc().nullsFirst())
@@ -550,7 +550,7 @@ export const serviceFailure = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------
-// access_audit · la bitácora. Inmutable: no hay política de UPDATE ni de DELETE para
+// access_audit · la auditoría. Inmutable: no hay política de UPDATE ni de DELETE para
 // ningún rol, así que no se puede reescribir ni borrar desde la aplicación.
 // Sin claves foráneas (§12.2.8): un registro que desaparece con lo que describe no sirve.
 // La exigen ya tres contratos del tramo: la decisión de licencia «va a audit_log con
@@ -566,7 +566,7 @@ export const accessAudit = pgTable(
 
     practiceId: uuid('practice_id'),
     actorAccountId: uuid('actor_account_id'),
-    // El nombre de quien entró, que es lo que la bitácora de accesos promete mostrar
+    // El nombre de quien entró, que es lo que la auditoría de accesos especifica mostrar
     // (DoctorAjustes). Se copia porque la fila sobrevive al borrado de la cuenta.
     actorLabel: text('actor_label'),
 
@@ -578,7 +578,7 @@ export const accessAudit = pgTable(
     region: text('region'),
   },
   (t) => [
-    // Consulta delante (§7.3, regla 5): la bitácora de accesos de una consulta.
+    // Consulta delante (§7.3, regla 5): la auditoría de accesos de una consulta.
     index('access_audit_practice_idx').on(t.practiceId, t.occurredAt.desc().nullsFirst()),
     index('access_audit_actor_idx').on(t.actorAccountId, t.occurredAt.desc().nullsFirst()),
     index('access_audit_action_idx').on(t.action, t.occurredAt.desc().nullsFirst()),

@@ -3,8 +3,8 @@
 //
 //   **`patient_link.access_sent_at` solo puede afirmar un envío que ocurrió.**
 //
-// `medskin_resend_patient_access()` escribe la marca AL ACUÑAR (`0006`) y el envío pasa
-// después, así que con el relé caído la base decía «ya se le mandó» siendo falso, y es la
+// `medskin_resend_patient_access()` escribe la marca AL GENERAR (`0006`) y el envío pasa
+// después, así que con el reenvío caído la base decía «ya se le mandó» siendo falso, y es la
 // columna que la consola lee para decidir si hay que reenviar. El endpoint la deja en nulo
 // otra vez en la misma llamada, y lo que se comprueba aquí es la FILA, no un doble.
 //
@@ -138,7 +138,7 @@ beforeAll(async () => {
     DOCTORA_CUENTA,
     CONSULTA,
   ]);
-  // La paciente: su temporal SIN estrenar, que es el caso que el reenvío atiende.
+  // La paciente: su temporal Sin usar, que es el caso que el reenvío atiende.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
      values ($1, $2, 'patient', 'latam', 'Rocio', 'Vargas')`,
@@ -215,7 +215,7 @@ describe('`access_sent_at` solo afirma un envío que ocurrió', () => {
       [CONSULTA, PACIENTE_CUENTA],
     );
 
-    // Tres: el que salió y los dos que no. La bitácora guarda el acto de la doctora; la
+    // Tres: el que salió y los dos que no. La auditoría guarda el acto de la doctora; la
     // columna guarda el hecho del envío, y son dos cosas distintas. De ahí el nombre:
     // `acceso_pedido` es verdad en los tres casos y `acceso_enviado` lo era en uno, y esta
     // tabla no se puede corregir después —nadie tiene `UPDATE` ni `DELETE` sobre ella—.
@@ -241,7 +241,7 @@ describe('`access_sent_at` solo afirma un envío que ocurrió', () => {
     expect(rows[0]?.temp_first_used_at).toBeNull();
   });
 
-  it('una cuenta de OTRA consulta no tiene vínculo aquí: 404 y no se acuña nada', async () => {
+  it('una cuenta de OTRA consulta no tiene vínculo aquí: 404 y no se genera nada', async () => {
     // Se parte de la marca en nulo a propósito, para que este caso no dependa del
     // anterior: lo que prueba es que un 404 no escribe nada.
     await ponerMarca(null);

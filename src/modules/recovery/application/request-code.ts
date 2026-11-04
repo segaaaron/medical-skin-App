@@ -5,9 +5,9 @@
 // mismo cuerpo, mismo `caduca_en` calculado, mismo tiempo de respuesta».
 //
 // Lo que hace es contar, encolar y responder, y hace exactamente eso en los dos casos. Si
-// acuñara aquí, el camino del correo con cuenta haría un `UPDATE` y un `INSERT` más que el
+// generara aquí, el camino del correo con cuenta haría un `UPDATE` y un `INSERT` más que el
 // del correo sin cuenta, y el cronómetro distinguiría los dos: eso es dato de salud.
-// Quien acuña es el trabajador de la cola, que ya no tiene a nadie mirándole el reloj.
+// Quien genera es el trabajador de la cola, que ya no tiene a nadie mirándole el reloj.
 //
 // Por eso también la cola recibe A QUIÉN escribirle y no QUÉ escribirle: el código todavía
 // no existe cuando se encola el trabajo.

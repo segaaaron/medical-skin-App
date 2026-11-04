@@ -5,17 +5,17 @@
 //
 //   1. forma del cuerpo
 //   2. la PAUSA, antes de verificar nada y exista o no la fila
-//   3. el verificado de Argon2id SIEMPRE: contra el hash real, o contra el señuelo
+//   3. el verificado de Argon2id SIEMPRE: contra el hash real, o contra el decoy
 //   4. si no coincide → 401 `acceso_no_coincide`, y AQUÍ TERMINA
 //   5. solo si coincide → `status`, y la firma
 //
-// Y aquí el oráculo importa más que en la app, no menos: este es el **único** endpoint de
+// Y aquí la filtración importa más que en la app, no menos: este es el **único** endpoint de
 // consola alcanzable sin token, así que es el único que un desconocido puede golpear desde
 // internet. Un 401 que distinguiera «ese correo no existe» de «esa contraseña está mal»
-// serviría la lista de los correos del equipo de MedSkin a quien pregunte. Es un padrón.
+// serviría la lista de los correos del equipo de MedSkin a quien pregunte. Es un registro.
 //
 // Va en el módulo `access` y no en uno nuevo porque reusa cuatro piezas que ya están aquí:
-// el `PasswordHasher` de Argon2id, el hash señuelo, los contadores de `rate_counter` y la
+// el `PasswordHasher` de Argon2id, el hash decoy, los contadores de `rate_counter` y la
 // escalera de la pausa. Un módulo aparte sería una copia de las cuatro.
 
 import { z } from 'zod';
@@ -68,15 +68,15 @@ export class PlatformSignIn {
     const before = await this.pause.peek(email, request.ip);
     if (before.paused) throw this.pausedError(before.pausedUntil);
 
-    // --- 3 · el verificado, siempre. Real o señuelo, Argon2id en los dos casos y el mismo
+    // --- 3 · el verificado, siempre. Real o decoy, Argon2id en los dos casos y el mismo
     // coste: sin eso el «no existe» se mide con un cronómetro.
     const credential = await this.credentials.read(email);
-    // SIN `who`, y no por el camino del señuelo: `who.accountRole` solo admite
+    // SIN `who`, y no por el camino del decoy: `who.accountRole` solo admite
     // `practitioner` o `paciente`, y una cuenta de consola no es ninguna de las dos.
     // Rellenarlo para que el tipo cuadre escribiría un actor FALSO en `service_failure`, que
     // es la tabla que existe para poder reconstruir quién hizo qué. Lo que se pierde: si un
     // `password_hash` de `platform_account` quedara ilegible, el aviso no dice de quién. Lo
-    // que se gana: la bitácora no miente. El `access_audit` de `medskin_platform_attempt` sí
+    // que se gana: la auditoría no informa en falso. El `access_audit` de `medskin_platform_attempt` sí
     // lleva el `id` y la `label`, que es donde esa información corresponde.
     const matched = await this.passwords.verify(credential.hash, password);
 
@@ -145,7 +145,7 @@ export class PlatformSignIn {
       campos: ['correo', 'contrasena'],
       intentos_restantes: attemptsLeft,
       pausa_minutos: PAUSE_MINUTES,
-      aviso: `Te quedan ${intentos} antes de una pausa de ${PAUSE_MINUTES} minutos.`,
+      aviso: `Te quedan ${intentos}. Después tendrás que esperar ${PAUSE_MINUTES} minutos para volver a entrar.`,
     });
   }
 }

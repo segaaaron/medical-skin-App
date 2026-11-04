@@ -12,15 +12,15 @@ import type {
 
 // ---------------------------------------------------------------------------------------
 // Credencial · lo que devuelve `medskin_access_credential()`, que SIEMPRE devuelve una
-// fila y SIEMPRE un `hash` que verificar: el de la cuenta, o el del señuelo. `accountId`
-// nulo significa señuelo, y eso lo sabe el proceso y nunca la respuesta HTTP.
+// fila y SIEMPRE un `hash` que verificar: el de la cuenta, o el del decoy. `accountId`
+// nulo significa decoy, y eso lo sabe el proceso y nunca la respuesta HTTP.
 // ---------------------------------------------------------------------------------------
 export type AccessCredential = {
   accountId: string | null;
   accountRole: AccountRole | null;
   accountStatus: string | null;
   region: Region | null;
-  /** El hash real o el del señuelo. Nunca nulo: sin él no hay «mismo tiempo». */
+  /** El hash real o el del decoy. Nunca nulo: sin él no hay «mismo tiempo». */
   hash: string;
   isTemporary: boolean;
   tempExpiresAt: Date | null;
@@ -49,7 +49,7 @@ export interface CredentialPort {
    * transacción: guardar la contraseña, consumir la temporal, anular el código, revocar
    * las demás sesiones y convertir esta en una de alcance `completo` con su refresco.
    * Las cinco cosas o ninguna: repartidas, un fallo entre dos deja a alguien fuera de su
-   * propia cuenta sin salida, que es lo que el 500 de este endpoint promete que no pasa.
+   * propia cuenta sin salida, que es lo que el 500 de este endpoint especifica que no pasa.
    *
    * Los tres nulos son la entrada por RECUPERACIÓN, no un descuido: su token no lleva rol
    * ni sesión (`RecoveryClaims`), así que no hay sesión que ascender —se abre después, con
@@ -78,8 +78,8 @@ export type SavedPassword = {
 };
 
 // ---------------------------------------------------------------------------------------
-// Contraseñas · Argon2id en Node. El MISMO coste en los dos caminos, el real y el señuelo:
-// si el señuelo se verificara más rápido, el cronómetro sería el oráculo que el
+// Contraseñas · Argon2id en Node. El MISMO coste en los dos caminos, el real y el decoy:
+// si el decoy se verificara más rápido, el cronómetro sería la filtración que el
 // `401 acceso_no_coincide` existe para cerrar.
 // ---------------------------------------------------------------------------------------
 export interface PasswordHasher {
@@ -87,7 +87,7 @@ export interface PasswordHasher {
    * `who` es solo para el REGISTRO: un hash ilegible devuelve `false` igual que una
    * contraseña mal —si no, el 500 distinguiría una credencial rota de un error de quien
    * escribe— pero deja un aviso en `service_failure` con la cuenta. Se omite cuando no hay
-   * cuenta que nombrar, que es el camino del señuelo.
+   * cuenta que nombrar, que es el camino del decoy.
    */
   verify(
     hash: string,
@@ -147,7 +147,7 @@ export type SessionOpening = {
   refreshExpiresAt: Date | null;
   device: Device;
   region: Region;
-  /** Para la bitácora de accesos: el nombre sobrevive al borrado de la cuenta. */
+  /** Para la auditoría de accesos: el nombre sobrevive al borrado de la cuenta. */
   actorLabel: string | null;
 };
 

@@ -9,7 +9,7 @@
 //
 // TENÍA CUATRO PRUEBAS MÁS Y SE FUERON CON LO QUE PROBABAN: el `202` de «caso de revisión
 // abierto», el `respuesta_estimada_en` de 24 h hábiles, los dos `409`
-// —`licencia_en_revision` y `licencia_ya_verificada`— y los tres veredictos de transición
+// —`licencia_en_revision` y `licencia_ya_verificada`— y los tres resultados de transición
 // imposible. MedSkin no verifica licencias (migración 0072): es un formulario y el último
 // `POST` gana.
 
@@ -78,7 +78,7 @@ function armar(verdict: SubmissionVerdict = 'saved', repetida: unknown = null) {
       const submission: Submission =
         verdict === 'saved' ? { verdict, declaredAt: DECLARADA } : { verdict, declaredAt: null };
       // Lo que el repositorio guardaría en la MISMA transacción, construido por quien sabe
-      // su forma: nulo para los veredictos que no se repiten.
+      // su forma: nulo para los resultados que no se repiten.
       guardadas.push(p.respond(submission));
       return Promise.resolve({ submission, replay: null });
     },

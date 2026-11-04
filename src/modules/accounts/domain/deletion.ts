@@ -1,15 +1,15 @@
-// `DELETE /v1/accounts/mine` · lo que el borrado promete por escrito, sin NestJS y sin `pg`.
+// `DELETE /v1/accounts/mine` · lo que el borrado especifica por escrito, sin NestJS y sin `pg`.
 //
 // DOS COSAS QUE PARECEN LA MISMA Y NO LO SON: el PLAZO sale de la configuración del
-// despliegue (`CONSERVACION_ANOS`), y la FECHA que se le promete a quien se borra se guarda
+// despliegue (`CONSERVACION_ANOS`), y la FECHA que se le especifica a quien se borra se guarda
 // como hecho histórico de ese borrado. Si mañana el plazo de la región pasa de siete años a
 // diez, no cambia lo que se le prometió a quien ya se fue (`cuentas.md`, 28 de octubre).
 
 /**
  * `se_borro` ENUMERA LO QUE EL BORRADO CUBRE, NO LO QUE ENCONTRÓ. `fotos_que_subiste` y
  * `tokens_de_aviso` son tablas de los tramos 6 y 7 y todavía no existen, así que hoy el
- * borrado las cubre con cero filas y la lista no miente. **No se quitan:** el día que esas
- * tablas existan se borran dentro de la misma función, no en otro sitio, y la promesa que
+ * borrado las cubre con cero filas y la lista no informa en falso. **No se quitan:** el día que esas
+ * tablas existan se borran dentro de la misma función, no en otro sitio, y la especificación que
  * la pantalla ya hace tiene que seguir siendo la misma.
  */
 export const DELETED_ITEMS = [
@@ -30,7 +30,7 @@ export const RETAINED_RECORD = {
 /**
  * `se_conserva.hasta`: la fecha del borrado más el plazo de la región, en `AAAA-MM-DD`.
  *
- * Se calcula sobre la fecha UTC del instante y no sobre la zona del despliegue: es una cota
+ * Se calcula sobre la fecha UTC del instante y no sobre la zona del despliegue: es un límite
  * a siete años, donde un día de diferencia no significa nada, y así la misma entrada
  * produce la misma salida en cualquier máquina —incluida la de las pruebas—.
  */

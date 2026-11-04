@@ -8,7 +8,7 @@
 // `withTenantContext()`. En ningún momento se desactiva RLS.
 //
 // Lo que NO se repite aquí porque ya está probado en `practice-license.spec.ts`: que la
-// fila de `license` nace con la consulta, que la doctora no tiene `INSERT` sobre `license`, y
+// fila de `license` se crea con la consulta, que la doctora no tiene `INSERT` sobre `license`, y
 // el plan del recuento del plan con 4.400 fichas.
 
 import { Pool, type QueryResultRow } from 'pg';
@@ -237,7 +237,7 @@ describe('POST /v1/tenants/mine/license · contra las políticas y los grants de
   /**
    * La clave de cada guardado, distinta por caso: la misma dos veces es una repetición a
    * propósito y tiene su propio caso. `respond` es lo que el repositorio guarda DENTRO de la
-   * transacción, y devuelve nulo para los veredictos que no se repiten.
+   * transacción, y devuelve nulo para los resultados que no se repiten.
    */
   let claves = 0;
   const envio = (): { idempotency: IdempotencyRecord; respond: (s: Submission) => RememberedResponse } => {
@@ -249,7 +249,7 @@ describe('POST /v1/tenants/mine/license · contra las políticas y los grants de
     };
   };
 
-  it('escribe las tres columnas bajo SU grant y deja su fila en la bitácora', async () => {
+  it('escribe las tres columnas bajo SU grant y deja su fila en la auditoría', async () => {
     const { submission } = await repository.submit({
       owner: { accountId: A.owner, practiceId: A.practice },
       form,
@@ -273,7 +273,7 @@ describe('POST /v1/tenants/mine/license · contra las políticas y los grants de
       practice_country: 'BO',
     });
 
-    // La bitácora es la que cuenta los cinco guardados del día, así que su fila no es un
+    // La auditoría es la que cuenta los cinco guardados del día, así que su fila no es un
     // adorno: sin ella el `429` no existe. Y es además el registro que sostiene «responde
     // quien lo declaró», que es la razón por la que MedSkin puede guardar esto sin verificarlo.
     const audit = await read<{ action: string; actor_label: string }>(
@@ -322,7 +322,7 @@ describe('POST /v1/tenants/mine/license · contra las políticas y los grants de
     expect(license).toEqual([{ license_number: null }]);
   });
 
-  it('con cinco guardados en la bitácora de las últimas 24 h, el sexto es `too_many`', async () => {
+  it('con cinco guardados en la auditoría de las últimas 24 h, el sexto es `too_many`', async () => {
     await owner.query(
       `insert into access_audit (practice_id, actor_account_id, actor_label, action, subject_type,
                                  region, occurred_at)
@@ -349,7 +349,7 @@ describe('POST /v1/tenants/mine/license · contra las políticas y los grants de
   });
 
   it('los guardados de otra consulta no cuentan contra los cinco: el recuento va por política', async () => {
-    // Los cinco de C siguen en la bitácora. D manda el suyo y entra: si el recuento no
+    // Los cinco de C siguen en la auditoría. D manda el suyo y entra: si el recuento no
     // estuviera acotado por la consulta, este sería el sexto.
     const { submission } = await repository.submit({
       owner: { accountId: D.owner, practiceId: D.practice },

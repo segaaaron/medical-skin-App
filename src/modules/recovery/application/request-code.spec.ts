@@ -3,7 +3,7 @@
 // No comprueba que un doble fue llamado: comprueba que el caso de uso NO TIENE RAMAS. El
 // contrato dice «mismo 202, mismo cuerpo, mismo `caduca_en` calculado, mismo tiempo de
 // respuesta» exista o no el correo, y la única forma de cumplirlo es que la petición no
-// consulte la base: acuñar escribe dos filas cuando la cuenta existe y ninguna cuando no,
+// consulte la base: generar escribe dos filas cuando la cuenta existe y ninguna cuando no,
 // y eso se mide con un cronómetro.
 //
 // Así que lo que se fija aquí es que el caso de uso no recibe NINGÚN puerto de base, que

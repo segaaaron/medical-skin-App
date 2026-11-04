@@ -40,7 +40,7 @@ export class SessionController {
   @Get()
   async mine(@Req() req: RequestWithContext) {
     const caller = callerOf(req);
-    // El `exp` del token que llegó, que es lo que `token_caduca_en` promete. Se vuelve a
+    // El `exp` del token que llegó, que es lo que `token_caduca_en` especifica. Se vuelve a
     // verificar la firma en vez de leer la reclamación a pelo: el guardia ya la verificó
     // —así que esto no decide nada de seguridad— y el `exp` no viaja en `Caller`.
     // Ponerlo ahí sería un campo opcional en un tipo que treinta sitios leen como

@@ -17,7 +17,7 @@
 //   · `whatsapp` → MedSkin no manda nada por ella (`enviado: false`) y devuelve el `wa.me`
 //                  armado con la temporal dentro, que es la concesión escrita del contrato;
 //   · `ninguna`  → la doctora eligió dárselo en persona, así que la temporal viaja;
-//   · `ya_tiene_cuenta` → no se acuñó ninguna temporal porque ella ya tiene la suya, así
+//   · `ya_tiene_cuenta` → no se generó ninguna temporal porque ella ya tiene la suya, así
 //                  que no hay nada que entregar ni nada que caducar.
 
 import {
@@ -65,7 +65,7 @@ export interface RegistrationClock extends DeliveryClock {
 
 /**
  * El bloque `acceso` del 201. Es el de `cuentas.md` con dos campos que pueden ser nulos, y
- * lo son en un solo caso: `ya_tiene_cuenta`, donde no se acuñó ninguna temporal y por lo
+ * lo son en un solo caso: `ya_tiene_cuenta`, donde no se generó ninguna temporal y por lo
  * tanto no hay nada que caduque. Devolver una fecha ahí sería inventarse una caducidad.
  */
 export type PatientAccessBlock = {
@@ -129,7 +129,7 @@ export class RegisterPatient {
     const expiresAt = temporaryPasswordExpiry(now);
     const temporary = mintTemporaryPassword();
 
-    // La temporal se hashea SIEMPRE, incluso cuando la cuenta ya existe y no se va a acuñar
+    // La temporal se hashea SIEMPRE, incluso cuando la cuenta ya existe y no se va a generar
     // ninguna: la función no puede decirnos si existe sin recibir el hash, y pagar Argon2id
     // en los dos caminos es lo que hace que el tiempo de respuesta no diga si ese correo
     // tenía cuenta. Lo que la respuesta revela —`ya_tiene_cuenta`— es una decisión escrita
@@ -178,7 +178,7 @@ export class RegisterPatient {
 
     // La clave se cierra con la respuesta ya verdadera. Si esto falla, la ficha existe y el
     // acceso salió: el reintento NO puede volver a crearla —la reserva está escrita— y recibe
-    // esta misma frase, que es la única que no miente en ese estado.
+    // esta misma frase, que es la única que no informa en falso en ese estado.
     try {
       await this.idempotency.complete({ owner, record, status: 201, response });
     } catch (cause) {
@@ -208,7 +208,7 @@ export class RegisterPatient {
       // «Ese correo no se puede usar», Y NO POR QUÉ (migración 0021). La frase no nombra la
       // causa a propósito: si dijera que ese correo es de una practicante, el alta sería un
       // directorio del personal de MedSkin consultable de uno en uno, que es el mismo
-      // oráculo del padrón que §12.2.1 cierra en la otra dirección. Es el mismo código y la
+      // filtración del registro que §12.2.1 cierra en la otra dirección. Es el mismo código y la
       // misma opacidad que el `409` del alta de equipo.
       case 'email_unavailable':
         throw new ContractError(
@@ -249,7 +249,7 @@ export class RegisterPatient {
   /**
    * La entrega. La única que MedSkin hace es el correo, y hace DOS correos distintos:
    *   · cuenta nueva  → el acceso, con la temporal dentro;
-   *   · cuenta reusada → el AVISO, sin contraseña porque no se acuñó ninguna. Y se manda
+   *   · cuenta reusada → el AVISO, sin contraseña porque no se generó ninguna. Y se manda
    *     igual, porque esa persona tiene que enterarse de que una consulta la dio de alta:
    *     es su identidad la que queda vinculada, y enterarse es lo único que le permite
    *     reaccionar (decisión del dueño, 28 de octubre de 2026).
@@ -257,7 +257,7 @@ export class RegisterPatient {
    * `false` porque MedSkin no entrega nada.
    *
    * EN LÍNEA Y NO POR COLA, por lo mismo que el reenvío: por aquí la temporal ya está
-   * acuñada, así que encolar obligaría a meterla EN CLARO en Redis para que el trabajador
+   * generada, así que encolar obligaría a meterla EN CLARO en Redis para que el trabajador
    * la escriba. Y en línea `enviado` puede decir la verdad en la misma respuesta.
    */
   private async deliver(
@@ -288,7 +288,7 @@ export class RegisterPatient {
       // dos dicen lo mismo de lo único que importa: la ficha ya está, no la crees otra vez.
       //
       // Ni el correo de la paciente ni la contraseña entran en la causa: solo la ficha. La
-      // causa real del relé viaja encadenada y acaba en `service_failure` (§10.3).
+      // causa real del reenvío viaja encadenada y acaba en `service_failure` (§10.3).
       // CON LOS IDENTIFICADORES DE LO QUE YA ESTÁ CREADO. El reenvío
       // —`POST /v1/accounts/{account_id}/access`— pedía un identificador que solo viajaba en
       // el 201 que nunca llegó: la doctora leía «vuelve a mandárselo» y no tenía con qué.
@@ -303,9 +303,9 @@ export class RegisterPatient {
 
   /**
    * `patient_link.access_sent_at` SE ESCRIBE AL CREAR el vínculo cuando la vía es el correo,
-   * y el envío pasa después: con el relé caído la base afirmaría «ya se le mandó» siendo
+   * y el envío pasa después: con el reenvío caído la base afirmaría «ya se le mandó» siendo
    * falso, y es la columna que la consola lee para decidir si hay que reenviar. Aquí el
-   * vínculo acaba de nacer, así que lo que esta llamada escribió es TODO lo que hay y
+   * vínculo acaba de empezar, así que lo que esta llamada escribió es TODO lo que hay y
    * deshacerlo es dejarlo en nulo: no hay historia que borrar, al contrario que en el
    * reenvío. El intento no se pierde: vive en `access_audit`.
    */
@@ -345,7 +345,7 @@ export class RegisterPatient {
     const phone = request.ficha.phone;
     if (request.via !== 'whatsapp' || phone === null) return block;
 
-    // El texto de quien ya tiene cuenta NO lleva contraseña, porque no se acuñó ninguna.
+    // El texto de quien ya tiene cuenta NO lleva contraseña, porque no se generó ninguna.
     const texto = existing
       ? whatsappTextForExistingAccount({
           patientFirstName: facts.patientFirstName,

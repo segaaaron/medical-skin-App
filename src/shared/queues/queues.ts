@@ -14,7 +14,7 @@
 // Lo que va a una cola es «lo que puede tardar o reintentarse»: aquí, el correo del código
 // de recuperación. Lo que NO va es nada que el ciclo de la petición necesite para
 // responder, y en este tramo hay una razón añadida: el 202 de `POST /v1/recovery` tiene
-// que tardar lo mismo exista o no el correo, y acuñar un código no tarda lo mismo.
+// que tardar lo mismo exista o no el correo, y generar un código no tarda lo mismo.
 //
 // Este archivo es solo la plumbería: el nombre de la cola y la política de reintentos. El
 // trabajo lo hace un caso de uso del módulo (`SendRecoveryCode`), porque un procesador con
@@ -63,7 +63,7 @@ export const QUEUE_NAMES = {
  * `removeOnComplete: 100` deja los últimos cien. Y `removeOnFail: 2_000` —no `false`, que era
  * «no borres nunca»— por una razón medida: Redis es de 100 MB en esta VPS (`servicios.md`
  * §6.3: «una cola que nunca se limpia es una fuga de disco lenta»), el trabajador de fotos
- * reintenta hasta su tope sobre el mismo Redis, y una cola de fallidos sin cota crece hasta
+ * reintenta hasta su tope sobre el mismo Redis, y una cola de fallidos sin límite crece hasta
  * que el `maxmemory` empieza a rechazar escrituras. Cuando eso pasa, lo que deja de funcionar
  * son los CONTADORES —el límite de intentos de acceso—, que viven en el mismo Redis.
  *
@@ -72,7 +72,7 @@ export const QUEUE_NAMES = {
  * `service_failure` con su causa —esa tabla es la que de verdad guarda el diagnóstico, y tiene
  * su propia retención—.
  *
- * Y `attempts: 3` con 2 s de base da ~2 s, 4 s y 8 s, que es lo que tarda un relé de correo en
+ * Y `attempts: 3` con 2 s de base da ~2 s, 4 s y 8 s, que es lo que tarda un reenvío de correo en
  * volver sin que la paciente deje de esperar.
  */
 export const JOB_OPTIONS: JobsOptions = {

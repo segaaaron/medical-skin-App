@@ -1,12 +1,12 @@
 // Lo que añaden la 0017 y la 0018, y solo eso:
 //
 //   0017 · el reenvío de acceso deja de borrar `temp_first_used_at`, así que la paciente
-//          que ya estrenó su temporal conserva la recuperación por correo cuando el
+//          que ya usó por primera vez su temporal conserva la recuperación por correo cuando el
 //          reenvío se queda a medias (H-12) o cuando el correo se pierde.
 //   0018 · `medskin_session_refresh` devuelve lo que el 200 de `POST /v1/session/refresh`
-//          promete —`practitioner_role`, `license_declared`, `first_day_done`,
+//          especifica —`practitioner_role`, `license_declared`, `first_day_done`,
 //          `password_is_temporary`— y resuelve la gracia de 20 s en la fila.
-//   0020 · acuñar una temporal nueva revoca las sesiones de esa cuenta —la llave contra la
+//   0020 · generar una temporal nueva revoca las sesiones de esa cuenta —la llave contra la
 //          que estaban autenticadas ya no existe— y el refresco calcula su caducidad con el
 //          rol, en la misma transacción que rota.
 //
@@ -38,21 +38,21 @@ const DOCTOR = {
   email: 'duena@refresco.local',
   refresh: 'd'.repeat(64),
 };
-// La paciente de la 0017 que SÍ estrenó su temporal, y la que no. Las dos con vínculo en
+// La paciente de la 0017 que SÍ usó por primera vez su temporal, y la que no. Las dos con vínculo en
 // la consulta de la doctora, que es lo que autoriza el reenvío.
 const USED = {
   account: '0a0a0a0a-0000-4000-8000-00000000000b',
   patient: '0a0a0a0a-0000-4000-8000-00000000001b',
   link: '0a0a0a0a-0000-4000-8000-00000000002b',
   session: '0a0a0a0a-0000-4000-8000-00000000003b',
-  email: 'estreno@refresco.local',
+  email: 'primera-entrada@refresco.local',
   refresh: 'e'.repeat(64),
 };
 const NEVER = {
   account: '0a0a0a0a-0000-4000-8000-00000000000c',
   patient: '0a0a0a0a-0000-4000-8000-00000000001c',
   link: '0a0a0a0a-0000-4000-8000-00000000002c',
-  email: 'sin.estrenar@refresco.local',
+  email: 'sin.usar por primera vez@refresco.local',
 };
 
 const ctxDoctor: TenantContext = { role: 'app_practitioner', practiceId: DOCTOR.practice, accountId: DOCTOR.account };
@@ -156,11 +156,11 @@ afterAll(async () => {
 // 0017 · H-12
 // =========================================================================================
 describe('el reenvío de acceso · la marca de la primera entrada es un hecho (0017)', () => {
-  it('la paciente que ya estrenó su temporal conserva la recuperación cuando el reenvío se queda a medias', async () => {
+  it('la paciente que ya usó por primera vez su temporal conserva la recuperación cuando el reenvío se queda a medias', async () => {
     const before = await markOf(USED.account);
     expect(before).not.toBeNull();
 
-    // El reenvío de la doctora. En el camino de H-12 lo que viene después es el relé de
+    // El reenvío de la doctora. En el camino de H-12 lo que viene después es el reenvío de
     // correo que falla y la compensación de `access_sent_at`: la temporal vieja ya está
     // muerta y la nueva no se entregó nunca.
     const [out] = await read<{ outcome: string }>(
@@ -184,7 +184,7 @@ describe('el reenvío de acceso · la marca de la primera entrada es un hecho (0
     expect(minted?.medskin_recovery_mint).toBe(true);
   });
 
-  it('la que nunca la estrenó sigue sin recuperación, y el reenvío no cambia eso', async () => {
+  it('la que nunca la usó por primera vez sigue sin recuperación, y el reenvío no cambia eso', async () => {
     // La regla de `recuperacion.md` no se toca: «quien no probó nunca que tiene el correo
     // no puede usar el correo para entrar». Su camino sigue siendo el reenvío.
     const [out] = await read<{ outcome: string }>(
@@ -249,7 +249,7 @@ describe('el reenvío de acceso · la marca de la primera entrada es un hecho (0
 // =========================================================================================
 // 0018 · POST /v1/session/refresh
 // =========================================================================================
-describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () => {
+describe('el refresco · lo que el 200 especifica y la gracia de 20 s (0018)', () => {
   type Rotation = {
     verdict: string;
     role: string | null;
@@ -263,7 +263,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
     refresh_expires_at: Date | null;
   };
 
-  // Las dos vidas las pone el llamador y la base les pone cota: `REFRESH_LIFETIME_MS` de
+  // Las dos vidas las pone el llamador y la base les pone límite: `REFRESH_LIFETIME_MS` de
   // `sign-in.ts`, en segundos.
   const PATIENT_SECONDS = 30 * 24 * 3600;
   const PRACTITIONER_SECONDS = 12 * 3600;
@@ -424,7 +424,7 @@ describe('el refresco · lo que el 200 promete y la gracia de 20 s (0018)', () =
   });
 
   it('intercambiar las dos vidas revienta, en vez de regalarle 30 días a una doctora', async () => {
-    // La cota es lo que convierte un error de llamada en un fallo a gritos: sin ella, los
+    // El límite es lo que convierte un error de llamada en un fallo a gritos: sin ella, los
     // argumentos al revés le darían a la doctora un refresco de 30 días y nadie se
     // enteraría (§13).
     await expect(

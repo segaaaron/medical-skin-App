@@ -31,7 +31,7 @@ const KEYS = {
   bySession: (sessionId: string) => `sesion:refrescos:${sessionId}`,
   /**
    * Cuántos refrescos entran por la ventana de gracia. No sale en la respuesta —el cliente
-   * no tiene nada que hacer con ese dato— y no va a `access_audit`: esa bitácora la LEE la
+   * no tiene nada que hacer con ese dato— y no va a `access_audit`: esa auditoría la LEE la
    * doctora en Ajustes, y una fila por reintento de su app es ruido en su pantalla. Aquí se
    * mide, que es para lo que se pidió.
    */

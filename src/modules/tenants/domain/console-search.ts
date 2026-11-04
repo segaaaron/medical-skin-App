@@ -2,13 +2,13 @@
 //
 // Buscar una consulta cuando ya no se tiene su uuid. Tres decisiones:
 //
-//   1. CURSOR, NO NÚMERO DE PÁGINA. El padrón crece por el final: con `?pagina=2`, una
+//   1. CURSOR, NO NÚMERO DE PÁGINA. El registro crece por el final: con `?pagina=2`, una
 //      consulta creada entre dos peticiones desplaza todo y se salta una fila. El cursor es
 //      `created_at|id`, que no se mueve.
-//   2. `cuantas` ES LO DE ESTA PÁGINA, NO EL TOTAL. Contar el padrón entero en cada búsqueda
+//   2. `cuantas` ES LO DE ESTA PÁGINA, NO EL TOTAL. Contar el registro entero en cada búsqueda
 //      es un recuento que nadie mira y que crece con la tabla.
 //   3. SIN RESULTADOS ES UN 200 CON LISTA VACÍA. Un `404` aquí diría «ese correo no está en
-//      MedSkin», que es el oráculo que el acceso cierra — servido a quien tenga token de
+//      MedSkin», que es la filtración que el acceso cierra — servido a quien tenga token de
 //      consola, pero servido igual.
 //
 // AQUÍ VIVÍA TAMBIÉN `readLicenseInbox()`, con los cuatro estados de `license.status` como
@@ -77,7 +77,7 @@ export function readConsoleSearch(params: Record<string, unknown>): ConsoleSearc
   if (raw !== undefined && raw !== null && raw !== '') {
     if (typeof raw !== 'string') invalid();
     const trimmed = raw.trim();
-    // Menos de dos caracteres devuelve casi todo el padrón con un `LIKE %a%`, que no es una
+    // Menos de dos caracteres devuelve casi todo el registro con un `LIKE %a%`, que no es una
     // búsqueda: es un volcado con un filtro decorativo.
     if (trimmed.length < QUERY_MIN || trimmed.length > QUERY_MAX) invalid();
     query = trimmed;

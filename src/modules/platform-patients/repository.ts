@@ -1,7 +1,7 @@
 // Las pacientes vistas desde la consola, contra la base · `pacientes-consola.md`, 31 oct 2026.
 //
 // Única puerta: `withTenantContext()` con `app_platform` y `medskin.account_id` = el `sub` del
-// token. `practice_id` NO se fija: la consola cruza inquilinos a propósito y sus políticas son
+// token. `practice_id` NO se fija: la consola cruza tenants a propósito y sus políticas son
 // `current_user = 'app_platform'`.
 //
 // LO QUE ESTE ROL NO PUEDE, y lo dice la base y no este archivo (migración 0077):
@@ -185,7 +185,7 @@ export class PlatformPatientsRepository {
    * corrige el nombre ni el correo de una paciente.
    *
    * Cero filas es el `404`. Archivar lo ya archivado devuelve la misma fila, que es la
-   * idempotencia que el contrato promete.
+   * idempotencia que el contrato especifica.
    */
   async setStatus(p: {
     actor: ConsoleActor;

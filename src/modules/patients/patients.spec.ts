@@ -217,7 +217,7 @@ describe('la lista y la ficha', () => {
     ).rejects.toMatchObject({ code: 'busqueda_muy_corta' });
   });
 
-  it('la ficha trae el vínculo y los antecedentes, y abrirla deja su línea en la bitácora', async () => {
+  it('la ficha trae el vínculo y los antecedentes, y abrirla deja su línea en la auditoría', async () => {
     const before = await owner.query<{ n: string }>(
       `select count(*)::text as n from access_audit
         where subject_id = $1 and action = 'paciente.ficha_abierta'`,
@@ -365,7 +365,7 @@ describe('los vínculos, que son de la paciente', () => {
 });
 
 describe('la ficha médica que llena la paciente', () => {
-  it('lo que escribió la doctora NO se pisa, y la respuesta lo dice', async () => {
+  it('lo que escribió la doctora NO se sobrescribe, y la respuesta lo dice', async () => {
     await owner.query(`update patient_link set status = 'vinculada' where id = $1`, [ANA.link]);
 
     const saved = await history.run(

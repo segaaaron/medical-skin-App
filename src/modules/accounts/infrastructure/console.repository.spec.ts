@@ -108,7 +108,7 @@ async function credencialDe(accountId: string): Promise<{ hash: string; is_tempo
   return rows[0];
 }
 
-async function bitacora(): Promise<
+async function auditoria(): Promise<
   { action: string; actor_label: string | null; subject_id: string | null; data: Record<string, unknown> | null; practice_id: string | null }[]
 > {
   const { rows } = await owner.query<{
@@ -127,7 +127,7 @@ async function bitacora(): Promise<
 
 beforeAll(async () => {
   await limpiar();
-  // La cuenta en pausa por intentos, con su temporal SIN estrenar: es el caso de las dos.
+  // La cuenta en pausa por intentos, con su temporal Sin usar: es el caso de las dos.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name, failed_attempts,
                           locked_until)
@@ -150,7 +150,7 @@ beforeAll(async () => {
      values ($1, $2, false, now())`,
     [YA_ELIGIO, HASH],
   );
-  // LA CUENTA DEL RESETEO: eligió su contraseña hace tiempo, estrenó su temporal en su día y
+  // LA CUENTA DEL RESETEO: eligió su contraseña hace tiempo, usó por primera vez su temporal en su día y
   // tiene una sesión viva. Es el caso que el reenvío contesta con 409.
   await owner.query(
     `insert into account (id, email, role, region, first_name, last_name)
@@ -194,7 +194,7 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
     const respuesta = await reenvio().run(PAUSADA, SOPORTE);
 
     // El cuerpo del contrato, entero. `contrasena_temporal` desde el 4 de noviembre de 2026:
-    // el PIN que ESTA llamada acaba de acuñar, para que soporte pueda dictarlo cuando el correo
+    // el PIN que ESTA llamada acaba de generar, para que soporte pueda dictarlo cuando el correo
     // de la cuenta está mal escrito —que es justo cuando se usa esto—.
     expect(Object.keys(respuesta).sort()).toEqual([
       'caduca_en',
@@ -220,9 +220,9 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
     expect(guardada?.temp_first_used_at).toBeInstanceOf(Date);
   });
 
-  it('queda en la bitácora con quién la ejecutó, y sin el correo ni la contraseña', async () => {
+  it('queda en la auditoría con quién la ejecutó, y sin el correo ni la contraseña', async () => {
     await reenvio().run(PAUSADA, SOPORTE);
-    const filas = await bitacora();
+    const filas = await auditoria();
 
     expect(filas).toHaveLength(1);
     expect(filas[0]).toMatchObject({
@@ -249,7 +249,7 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
     );
     expect((await credencialDe(YA_ELIGIO))?.hash).toBe(HASH);
     expect(mandados).toEqual([]);
-    expect(await bitacora()).toEqual([]);
+    expect(await auditoria()).toEqual([]);
   });
 
   it('una cuenta borrada y una inventada responden lo MISMO, y no mandan nada', async () => {
@@ -262,10 +262,10 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
       expect((fallo as ContractError).userMessage).toBe('No encontramos esa cuenta.');
     }
     expect(mandados).toEqual([]);
-    expect(await bitacora()).toEqual([]);
+    expect(await auditoria()).toEqual([]);
   });
 
-  it('el relé caído es un 500, y su causa no lleva el correo ni la contraseña', async () => {
+  it('el reenvío caído es un 500, y su causa no lleva el correo ni la contraseña', async () => {
     const fallo = await reenvio(CORREO_CAIDO).run(PAUSADA, SOPORTE).catch((e: unknown) => e);
 
     expect((fallo as ContractError).code).toBe('fallo_de_servicio');
@@ -277,16 +277,16 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
     expect(cadena).toContain('ECONNREFUSED');
     expect(cadena).not.toContain(CORREO_PAUSADA);
     expect(cadena).not.toMatch(/[a-z]+-[a-z]+-\d{2}/);
-    // Y reintentar SÍ sirve, que es lo que la frase promete: la línea de bitácora dice que
-    // se pidió —que es verdad— y la cuenta sigue con una temporal sin estrenar.
-    expect((await bitacora())[0]?.action).toBe('cuenta.acceso_pedido');
+    // Y reintentar SÍ sirve, que es lo que la frase especifica: la línea de auditoría dice que
+    // se pidió —que es verdad— y la cuenta sigue con una temporal sin usar.
+    expect((await auditoria())[0]?.action).toBe('cuenta.acceso_pedido');
     expect((await credencialDe(PAUSADA))?.is_temporary).toBe(true);
   });
 });
 
 // EL RESETEO DEL PIN · `POST /v1/platform/accounts/{id}/access/reset`, migración 0083. Contra la
 // base real y no contra un doble, porque lo que hay que probar son columnas. DOS PRUEBAS Y NO
-// SEIS: el 404 indistinguible, el 500 del relé y la forma de la respuesta ya los prueba el
+// SEIS: el 404 indistinguible, el 500 del reenvío y la forma de la respuesta ya los prueba el
 // reenvío de arriba sobre el MISMO camino —misma clase, mismo correo, mismo repositorio—, y
 // repetirlos aquí solo haría más lenta la suite sin cubrir una línea más. Lo que es propio del
 // reseteo es lo de abajo.
@@ -312,7 +312,7 @@ describe('POST /v1/platform/accounts/{id}/access/reset', () => {
     );
   });
 
-  it('pisa la contraseña elegida, cierra sus sesiones y lo deja en la bitácora', async () => {
+  it('sobrescribe la contraseña elegida, cierra sus sesiones y lo deja en la auditoría', async () => {
     const respuesta = await reenvio().run(RESETEO, SOPORTE, true);
 
     // El PIN va a su correo y NO a la respuesta: soporte no lo ve.
@@ -342,7 +342,7 @@ describe('POST /v1/platform/accounts/{id}/access/reset', () => {
     expect(rows[0]?.revoked_reason).toBe('access_reset');
 
     // Acción PROPIA, distinta de la del reenvío, y sin el correo ni el PIN dentro.
-    const filas = await bitacora();
+    const filas = await auditoria();
     expect(filas).toHaveLength(1);
     expect(filas[0]).toMatchObject({
       action: 'cuenta.acceso_reseteado',
@@ -389,9 +389,9 @@ describe('DELETE /v1/platform/accounts/{id}/lock', () => {
     expect(segunda).toEqual(primera);
   });
 
-  it('queda en la bitácora, con su propia acción y sin dato de nadie', async () => {
+  it('queda en la auditoría, con su propia acción y sin dato de nadie', async () => {
     await pausa().run(PAUSADA, SOPORTE);
-    const filas = await bitacora();
+    const filas = await auditoria();
 
     expect(filas).toHaveLength(1);
     expect(filas[0]).toMatchObject({
@@ -412,7 +412,7 @@ describe('DELETE /v1/platform/accounts/{id}/lock', () => {
       expect((fallo as ContractError).code).toBe('cuenta_no_existe');
       expect((fallo as ContractError).status).toBe(404);
     }
-    expect(await bitacora()).toEqual([]);
+    expect(await auditoria()).toEqual([]);
     // Y la cuenta borrada sigue borrada: levantarle la pausa sería devolverle un acceso que
     // el borrado le quitó.
     const { rows } = await owner.query<{ status: string; deleted_at: Date | null }>(

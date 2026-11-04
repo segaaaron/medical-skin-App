@@ -3,7 +3,7 @@
 //
 // EL CONTEXTO ES `app_platform` CON `medskin.account_id` = EL `sub` DEL TOKEN, y fijarlo **no
 // crea ninguna fila en `account`**: la persona de plataforma no vive en esta región. Ese uuid
-// es lo que la política de `idempotency_key` compara y lo que viaja a la bitácora.
+// es lo que la política de `idempotency_key` compara y lo que viaja a la auditoría.
 // `practice_id` NO se fija: la consola cruza consultas a propósito y sus políticas son
 // `current_user = 'app_platform'`, no por consulta.
 //
@@ -83,7 +83,7 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
     expiresAt: Date;
     force: boolean;
   }): Promise<{ outcome: PlatformResendOutcome; expiresAt: Date | null; email: string | null }> {
-    // DOS FUNCIONES Y NO UNA CON BANDERA: la de reseteo es la única que pisa una credencial ya
+    // DOS FUNCIONES Y NO UNA CON BANDERA: la de reseteo es la única que sobrescribe una credencial ya
     // elegida, y lo que decide cuál se puede llamar es el `GRANT EXECUTE` de cada una (0083).
     const fn = p.force ? 'medskin_platform_reset_access' : 'medskin_platform_resend_access';
     const phrase = p.force
@@ -97,7 +97,7 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
       );
       const row = rows[0];
       if (row === undefined) {
-        throw new ServiceFailure(phrase, new Error(`${fn} no devolvió veredicto`));
+        throw new ServiceFailure(phrase, new Error(`${fn} no devolvió resultado`));
       }
       const outcome = row.outcome as PlatformResendOutcome;
       if (outcome !== 'acceso_renovado') {
@@ -105,7 +105,7 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
         return { outcome, expiresAt: null, email: null };
       }
 
-      // A dónde escribir. Se lee DENTRO de la misma transacción y DESPUÉS del veredicto: la
+      // A dónde escribir. Se lee DENTRO de la misma transacción y DESPUÉS del resultado: la
       // función es la que decide si esa cuenta existe, y leer el correo antes sería una
       // segunda respuesta a la misma pregunta que podría no coincidir con la primera.
       const { rows: destino } = await c.query<{ email: string }>(
@@ -131,7 +131,7 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
       const action = p.force ? 'cuenta.acceso_reseteado' : 'cuenta.acceso_pedido';
       // `credencial_vista`: desde el 4 de noviembre de 2026 estas dos rutas DEVUELVEN el PIN a
       // la consola, así que el operador pudo leerlo. Es una etiqueta cerrada, no el PIN —en la
-      // bitácora no entra ninguna credencial—, y está para que «quién pudo ver la contraseña de
+      // auditoría no entra ninguna credencial—, y está para que «quién pudo ver la contraseña de
       // esta persona» tenga respuesta.
       await this.audit(c, p.actor, p.accountId, action, {
         via: 'correo',
@@ -162,14 +162,14 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
   }
 
   /**
-   * La línea de la bitácora. `actor_account_id` es el `sub` del token y `actor_label` su
+   * La línea de la auditoría. `actor_account_id` es el `sub` del token y `actor_label` su
    * nombre legible: la tabla no tiene clave foránea hacia esa persona —no vive en esta
    * región— y es deliberado.
    *
    * `practice_id` va NULO: esta acción no es de ninguna consulta, y `app_platform` no fija
    * consulta. En `data` van etiquetas cerradas: NI EL CORREO, NI LA CONTRASEÑA, ni un dato
-   * clínico (§10.3, regla 1). El correo además no podría entrar sin convertir la bitácora
-   * —que soporte lee entera— en un padrón consultable.
+   * clínico (§10.3, regla 1). El correo además no podría entrar sin convertir la auditoría
+   * —que soporte lee entera— en un registro consultable.
    */
   private async audit(
     c: PoolClient,

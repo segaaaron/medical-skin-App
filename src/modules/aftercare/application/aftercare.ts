@@ -117,7 +117,7 @@ export class Aftercare {
     const thread = await this.aftercare.thread(asking, { patientId, practiceId }, false);
     if (thread === 'revoked') throw new ContractError('vinculo_revocado');
     // Un hilo que todavía no existe es un hilo vacío, no un 404 y no una fila nueva: «una
-    // paciente, una doctora, un hilo», y nace cuando alguna escribe.
+    // paciente, una doctora, un hilo», y empieza cuando alguna escribe.
     if (thread === null) return { hilo: { id: null, cerrado: false }, mensajes: [] };
 
     const before = typeof query.antes_de === 'string' ? new Date(query.antes_de) : null;
@@ -319,7 +319,7 @@ function incidentView(answer: {
     estado: 'recibida',
     // `avisamos_a` SOLO SI SE AVISÓ. Y si no —una consulta sin dueña registrada, que es una
     // columna nullable desde el tramo 1—, la frase dice la verdad: queda registrado y lo verá
-    // al abrir la app. Prometer un aviso que no salió es el defecto que este endpoint tenía.
+    // al abrir la app. Especificar un aviso que no salió es el defecto que este endpoint tenía.
     avisamos_a: answer.notified ? answer.practitioner : null,
     que_sigue: answer.notified
       ? 'Tu doctora lo recibió y te va a responder por el chat.'

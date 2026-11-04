@@ -5,7 +5,7 @@
 // `app_anonymous` NO TIENE UN SOLO PRIVILEGIO DE TABLA. No puede leer `account`, no puede
 // leer `recovery_code` y no puede escribir en ninguna: lo único que puede hacer es ejecutar
 // estas tres funciones `SECURITY DEFINER`, que validan sus argumentos y devuelven el
-// veredicto y nunca la fila. Con él no se puede enumerar correos ni por error de
+// resultado y nunca la fila. Con él no se puede enumerar correos ni por error de
 // programación, porque no hay consulta que escribir.
 //
 // Consultas parametrizadas sin excepción (OWASP A03).
@@ -45,13 +45,13 @@ export class RecoveryRepository implements RecoveryCodePort {
     return withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) => {
       const { rows } = await c.query<LiveRow>('select * from medskin_recovery_live($1)', [email]);
       const row = rows[0];
-      // La función devuelve SIEMPRE una fila y SIEMPRE un hash —el real o el del señuelo—.
-      // Si no, el señuelo no está sembrado, y servir esto sin él abriría el oráculo del
+      // La función devuelve SIEMPRE una fila y SIEMPRE un hash —el real o el del decoy—.
+      // Si no, el decoy no está sembrado, y servir esto sin él abriría la filtración del
       // reloj: antes un 500 con su causa que un 401 que llega más rápido.
       if (row === undefined || !row.code_hash) {
         throw new ServiceFailure(
           FAILURE_PHRASES.checkRecoveryCode,
-          new Error('medskin_recovery_live no devolvió fila o devolvió sin hash señuelo'),
+          new Error('medskin_recovery_live no devolvió fila o devolvió sin hash decoy'),
         );
       }
       // `role` se descarta aquí mismo, a la vista. La función lo devuelve y el token de

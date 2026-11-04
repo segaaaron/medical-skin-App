@@ -98,7 +98,7 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         passwords: Argon2Passwords,
         limit: ResendLimit,
         clock: SystemClock,
-        // Sin esto, `via: "correo"` acuña una temporal nueva, mata la que la paciente
+        // Sin esto, `via: "correo"` genera una temporal nueva, invalida la que la paciente
         // tenía y no manda nada: la asimetría con `recovery.module.ts` ERA el defecto.
         mail: PatientAccessMail,
       ) => new SendPatientAccess(repo, passwords, limit, clock, mail),
@@ -160,7 +160,7 @@ const PRACTITIONER_FACTS = Symbol('PRACTITIONER_FACTS');
         repo: ConsoleRepository,
         passwords: Argon2Passwords,
         clock: SystemClock,
-        // Sin esto la consola acuñaría una temporal que nadie manda, y como la respuesta NO
+        // Sin esto la consola generaría una temporal que nadie manda, y como la respuesta NO
         // la lleva —«soporte no la ve»—, nadie podría entregarla: la cuenta quedaría fuera.
         mail: PlatformAccessMail,
       ) => new ResendPlatformAccess(repo, passwords, clock, mail),
