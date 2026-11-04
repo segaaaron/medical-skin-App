@@ -44,16 +44,27 @@ export class ResendPlatformAccess {
     private readonly mail: PlatformAccessMailPort,
   ) {}
 
-  async run(accountId: string, actor: ConsoleActor): Promise<PlatformResendResponse> {
+  /**
+   * `force` es el RESETEO (`POST …/access/reset`, 4 de noviembre de 2026): el mismo camino
+   * entero —acuñar, mandar al correo de la persona, no devolver la contraseña— contra la
+   * función que SÍ pisa una credencial ya elegida. Lo que separa a las dos acciones no es este
+   * booleano: es el permiso de la tabla de rutas y el `GRANT EXECUTE` de cada función. Aquí
+   * solo cambia a qué función se llama, qué dice la bitácora y qué frase lleva el 500.
+   */
+  async run(accountId: string, actor: ConsoleActor, force = false): Promise<PlatformResendResponse> {
     const now = this.clock.now();
     const expiresAt = temporaryPasswordExpiry(now);
     const temporary = mintTemporaryPassword();
+    const phrase = force
+      ? FAILURE_PHRASES.resetPlatformAccess
+      : FAILURE_PHRASES.resendPlatformAccess;
 
     const renewed = await this.accounts.resend({
       actor,
       accountId,
       hash: await this.passwords.hash(temporary),
       expiresAt,
+      force,
     });
 
     // El 404 es uno solo e indistinguible: una cuenta que no existe, una borrada y una de
@@ -61,6 +72,9 @@ export class ResendPlatformAccess {
     // contraseña ya elegida no se resetea desde fuera, la recuperación es de ella y de su
     // correo.
     if (renewed.outcome === 'cuenta_no_existe') throw new ContractError('cuenta_no_existe');
+    // Con `force` este veredicto NO PUEDE volver: `medskin_platform_reset_access` no hace esa
+    // pregunta, que es justamente para lo que existe. La rama se queda porque el reenvío sigue
+    // siendo el camino normal y es su regla.
     if (renewed.outcome === 'ya_eligio_su_contrasena') {
       throw new ContractError('ya_eligio_su_contrasena');
     }
@@ -68,7 +82,7 @@ export class ResendPlatformAccess {
       // Sin el correo no hay a dónde escribir, y aquí la temporal ya está acuñada: no se
       // calla, se registra con su causa.
       throw new ServiceFailure(
-        FAILURE_PHRASES.resendPlatformAccess,
+        phrase,
         new Error(`el reenvío de la cuenta ${accountId} no devolvió a dónde escribir`),
       );
     }
@@ -81,7 +95,7 @@ export class ResendPlatformAccess {
 
     // EN LÍNEA Y NO POR COLA, por la misma razón que los otros dos envíos de acceso: por aquí
     // la temporal ya está acuñada, así que encolar obligaría a meterla EN CLARO en Redis.
-    await this.send(facts, accountId);
+    await this.send(facts, accountId, phrase);
 
     return {
       // `enviado_en` es cuándo el relé aceptó el mensaje, no cuándo llegó a su bandeja: lo
@@ -100,14 +114,18 @@ export class ResendPlatformAccess {
    * —`patient_link` no existe para `app_platform`— y la línea de `access_audit` dice
    * `acceso_pedido`, que es verdad aunque el relé se cayera.
    */
-  private async send(facts: PlatformDeliveryFacts, accountId: string): Promise<void> {
+  private async send(
+    facts: PlatformDeliveryFacts,
+    accountId: string,
+    phrase: string,
+  ): Promise<void> {
     try {
       await this.mail.sendAccess(facts);
     } catch (cause) {
       // Ni el correo ni la contraseña entran en la causa: solo la cuenta (§10.3).
       throw new ServiceFailure(
-        FAILURE_PHRASES.resendPlatformAccess,
-        new Error(`no se pudo reenviar el acceso de la cuenta ${accountId}`, { cause }),
+        phrase,
+        new Error(`no se pudo mandar el acceso de la cuenta ${accountId}`, { cause }),
       );
     }
   }

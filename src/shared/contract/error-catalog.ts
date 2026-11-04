@@ -1682,6 +1682,13 @@ export const FAILURE_PHRASES = {
     'No pudimos cambiar el estado de la ficha. El servidor no respondió: puedes volver a intentarlo.',
   resendPlatformAccess:
     'No pudimos reenviar el acceso. El servidor no respondió: puedes volver a intentarlo.',
+  /**
+   * Frase PROPIA y no la del reenvío, porque las dos acciones son distintas en la pantalla de
+   * soporte y «reenviar» describiría mal lo que se intentó: el reseteo pisa la contraseña que
+   * la persona había elegido. Reintentar sí sirve, igual que en el reenvío.
+   */
+  resetPlatformAccess:
+    'No pudimos resetear el acceso. El servidor no respondió: puedes volver a intentarlo.',
   liftAccessPause:
     'No pudimos levantar la pausa. El servidor no respondió: puedes volver a intentarlo.',
 

@@ -582,6 +582,13 @@
       "when": 1793761180021,
       "tag": "0082_soltar_los_correos_que_quedaron_colgados",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793766344562,
+      "tag": "0083_la_consola_resetea_el_pin",
+      "breakpoints": true
     }
   ]
 }

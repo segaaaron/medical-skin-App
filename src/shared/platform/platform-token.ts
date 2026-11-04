@@ -76,6 +76,13 @@ export const PLATFORM_PERMISSIONS = [
   // cerrada y lo que no está aquí no se puede firmar: un permiso concedido que nadie usa es
   // el que alguien reutiliza en seis meses sin leer para qué era.
   'plataforma:acceso:reenviar',
+  // `POST /v1/platform/accounts/{id}/access/reset`, nuevo el 4 de noviembre de 2026. PROPIO y
+  // NO `plataforma:acceso:reenviar`, y la separación ES la decisión: el reenvío solo alcanza a
+  // quien todavía no eligió su contraseña, y el reseteo PISA una credencial ya elegida —la
+  // única acción de la casa que puede—. Con un permiso único, «quien reenvía un acceso puede
+  // quitarle a cualquiera la contraseña que eligió» sería verdad para siempre y nadie lo habría
+  // decidido.
+  'plataforma:acceso:resetear',
   'plataforma:pausa:levantar',
   // `GET /v1/platform/accounts?correo=`, nuevo el 31 de octubre de 2026. PROPIO y no
   // `plataforma:consultas:leer`: quien mira el padrón responde «qué consultas hay», y esto

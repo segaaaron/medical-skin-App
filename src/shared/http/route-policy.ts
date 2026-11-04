@@ -521,6 +521,12 @@ export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
     platformPermission: 'plataforma:acceso:reenviar',
     failurePhrase: FAILURE_PHRASES.resendPlatformAccess,
   },
+  // El reseteo del PIN, 4 de noviembre de 2026. Ruta y permiso PROPIOS: es la única acción de
+  // la casa que pisa una credencial ya elegida (migración 0083).
+  'POST /v1/platform/accounts/:account_id/access/reset': {
+    platformPermission: 'plataforma:acceso:resetear',
+    failurePhrase: FAILURE_PHRASES.resetPlatformAccess,
+  },
   'DELETE /v1/platform/accounts/:account_id/lock': {
     platformPermission: 'plataforma:pausa:levantar',
     failurePhrase: FAILURE_PHRASES.liftAccessPause,

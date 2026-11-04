@@ -40,11 +40,13 @@ const OPERADOR = 'c0c0c0c0-0000-4000-8000-000000000001';
 const PAUSADA = 'c0c0c0c0-0000-4000-8000-000000000002';
 const YA_ELIGIO = 'c0c0c0c0-0000-4000-8000-000000000003';
 const BORRADA = 'c0c0c0c0-0000-4000-8000-000000000004';
+const RESETEO = 'c0c0c0c0-0000-4000-8000-000000000005';
 const INVENTADA = 'c0c0c0c0-0000-4000-8000-000000000009';
 
 const CORREO_PAUSADA = 'rocio.pausada@consola.local';
 const CORREO_YA_ELIGIO = 'ana.eligio@consola.local';
 const CORREO_BORRADA = 'borrada+c0c0c0c0@medskin.invalid';
+const CORREO_RESETEO = 'lucia.reseteo@consola.local';
 
 const HASH =
   '$argon2id$v=19$m=19456,p=1,t=2$c2VtaWxsYWRlcHJ1ZWJh$BcVqHhiTZ4RrQZ4kYgVvxCuUAneDdfTxZ6qz6hUwcLY';
@@ -86,19 +88,23 @@ const pausa = (): LiftAccessPause => new LiftAccessPause(new ConsoleRepository(a
 
 async function limpiar(): Promise<void> {
   await owner.query('delete from account where id = any($1::uuid[])', [
-    [PAUSADA, YA_ELIGIO, BORRADA],
+    [PAUSADA, YA_ELIGIO, BORRADA, RESETEO],
   ]);
   await owner.query('delete from access_audit where actor_account_id = $1', [OPERADOR]);
 }
 
-async function credencialDe(accountId: string): Promise<{ hash: string; is_temporary: boolean; temp_first_used_at: Date | null } | undefined> {
+async function credencialDe(accountId: string): Promise<{ hash: string; is_temporary: boolean; temp_first_used_at: Date | null; temp_used_at: Date | null; set_at: Date | null } | undefined> {
   const { rows } = await owner.query<{
     hash: string;
     is_temporary: boolean;
     temp_first_used_at: Date | null;
-  }>('select hash, is_temporary, temp_first_used_at from credential where account_id = $1', [
-    accountId,
-  ]);
+    temp_used_at: Date | null;
+    set_at: Date | null;
+  }>(
+    `select hash, is_temporary, temp_first_used_at, temp_used_at, set_at
+       from credential where account_id = $1`,
+    [accountId],
+  );
   return rows[0];
 }
 
@@ -143,6 +149,20 @@ beforeAll(async () => {
     `insert into credential (account_id, hash, is_temporary, set_at)
      values ($1, $2, false, now())`,
     [YA_ELIGIO, HASH],
+  );
+  // LA CUENTA DEL RESETEO: eligió su contraseña hace tiempo, estrenó su temporal en su día y
+  // tiene una sesión viva. Es el caso que el reenvío contesta con 409.
+  await owner.query(
+    `insert into account (id, email, role, region, first_name, last_name)
+     values ($1, $2, 'doctor', 'latam', 'Lucia', 'Paz')`,
+    [RESETEO, CORREO_RESETEO],
+  );
+  await owner.query(
+    `insert into credential (account_id, hash, is_temporary, temp_first_used_at, temp_used_at,
+                             set_at)
+     values ($1, $2, false, now() - interval '30 days', now() - interval '30 days',
+             now() - interval '30 days')`,
+    [RESETEO, HASH],
   );
   // Una cuenta borrada: el mismo 404 que una inventada, en las dos rutas.
   await owner.query(
@@ -254,6 +274,85 @@ describe('POST /v1/platform/accounts/{id}/access/resend', () => {
     // se pidió —que es verdad— y la cuenta sigue con una temporal sin estrenar.
     expect((await bitacora())[0]?.action).toBe('cuenta.acceso_pedido');
     expect((await credencialDe(PAUSADA))?.is_temporary).toBe(true);
+  });
+});
+
+// EL RESETEO DEL PIN · `POST /v1/platform/accounts/{id}/access/reset`, migración 0083. Contra la
+// base real y no contra un doble, porque lo que hay que probar son columnas. DOS PRUEBAS Y NO
+// SEIS: el 404 indistinguible, el 500 del relé y la forma de la respuesta ya los prueba el
+// reenvío de arriba sobre el MISMO camino —misma clase, mismo correo, mismo repositorio—, y
+// repetirlos aquí solo haría más lenta la suite sin cubrir una línea más. Lo que es propio del
+// reseteo es lo de abajo.
+describe('POST /v1/platform/accounts/{id}/access/reset', () => {
+  const SESION = 'c0c0c0c0-0000-4000-8000-00000000000a';
+
+  beforeEach(async () => {
+    await owner.query(
+      `update credential
+          set hash = $2, is_temporary = false, temp_expires_at = null,
+              temp_first_used_at = now() - interval '30 days',
+              temp_used_at = now() - interval '30 days', set_at = now() - interval '30 days'
+        where account_id = $1`,
+      [RESETEO, HASH],
+    );
+    await owner.query('delete from session where id = $1', [SESION]);
+    await owner.query(
+      `insert into session (id, account_id, scope, device_id, refresh_hash,
+                            refresh_expires_at)
+       values ($1, $2, 'completo', 'iphone-de-lucia', 'refresco-de-prueba-0083',
+               now() + interval '12 hours')`,
+      [SESION, RESETEO],
+    );
+  });
+
+  it('pisa la contraseña elegida, cierra sus sesiones y lo deja en la bitácora', async () => {
+    const respuesta = await reenvio().run(RESETEO, SOPORTE, true);
+
+    // El PIN va a su correo y NO a la respuesta: soporte no lo ve.
+    const pin = mandados[0]?.temporaryPassword ?? '';
+    expect(pin).toMatch(/^\d{6}$/);
+    expect(mandados[0]?.email).toBe(CORREO_RESETEO);
+    expect(JSON.stringify(respuesta)).not.toContain(pin);
+
+    const guardada = await credencialDe(RESETEO);
+    expect(await new Argon2Passwords().verify(guardada?.hash ?? '', pin)).toBe(true);
+    // Las tres columnas que hacen al reseteo ser un reseteo: la temporal está viva y sin
+    // consumir, y la definitiva que había ya no se afirma en ninguna parte.
+    expect(guardada?.is_temporary).toBe(true);
+    expect(guardada?.temp_used_at).toBeNull();
+    expect(guardada?.set_at).toBeNull();
+    // Y la que NO se mueve: ya probó que tiene su correo, y eso no se des-ocurre (0017). Si
+    // cayera, esta persona perdería además su recuperación por correo.
+    expect(guardada?.temp_first_used_at).toBeInstanceOf(Date);
+
+    // La sesión que seguía abierta contra el hash que acaba de morir.
+    const { rows } = await owner.query<{ revoked_at: Date | null; revoked_reason: string | null }>(
+      'select revoked_at, revoked_reason from session where id = $1',
+      [SESION],
+    );
+    expect(rows[0]?.revoked_at).toBeInstanceOf(Date);
+    expect(rows[0]?.revoked_reason).toBe('access_reset');
+
+    // Acción PROPIA, distinta de la del reenvío, y sin el correo ni el PIN dentro.
+    const filas = await bitacora();
+    expect(filas).toHaveLength(1);
+    expect(filas[0]).toMatchObject({
+      action: 'cuenta.acceso_reseteado',
+      actor_label: 'Marcela · soporte',
+      subject_id: RESETEO,
+      practice_id: null,
+    });
+    const fila = JSON.stringify(filas[0]);
+    expect(fila).not.toContain(CORREO_RESETEO);
+    expect(fila).not.toContain(pin);
+  });
+
+  it('el REENVÍO sobre la misma cuenta sigue siendo 409: la regla no se abrió', async () => {
+    const fallo = await reenvio().run(RESETEO, SOPORTE).catch((e: unknown) => e);
+
+    expect((fallo as ContractError).code).toBe('ya_eligio_su_contrasena');
+    expect((await credencialDe(RESETEO))?.hash).toBe(HASH);
+    expect(mandados).toEqual([]);
   });
 });
 

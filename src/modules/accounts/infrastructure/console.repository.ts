@@ -81,18 +81,23 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
     accountId: string;
     hash: string;
     expiresAt: Date;
+    force: boolean;
   }): Promise<{ outcome: PlatformResendOutcome; expiresAt: Date | null; email: string | null }> {
+    // DOS FUNCIONES Y NO UNA CON BANDERA: la de reseteo es la única que pisa una credencial ya
+    // elegida, y lo que decide cuál se puede llamar es el `GRANT EXECUTE` de cada una (0083).
+    const fn = p.force ? 'medskin_platform_reset_access' : 'medskin_platform_resend_access';
+    const phrase = p.force
+      ? FAILURE_PHRASES.resetPlatformAccess
+      : FAILURE_PHRASES.resendPlatformAccess;
+
     return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
       const { rows } = await c.query<{ outcome: string; expires_at: Date | null }>(
-        'select outcome, expires_at from medskin_platform_resend_access($1, $2, $3)',
+        `select outcome, expires_at from ${fn}($1, $2, $3)`,
         [p.accountId, p.hash, p.expiresAt],
       );
       const row = rows[0];
       if (row === undefined) {
-        throw new ServiceFailure(
-          FAILURE_PHRASES.resendPlatformAccess,
-          new Error('medskin_platform_resend_access no devolvió veredicto'),
-        );
+        throw new ServiceFailure(phrase, new Error(`${fn} no devolvió veredicto`));
       }
       const outcome = row.outcome as PlatformResendOutcome;
       if (outcome !== 'acceso_renovado') {
@@ -110,7 +115,7 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
       const email = destino[0]?.email;
       if (email === undefined) {
         throw new ServiceFailure(
-          FAILURE_PHRASES.resendPlatformAccess,
+          phrase,
           new Error(`la cuenta ${p.accountId} se renovó y no tiene correo que leer`),
         );
       }
@@ -118,7 +123,13 @@ export class ConsoleRepository implements PlatformAccessPort, ConsoleAccountSear
       // «Las dos quedan en `access_audit` con quién las ejecutó.» La escribe el endpoint, que
       // es quien sabe qué operador fue; la función no recibe al actor y así no puede
       // confundirlo con el sujeto.
-      await this.audit(c, p.actor, p.accountId, 'cuenta.acceso_pedido', {
+      //
+      // ACCIÓN DISTINTA PARA EL RESETEO, y no una etiqueta dentro de `data`: es la acción más
+      // fuerte que la consola puede ejecutar sobre una cuenta —le quita la contraseña que esa
+      // persona eligió— y `access_audit_action_idx` es por `action`, así que «enséñame todos
+      // los reseteos» tiene que ser una lectura por índice y no un filtro sobre un json.
+      const action = p.force ? 'cuenta.acceso_reseteado' : 'cuenta.acceso_pedido';
+      await this.audit(c, p.actor, p.accountId, action, {
         via: 'correo',
         origen: 'consola',
       });

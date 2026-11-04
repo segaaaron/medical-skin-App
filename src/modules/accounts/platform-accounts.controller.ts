@@ -64,6 +64,28 @@ export class PlatformAccountsController {
     return this.resend.run(accountId, actorOf(req));
   }
 
+  /**
+   * EL RESETEO DEL PIN · `POST /v1/platform/accounts/{id}/access/reset`, 4 de noviembre de
+   * 2026. Misma forma y misma respuesta que el reenvío —`{ enviado_en, caduca_en }`, sin la
+   * contraseña— y UNA diferencia: alcanza también a quien ya eligió la suya, que es lo que el
+   * reenvío contesta con `409`.
+   *
+   * ES OTRA RUTA Y OTRO PERMISO (`plataforma:acceso:resetear`) a propósito. Haberlo metido como
+   * un campo del cuerpo del reenvío habría concedido la acción más fuerte de la consola a todo
+   * el que ya podía reenviar, sin que nadie lo decidiera. El permiso lo verificó el guardia con
+   * la tabla de rutas y aquí NO se vuelve a comprobar.
+   *
+   * Tampoco lleva `Idempotency-Key`, por lo mismo que el reenvío: cada llamada acuña una
+   * contraseña nueva y mata la anterior, así que repetir la primera respuesta diría que vale
+   * una contraseña muerta.
+   */
+  @Post(':account_id/access/reset')
+  @HttpCode(200)
+  async resetAccess(@Req() req: RequestWithContext, @Param('account_id') accountId: string) {
+    if (!UUID.test(accountId)) throw new ContractError('cuenta_no_existe');
+    return this.resend.run(accountId, actorOf(req), true);
+  }
+
   @Delete(':account_id/lock')
   @HttpCode(200)
   async lift(@Req() req: RequestWithContext, @Param('account_id') accountId: string) {

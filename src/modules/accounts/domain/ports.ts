@@ -397,6 +397,18 @@ export interface PlatformAccessPort {
     accountId: string;
     hash: string;
     expiresAt: Date;
+    /**
+     * `true` es el RESETEO de la consola (`POST …/access/reset`, migración 0083): la misma
+     * forma y el mismo correo, pero contra `medskin_platform_reset_access`, que es la única
+     * función de la base que pisa una credencial YA elegida. Por eso con `force` el veredicto
+     * `ya_eligio_su_contrasena` no puede volver: esa pregunta no se hace.
+     *
+     * Un argumento y no un segundo método porque todo lo demás es idéntico —acuñar, mandar al
+     * correo de la persona, no devolver la contraseña, revocar sus sesiones—; lo que separa a
+     * las dos acciones es el PERMISO de la tabla de rutas (`plataforma:acceso:resetear`) y el
+     * `GRANT EXECUTE` de cada función, que es donde tiene que vivir esa separación.
+     */
+    force: boolean;
   }): Promise<{ outcome: PlatformResendOutcome; expiresAt: Date | null; email: string | null }>;
 
   /**
