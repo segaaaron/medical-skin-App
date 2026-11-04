@@ -251,5 +251,5 @@ export interface TenantLifecyclePort {
   remove(p: {
     actor: PlatformActor;
     practiceId: string;
-  }): Promise<{ name: string; patients: number } | null>;
+  }): Promise<{ name: string; patients: number; accountsReleased: number } | null>;
 }

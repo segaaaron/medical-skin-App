@@ -493,27 +493,45 @@ export class TenantLifecycleRepository implements TenantLifecyclePort {
   async remove(p: {
     actor: PlatformActor;
     practiceId: string;
-  }): Promise<{ name: string; patients: number } | null> {
+  }): Promise<{ name: string; patients: number; accountsReleased: number } | null> {
     return withTenantContext(this.pool, contextOf(p.actor), async (c) => {
-      const { rows } = await c.query<{ name: string; patients: string }>(
+      // La bitácora PRIMERO, porque después del borrado no queda de dónde leer el nombre ni
+      // el número de fichas: esta fila es lo único que sobrevive a esa consulta.
+      const { rows: before } = await c.query<{ name: string; patients: string }>(
         `select p.name, (select count(*) from patient where practice_id = p.id)::text as patients
            from practice p where p.id = $1`,
         [p.practiceId],
       );
-      const row = rows[0];
-      if (row === undefined) return null;
+      const seen = before[0];
+      if (seen === undefined) return null;
 
       await this.audit(c, p.actor, p.practiceId, 'consulta.borrada', {
-        nombre: row.name,
-        fichas_borradas: Number(row.patients),
+        nombre: seen.name,
+        fichas_borradas: Number(seen.patients),
       });
 
-      const { rowCount } = await c.query(`delete from practice where id = $1`, [p.practiceId]);
+      // Todo el borrado vive en la base (migración 0081) y no aquí: la consola NO tiene
+      // `DELETE` sobre `account`, y no debe tenerlo —sería poder borrar cualquier cuenta de
+      // la región—. La función solo suelta el correo de las cuentas que estaban atadas a
+      // esta consulta, que es lo que deja volver a dar de alta con el mismo correo.
+      const { rows } = await c.query<{
+        name: string;
+        patients: number;
+        accounts_released: number;
+      }>(`select * from medskin_delete_practice($1)`, [p.practiceId]);
+
+      const done = rows[0];
       // Cero filas aquí con la lectura de arriba en verde sería que otra petición la borró en
       // medio. No es un 500: el resultado que el cliente quería ya se cumplió.
-      if (rowCount === 0) return { name: row.name, patients: Number(row.patients) };
+      if (done === undefined) {
+        return { name: seen.name, patients: Number(seen.patients), accountsReleased: 0 };
+      }
 
-      return { name: row.name, patients: Number(row.patients) };
+      return {
+        name: done.name,
+        patients: Number(done.patients),
+        accountsReleased: Number(done.accounts_released),
+      };
     });
   }
 

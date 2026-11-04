@@ -130,6 +130,13 @@ async function clean() {
   const created = rows.map((row) => row.id);
   await owner.query('delete from practice where id = any($1::uuid[])', [[...SEEDED, ...created]]);
   await owner.query(`delete from account where email like '%@plataforma.local'`);
+  // Y por `id`, porque desde la migración 0081 borrar la consulta SUELTA el correo de su
+  // dueña: la fila se queda con `borrada+<id>@medskin.invalid` y el `like` de arriba ya no la
+  // encuentra. Sin esto, la segunda corrida de la suite choca contra `account_pkey`.
+  await owner.query(`delete from account where id = any($1::uuid[])`, [
+    [FILE.account, OTHER.account],
+  ]);
+  await owner.query(`delete from account where email like 'borrada+%@medskin.invalid'`);
   await owner.query('delete from access_audit where practice_id = any($1::uuid[])', [
     [...SEEDED, ...created],
   ]);
@@ -763,6 +770,19 @@ describe('suspender, reactivar y borrar una consulta', () => {
       paciente,
     ]);
 
+    // El correo de la dueña ANTES, y una sesión suya abierta: las dos cosas que el borrado
+    // tiene que dejar inservibles.
+    const { rows: antes } = await owner.query<{ email: string }>(
+      `select email from account where id = $1`,
+      [OTHER.account],
+    );
+    const correoDeLaDuena = antes[0]!.email;
+    await owner.query(
+      `insert into session (id, account_id, practice_id, scope, device_id)
+       values (gen_random_uuid(), $1, $2, 'completo', 'dispositivo-del-borrado')`,
+      [OTHER.account, OTHER.practice],
+    );
+
     const borrada = await lifecycle.remove({ actor: ACTOR, practiceId: OTHER.practice });
     expect(borrada?.patients).toBeGreaterThan(0);
 
@@ -784,5 +804,72 @@ describe('suspender, reactivar y borrar una consulta', () => {
       [OTHER.practice],
     );
     expect(fila[0]?.data).toMatchObject({ nombre: borrada?.name, fichas_borradas: borrada?.patients });
+
+    // Y el correo de la dueña queda libre con el mismo borrado: la cuenta no cuelga de la
+    // consulta, así que soltarlo es un paso aparte y aquí se comprueba que ese paso corrió.
+    const { rows: suelto } = await owner.query<{ email: string }>(
+      `select email from account where id = $1`,
+      [OTHER.account],
+    );
+    expect(suelto[0]?.email).not.toBe(correoDeLaDuena);
+  });
+
+  /**
+   * LO QUE FALLÓ EN PRODUCCIÓN el 3 de noviembre: la consulta se borraba, el padrón decía
+   * «Doctores 0», y dar de alta el mismo correo seguía contestando «Ese correo ya tiene una
+   * cuenta en MedSkin». `account` no cuelga de `practice` y el `CASCADE` no podía tocarla.
+   *
+   * Esta prueba vigila la promesa que el dueño pidió en una frase: «si más adelante lo
+   * tenemos que agregar, lo agregamos con el correo que se eliminó».
+   */
+  it('borrar la consulta libera el correo de la dueña, y la bitácora sobrevive', async () => {
+    const { rows: antes } = await owner.query<{ email: string }>(
+      `select email from account where id = $1`,
+      [FILE.account],
+    );
+    const correo = antes[0]!.email;
+
+    await owner.query(
+      `insert into session (id, account_id, practice_id, scope, device_id)
+       values (gen_random_uuid(), $1, $2, 'completo', 'dispositivo-que-sobrevivia')`,
+      [FILE.account, FILE.practice],
+    );
+
+    const borrada = await lifecycle.remove({ actor: ACTOR, practiceId: FILE.practice });
+    expect(borrada?.accountsReleased).toBe(1);
+
+    // La fila SIGUE existiendo, y tiene que seguir: `access_audit` y `patient_link` la
+    // nombran, y una bitácora que apunta a la nada no sirve el día que alguien pregunte.
+    const { rows: despues } = await owner.query<{
+      email: string;
+      status: string;
+      deleted_at: Date | null;
+    }>(`select email, status, deleted_at from account where id = $1`, [FILE.account]);
+    expect(despues).toHaveLength(1);
+    expect(despues[0]?.status).toBe('borrada');
+    expect(despues[0]?.deleted_at).not.toBeNull();
+    // El correo se soltó del índice único. Esto es exactamente lo que la consola veía mal.
+    expect(despues[0]?.email).not.toBe(correo);
+    expect(despues[0]?.email).toMatch(/^borrada\+.*@medskin\.invalid$/);
+
+    // Y la prueba de verdad, la que mide el síntoma y no el mecanismo: ese mismo correo se
+    // puede volver a dar de alta. Si el índice único siguiera ocupado, esto revienta.
+    const { rows: nueva } = await owner.query<{ id: string }>(
+      `insert into account (email, first_name, last_name, role, region)
+       values ($1, 'Yasmin', 'Otra vez', 'doctor', 'latam') returning id`,
+      [correo],
+    );
+    expect(nueva[0]?.id).toBeTruthy();
+    await owner.query(`delete from account where id = $1`, [nueva[0]!.id]);
+
+    // Ni contraseña viva ni sesión abierta de una consulta que ya no existe.
+    const cuenta = async (sql: string) =>
+      owner.query<{ n: string }>(sql, [FILE.account]).then((r) => Number(r.rows[0]?.n));
+    expect(await cuenta(`select count(*)::text as n from credential where account_id = $1`)).toBe(0);
+    expect(
+      await cuenta(
+        `select count(*)::text as n from session where account_id = $1 and revoked_at is null`,
+      ),
+    ).toBe(0);
   });
 });

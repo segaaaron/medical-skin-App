@@ -568,6 +568,13 @@
       "when": 1793749818538,
       "tag": "0080_suspender_cierra_las_sesiones_abiertas",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793755937002,
+      "tag": "0081_borrar_la_consulta_libera_el_correo",
+      "breakpoints": true
     }
   ]
 }

@@ -111,6 +111,14 @@ export class DeleteTenant {
     const gone = await this.tenants.remove({ actor, practiceId });
     if (gone === null) throw new ContractError('consulta_no_existe');
 
-    return { consulta_id: practiceId, nombre: gone.name, fichas_borradas: gone.patients };
+    return {
+      consulta_id: practiceId,
+      nombre: gone.name,
+      fichas_borradas: gone.patients,
+      // Cuántos correos quedan libres para volver a darse de alta. Sin este número la
+      // consola no puede contestar la única pregunta que viene después del borrado: «¿puedo
+      // volver a crear a esta doctora con su mismo correo?». Sí.
+      correos_liberados: gone.accountsReleased,
+    };
   }
 }
