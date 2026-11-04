@@ -168,6 +168,13 @@ export type TenantFile = {
     status: string;
     lockedUntil: Date | null;
     liveSessions: number;
+    /**
+     * `true` = el reenvío de acceso le funciona; `false` = ya eligió su contraseña y lo único
+     * que le sirve es el reseteo. Sale de `medskin_platform_pin_unused()` (0085) con la misma
+     * expresión que decide el `409`, porque la alternativa para saberlo era llamar al reenvío
+     * y quemarle un PIN para averiguarlo.
+     */
+    pinUnused: boolean;
   } | null;
 };
 

@@ -596,6 +596,13 @@
       "when": 1793768500000,
       "tag": "0084_quien_reenvia_un_acceso_tambien_lo_resetea",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793769200000,
+      "tag": "0085_la_ficha_dice_si_el_pin_sigue_sin_estrenar",
+      "breakpoints": true
     }
   ]
 }

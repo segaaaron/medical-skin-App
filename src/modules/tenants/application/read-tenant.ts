@@ -49,6 +49,12 @@ export type TenantFileResponse = {
     estado: string;
     pausa_hasta: string | null;
     sesiones_activas: number;
+    /**
+     * `true` = su PIN sigue sin estrenar, así que `…/access/resend` le funciona. `false` = ya
+     * eligió su contraseña y solo le vale `…/access/reset`. La consola pinta el botón que
+     * corresponde SIN tener que descubrirlo provocando un `409`, que costaba un PIN cada vez.
+     */
+    pin_sin_usar: boolean;
   };
   incidencias: readonly { clave: string; cuantas: number; causa: string }[];
 };
@@ -119,6 +125,7 @@ function view(
       estado: owner.status,
       pausa_hasta: owner.lockedUntil?.toISOString() ?? null,
       sesiones_activas: owner.liveSessions,
+      pin_sin_usar: owner.pinUnused,
     },
     // `incidencias` se alimenta de las fotos (tramo 6) y de las notificaciones (tramo 7),
     // que todavía no existen: «hasta entonces es `[]`, y la pantalla dibuja su estado vacío,

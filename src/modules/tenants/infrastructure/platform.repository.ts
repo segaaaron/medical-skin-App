@@ -77,6 +77,7 @@ type OwnerRow = {
   status: string;
   locked_until: Date | null;
   live_sessions: string;
+  pin_unused: boolean;
 };
 
 /**
@@ -291,7 +292,8 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
     const { rows } = await c.query<OwnerRow>(
       `select a.email::text as email, a.phone, a.status, a.locked_until,
               (select count(*) from session s
-                where s.account_id = a.id and s.revoked_at is null) as live_sessions
+                where s.account_id = a.id and s.revoked_at is null) as live_sessions,
+              medskin_platform_pin_unused(a.id) as pin_unused
          from account a
         where a.id = $1`,
       [accountId],
@@ -306,6 +308,9 @@ export class PlatformRepository implements TenantAdmissionPort, TenantFilePort {
       status: row.status,
       lockedUntil: row.locked_until,
       liveSessions: Number(row.live_sessions),
+      // 0085. `credential` sigue sin un grant para este rol: lo que se lee es el booleano que
+      // devuelve la función, con la MISMA expresión que decide el `409` del reenvío.
+      pinUnused: row.pin_unused,
     };
   }
 

@@ -43,6 +43,7 @@ const FICHA: TenantFile = {
     status: 'activa',
     lockedUntil: null,
     liveSessions: 2,
+    pinUnused: false,
   },
 };
 
@@ -88,6 +89,8 @@ describe('GET /v1/platform/tenants/{id}', () => {
         estado: 'activa',
         pausa_hasta: null,
         sesiones_activas: 2,
+        // 0085: `false` es «ya eligió su contraseña», así que a esta solo le vale el reseteo.
+        pin_sin_usar: false,
       },
       // Se alimenta de los tramos 6 y 7: hasta entonces la pantalla dibuja su estado vacío,
       // no un error.
