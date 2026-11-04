@@ -57,11 +57,20 @@ export class PlatformTenantsController {
    * cuerpo es el mismo la de la misma petición, contraseña temporal incluida.
    */
   @Post()
-  async create(@Req() req: RequestWithContext, @Res() res: FastifyReply): Promise<void> {
+  async create(
+    @Req() req: RequestWithContext,
+    // `passthrough: true` Y NO UN `@Res()` A SECAS. Con `@Res()` a secas, el cuerpo sale por
+    // Fastify directamente y NO pasa por el `EnvelopeInterceptor`: esta era la ÚNICA ruta de
+    // las 109 que contestaba sin `{datos, meta}`, y una consola que lee `datos.doctora` —como
+    // le dijimos a todo el mundo que hiciera— recibía `undefined` y se quedaba en blanco.
+    // Medido con Nest de verdad en `envelope-passthrough.spec.ts`. Con `passthrough` se
+    // conserva el 201 y el cuerpo sí se envuelve.
+    @Res({ passthrough: true }) res: FastifyReply,
+  ): Promise<unknown> {
     const body: unknown = req.body;
     const served = await this.createTenant.run(body, actorOf(req), keyOf(req, body), traceOf(req));
-    // `void` y no `await`: `send()` de Fastify devuelve la propia respuesta, no una promesa.
-    void res.status(served.replayed ? 200 : 201).send(served.response);
+    void res.status(served.replayed ? 200 : 201);
+    return served.response;
   }
 
   /**
