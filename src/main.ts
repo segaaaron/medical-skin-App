@@ -30,7 +30,13 @@ async function start() {
     // por IP. La razón completa está en `config.ts` · `PROXY_DE_CONFIANZA`.
     //
     // Ningún byte de imagen pasa por la API, así que el cuerpo nunca necesita ser grande.
-    new FastifyAdapter({ trustProxy: cfg.PROXY_DE_CONFIANZA, bodyLimit: 1 * 1024 * 1024 }),
+    // Sin rutas HEAD automáticas: ninguna tiene política de alcance, y una petición `HEAD` a
+    // cualquier ruta salía como 500 «ruta sin política» y dejaba una fila en `service_failure`.
+    new FastifyAdapter({
+      trustProxy: cfg.PROXY_DE_CONFIANZA,
+      bodyLimit: 1 * 1024 * 1024,
+      exposeHeadRoutes: false,
+    }),
     // Sin stack traces al cliente: el filtro global es el único que contesta errores.
     { bufferLogs: true },
   );
