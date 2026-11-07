@@ -74,12 +74,19 @@ function dispositivoDe(req: FastifyRequest): string | null {
 }
 
 /**
- * La clave del cubo. `dev:` y `ip:` llevan prefijo para que un dispositivo que se llame
- * como una dirección no caiga en el cubo de esa dirección.
+ * La clave del cubo: el cliente MÁS la ruta. Cada ruta tiene su cubo, así que agotar la cuota
+ * de una no deja a la misma persona con `429` en las demás: el usuario no paga por una pantalla
+ * que insiste. `dev:` y `ip:` llevan prefijo para que un dispositivo que se llame como una
+ * dirección no caiga en el cubo de esa dirección.
+ *
+ * La ruta es el PATRÓN que registró Fastify (`/v1/photos/:photo_id`), nunca la URL cruda: con la
+ * cruda, quien inventa URLs crea un cubo nuevo por petición y se salta el límite. Lo que no
+ * coincide con ninguna ruta (404) comparte un solo cubo por cliente.
  */
 export function claveDeRitmo(req: FastifyRequest): string {
   const dispositivo = dispositivoDe(req);
-  return dispositivo === null ? `ip:${req.ip}` : `dev:${dispositivo}`;
+  const cliente = dispositivo === null ? `ip:${req.ip}` : `dev:${dispositivo}`;
+  return `${cliente}|${req.method} ${req.routeOptions?.url ?? 'sin-ruta'}`;
 }
 
 /** El número que le toca a esa clave. */
@@ -139,6 +146,12 @@ export const OPCIONES_DE_RITMO = {
   // el registro gratis— así que sin esto nadie sabría si el límite está molestando a gente
   // real. Una línea, con la CLASE de clave y nunca la clave: un `dev:` repetido sería un
   // identificador de dispositivo en la salida del proceso.
-  onExceeded: (_req: FastifyRequest, key: string) =>
-    process.stdout.write(`429 ritmo ${key.startsWith('dev:') ? 'dev' : 'ip'}\n`),
+  // Con la ruta: dice QUÉ endpoint se está pasando, que es lo que ahora hay que saber.
+  onExceeded: (req: FastifyRequest, key: string) =>
+    process.stdout.write(
+      `429 ritmo ${key.startsWith('dev:') ? 'dev' : 'ip'} ${req.method} ${req.routeOptions?.url ?? 'sin-ruta'}\n`,
+    ),
+  // El plugin guarda 5000 cubos y descarta el más viejo; los cubos son ahora cliente × ruta, y
+  // un cubo descartado es un contador a cero. 50 000 cabe de sobra en memoria.
+  cache: 50_000,
 } as const;

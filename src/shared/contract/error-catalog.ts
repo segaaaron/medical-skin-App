@@ -1412,6 +1412,7 @@ export class ServiceFailure extends ContractError {
  * frase es un error que no dice dónde quedaron las cosas de quien lo lee.
  */
 export const FAILURE_PHRASES = {
+  health: 'El servicio no está disponible ahora mismo. Vuelve a intentarlo en unos minutos.',
   signIn:
     'No pudimos entrar. El servidor no respondió. Tu contraseña no cambió: puedes volver a intentarlo.',
   savePassword:

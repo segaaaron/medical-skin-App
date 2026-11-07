@@ -117,17 +117,15 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
     return withTenantContext(this.pool, contextOf(caller), async (c) => {
       // «Un día cerrado con citas vivas es una paciente que se presenta a una puerta cerrada»:
       // el feriado NO se impone, se rechaza con la lista de lo que hay ese día.
-      const conflicts: string[] = [];
-      for (const holiday of config.holidays) {
-        const { rows } = await c.query<{ id: string }>(
-          `select a.id from appointment a
-            where a.status in ('pendiente_de_sena', 'confirmada')
-              and (a.starts_at at time zone (select time_zone from practice))::date
-                  between $1::date and $2::date`,
-          [holiday.from, holiday.to],
-        );
-        conflicts.push(...rows.map((r) => r.id));
-      }
+      const { rows: clashes } = await c.query<{ id: string }>(
+        `select distinct a.id from appointment a
+           join unnest($1::date[], $2::date[]) as h(from_date, to_date)
+             on (a.starts_at at time zone (select time_zone from practice))::date
+                between h.from_date and h.to_date
+          where a.status in ('pendiente_de_sena', 'confirmada')`,
+        [config.holidays.map((h) => h.from), config.holidays.map((h) => h.to)],
+      );
+      const conflicts = clashes.map((r) => r.id);
       if (conflicts.length > 0) return { outcome: 'holiday_with_appointments', conflicts };
 
       await c.query(
@@ -144,21 +142,27 @@ export class ScheduleRepository implements SchedulePort, AppointmentPort {
       // Reemplazo entero: el `PUT` es la semana completa y es idempotente. «Cambiar el horario
       // no mueve ninguna cita ya agendada»: esto no toca `appointment`, a propósito.
       await c.query(`delete from schedule_rule`);
-      for (const rule of config.rules) {
-        await c.query(
-          `insert into schedule_rule (practice_id, weekday, starts_at, ends_at)
-           values (medskin_current_practice(), $1, $2::time, $3::time)`,
-          [rule.weekday, rule.startsAt, rule.endsAt],
-        );
-      }
+      await c.query(
+        `insert into schedule_rule (practice_id, weekday, starts_at, ends_at)
+         select medskin_current_practice(), r.weekday, r.starts_at, r.ends_at
+           from unnest($1::int[], $2::time[], $3::time[]) as r(weekday, starts_at, ends_at)`,
+        [
+          config.rules.map((r) => r.weekday),
+          config.rules.map((r) => r.startsAt),
+          config.rules.map((r) => r.endsAt),
+        ],
+      );
       await c.query(`delete from holiday`);
-      for (const holiday of config.holidays) {
-        await c.query(
-          `insert into holiday (practice_id, from_date, to_date, reason)
-           values (medskin_current_practice(), $1::date, $2::date, $3)`,
-          [holiday.from, holiday.to, holiday.reason],
-        );
-      }
+      await c.query(
+        `insert into holiday (practice_id, from_date, to_date, reason)
+         select medskin_current_practice(), h.from_date, h.to_date, h.reason
+           from unnest($1::date[], $2::date[], $3::text[]) as h(from_date, to_date, reason)`,
+        [
+          config.holidays.map((h) => h.from),
+          config.holidays.map((h) => h.to),
+          config.holidays.map((h) => h.reason),
+        ],
+      );
       return { outcome: 'saved', conflicts: [] };
     });
   }

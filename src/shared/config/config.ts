@@ -11,12 +11,14 @@ const urlPostgres = z.string().min(1).startsWith('postgresql://');
 const esquema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().positive().default(3000),
+  // Tope de bytes de maestras de fotos a partir del cual la vigilancia deja una fila de alarma.
+  // Sin valor no hay alarma de disco: se fija con el espacio real de la VPS.
+  STORAGE_ALERT_BYTES: z.coerce.number().int().positive().optional(),
 
   // La API usa el usuario de aplicación, nunca el dueño del esquema: RLS no se aplica al
   // dueño. `DATABASE_URL_OWNER` no está aquí a propósito: lo lee `migrate.ts` y nadie más.
   DATABASE_URL: urlPostgres,
   DATABASE_URL_POOLER: urlPostgres.optional(),
-
 
   // §7.4: un despliegue por región. La etiqueta sale de aquí y no de la base (decisión 6
   // de preguntas-abiertas): todos las consultas de un despliegue comparten la etiqueta.

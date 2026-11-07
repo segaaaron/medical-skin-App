@@ -41,6 +41,9 @@ export type ExportMailPort = {
   send(message: { to: string; subject: string; text: string }): Promise<void>;
 };
 
+/** Leer todo lo de una consulta tarda más que una petición; 30 s la cortaría a medias. */
+const EXPORT_STATEMENT_TIMEOUT = '120s';
+
 export class ExportWorker {
   constructor(
     private readonly pool: Pool,
@@ -148,8 +151,8 @@ export class ExportWorker {
       // fila significa «la pidió una paciente»: entra con `app_patient` y sin consulta.
       const context: TenantContext =
         practiceId === null
-          ? { role: 'app_patient', accountId }
-          : { role: 'app_practitioner', practiceId, accountId };
+          ? { role: 'app_patient', accountId, statementTimeout: EXPORT_STATEMENT_TIMEOUT }
+          : { role: 'app_practitioner', practiceId, accountId, statementTimeout: EXPORT_STATEMENT_TIMEOUT };
 
       const data = await withTenantContext(this.pool, context, async (c) =>
         practiceId === null ? this.patientData(c, now) : this.practiceData(c),

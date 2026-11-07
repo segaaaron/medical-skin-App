@@ -22,7 +22,7 @@
 // recomprimir, no con 1,55 MB.
 
 import type { Pool } from 'pg';
-import sharp, { type Metadata } from 'sharp';
+import sharp, { type Metadata, type Sharp } from 'sharp';
 
 import { withTenantContext } from '../../../shared/db/tenant-context';
 import type { FailureLog } from '../../../shared/failures/service-failure';
@@ -31,6 +31,13 @@ import { DERIVATIVES, MAX_ATTEMPTS, dimensionsAreSane, typeOfBytes } from '../do
 
 /** Si esta compilación de libvips puede escribir JPEG XL. Se pregunta una vez, al arrancar. */
 export const JXL_AVAILABLE = sharp.format.jxl?.output?.buffer === true;
+
+/** Lo que dura el reclamo de una foto: si el trabajador muere, otra pasada la toma al vencer. */
+const CLAIM_LEASE_SECONDS = 300;
+const AVIF_QUALITY = 62;
+/** Tope de sharp al abrir; `dimensionsAreSane` ya rechaza bastante antes. */
+const MAX_INPUT_PIXELS = 300_000_000;
+const SIGNED_URL_SECONDS = 120;
 
 export class PhotoWorker {
   constructor(
@@ -55,9 +62,10 @@ export class PhotoWorker {
         practice_id: string;
         attempts: number;
         patient_id: string;
-      }>('select id, practice_id, attempts, patient_id from medskin_photos_pending($1, $2)', [
+      }>('select id, practice_id, attempts, patient_id from medskin_photos_claim($1, $2, $3)', [
         limit,
         MAX_ATTEMPTS,
+        CLAIM_LEASE_SECONDS,
       ]);
       return pending;
     });
@@ -91,15 +99,12 @@ export class PhotoWorker {
     const now = new Date();
     let done = 0;
     for (const photo of photos) {
-      const gone: boolean[] = [];
-      for (const derivative of DERIVATIVES) {
-        gone.push(await this.remove(`${photo.id}/${derivative.name}.avif`, now));
-      }
+      const gone = await this.removeAll(derivativeKeys(photo.id), now);
       // EL SELLO SOLO SI LAS TRES SE FUERON. Sellar igual sería una fila que afirma que los
       // bytes no están cuando siguen ahí, y entonces nadie vuelve a mirar. Si el
       // almacenamiento no respondió, la foto se queda en la lista y la pasada siguiente lo
       // vuelve a intentar: las claves son deterministas, así que repetir no cuesta nada.
-      if (gone.some((ok) => !ok)) continue;
+      if (!gone) continue;
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_derivatives($1, false)', [photo.id]),
       );
@@ -125,19 +130,7 @@ export class PhotoWorker {
       // como está: la foto sigue `lista` sin derivadas, y eso se ve en la pantalla.
       if (master === null) continue;
 
-      for (const derivative of DERIVATIVES) {
-        const bytes = await sharp(master)
-          .rotate()
-          .resize({
-            width: derivative.side,
-            height: derivative.side,
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
-          .avif({ quality: 62 })
-          .toBuffer();
-        await this.upload(`${photo.id}/${derivative.name}.avif`, bytes, now);
-      }
+      await this.uploadDerivatives(photo.id, sharp(master, { limitInputPixels: MAX_INPUT_PIXELS }), now);
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_derivatives($1, true)', [photo.id]),
       );
@@ -164,16 +157,14 @@ export class PhotoWorker {
     const now = new Date();
     let done = 0;
     for (const photo of photos) {
-      const gone: boolean[] = [];
-      for (const derivative of DERIVATIVES) {
-        gone.push(await this.remove(`${photo.id}/${derivative.name}.avif`, now));
-      }
-      gone.push(await this.remove(KEYS.master(photo.id), now));
-      gone.push(await this.remove(KEYS.upload(photo.id), now));
+      const gone = await this.removeAll(
+        [...derivativeKeys(photo.id), KEYS.master(photo.id), KEYS.upload(photo.id)],
+        now,
+      );
       // Lo mismo, y aquí importa más: `purged_at` significa «los bytes ya se fueron». Si se
       // escribiera sin que se fueran, la foto de alguien que pidió que se borrara seguiría en
       // el disco con una fila diciendo que no.
-      if (gone.some((ok) => !ok)) continue;
+      if (!gone) continue;
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_erased($1)', [photo.id]),
       );
@@ -206,7 +197,8 @@ export class PhotoWorker {
       }
 
       // 2 · las dimensiones por la cabecera. `metadata()` no decodifica la imagen entera.
-      const meta = await sharp(original, { limitInputPixels: 300_000_000 }).metadata();
+      const source = sharp(original, { limitInputPixels: MAX_INPUT_PIXELS });
+      const meta = await source.metadata();
       if (!dimensionsAreSane(meta.width, meta.height)) {
         await this.fail(photoId, attempts, 'Esa foto es demasiado pequeña o demasiado grande.');
         await this.remove(KEYS.upload(photoId), now);
@@ -221,14 +213,7 @@ export class PhotoWorker {
       await this.upload(KEYS.master(photoId), master, now);
 
       // 5 · las tres derivadas, en AVIF y por el lado mayor.
-      for (const derivative of DERIVATIVES) {
-        const bytes = await sharp(original)
-          .rotate()
-          .resize({ width: derivative.side, height: derivative.side, fit: 'inside', withoutEnlargement: true })
-          .avif({ quality: 62 })
-          .toBuffer();
-        await this.upload(`${photoId}/${derivative.name}.avif`, bytes, now);
-      }
+      await this.uploadDerivatives(photoId, source, now);
 
       await withTenantContext(this.pool, { role: 'app_anonymous' }, async (c) =>
         c.query('select medskin_photo_processed($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
@@ -279,15 +264,37 @@ export class PhotoWorker {
     );
   }
 
+  /** `clone()` comparte la entrada de una sola instancia entre las tres derivadas. */
+  private async uploadDerivatives(photoId: string, source: Sharp, now: Date): Promise<void> {
+    for (const derivative of DERIVATIVES) {
+      const bytes = await source
+        .clone()
+        .rotate()
+        .resize({ width: derivative.side, height: derivative.side, fit: 'inside', withoutEnlargement: true })
+        .avif({ quality: AVIF_QUALITY })
+        .toBuffer();
+      await this.upload(`${photoId}/${derivative.name}.avif`, bytes, now);
+    }
+  }
+
+  /** Intenta todas aunque falle una, para que la pasada siguiente tenga menos que repetir. */
+  private async removeAll(keys: string[], now: Date): Promise<boolean> {
+    let all = true;
+    for (const key of keys) {
+      if (!(await this.remove(key, now))) all = false;
+    }
+    return all;
+  }
+
   private async download(key: string, now: Date): Promise<Buffer | null> {
-    const url = signUrl(this.storage, { method: 'GET', key, expiresInSeconds: 120, now });
+    const url = signUrl(this.storage, { method: 'GET', key, expiresInSeconds: SIGNED_URL_SECONDS, now });
     const response = await fetch(url.url);
     if (!response.ok) return null;
     return Buffer.from(await response.arrayBuffer());
   }
 
   private async upload(key: string, bytes: Buffer, now: Date): Promise<void> {
-    const url = signUrl(this.storage, { method: 'PUT', key, expiresInSeconds: 120, now });
+    const url = signUrl(this.storage, { method: 'PUT', key, expiresInSeconds: SIGNED_URL_SECONDS, now });
     const response = await fetch(url.url, { method: 'PUT', body: new Uint8Array(bytes) });
     if (!response.ok) throw new Error(`el almacenamiento rechazó ${key}: ${response.status}`);
   }
@@ -299,11 +306,15 @@ export class PhotoWorker {
    * resultado que se quería.
    */
   private async remove(key: string, now: Date): Promise<boolean> {
-    const url = signUrl(this.storage, { method: 'DELETE', key, expiresInSeconds: 120, now });
+    const url = signUrl(this.storage, { method: 'DELETE', key, expiresInSeconds: SIGNED_URL_SECONDS, now });
     const response = await fetch(url.url, { method: 'DELETE' }).catch(() => null);
     if (response === null) return false;
     return response.ok || response.status === 404;
   }
+}
+
+function derivativeKeys(photoId: string): string[] {
+  return DERIVATIVES.map((derivative) => `${photoId}/${derivative.name}.avif`);
 }
 
 /** La cámara, de los metadatos. Nunca el GPS, que no se copia a ningún sitio. */

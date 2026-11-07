@@ -6,14 +6,14 @@ de la paciente.
 ## Empezar
 
 ```bash
-docker compose up -d          # PostgreSQL 17, Redis 7.4 y MinIO
+docker compose up -d          # PostgreSQL 17, PgBouncer y LocalStack (S3)
 pnpm install
 cp .env.example .env
 pnpm db:migrate               # esquema y políticas RLS
 pnpm start:dev                # http://localhost:3000
 ```
 
-Puertos **5433** (Postgres), **6380** (Redis) y **9000/9001** (MinIO), a propósito: dejan libres
+Puertos **5433** (Postgres), **6432** (PgBouncer) y **4566** (LocalStack), a propósito: dejan libres
 los de los servicios que ya estén instalados en la máquina.
 
 ## Qué se usa y por qué
@@ -73,6 +73,6 @@ pasa `pnpm audit`, `osv-scanner`, `gitleaks` y `trivy`. El gancho de pre-commit 
 mismo día.
 
 Las pruebas necesitan la pila de desarrollo levantada (`docker compose up -d`): Postgres con sus dos
-roles, Redis, LocalStack y PgBouncer en modo transacción. No hay dobles de la base en este
+roles, LocalStack y PgBouncer en modo transacción. No hay dobles de la base en este
 proyecto —el aislamiento multi-tenant no se puede probar contra un doble— y por eso la suite tarda
 quince segundos y no uno.

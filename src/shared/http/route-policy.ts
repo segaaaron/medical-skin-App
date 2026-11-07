@@ -46,6 +46,9 @@ const ALL_SCOPES: readonly Scope[] = [
  * incluidos (`:sesion_id`). Una ruta que no está aquí se deniega: no hay «por defecto».
  */
 export const ROUTE_POLICIES: Readonly<Record<string, RoutePolicy>> = {
+  // La salud del servicio: sin sesión, para el HEALTHCHECK de la imagen. No devuelve datos.
+  'GET /health': { anonymous: true, failurePhrase: FAILURE_PHRASES.health },
+
   'POST /v1/access': { anonymous: true, failurePhrase: FAILURE_PHRASES.signIn },
 
   // Los dos de recuperación, sin `Authorization` como el acceso: cuando llegan no hay

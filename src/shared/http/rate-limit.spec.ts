@@ -50,7 +50,7 @@ describe('la clave del cubo', () => {
 
     // La de la derecha: la que añadió el proxy. `1.2.3.4` es lo que escribió el cliente y
     // queda a la izquierda, donde no se lee.
-    expect(r.json()).toMatchObject({ ip: '203.0.113.9', clave: 'ip:203.0.113.9' });
+    expect(r.json()).toMatchObject({ ip: '203.0.113.9', clave: 'ip:203.0.113.9|GET /eco' });
     await app.close();
   });
 
@@ -82,7 +82,7 @@ describe('la clave del cubo', () => {
     });
 
     expect(r.json()).toMatchObject({
-      clave: `dev:${DISPOSITIVO}`,
+      clave: `dev:${DISPOSITIVO}|GET /eco`,
       maximo: RITMO_CON_SESION_POR_MINUTO,
     });
     await app.close();
@@ -99,7 +99,7 @@ describe('la clave del cubo', () => {
     // Si la cabecera del dispositivo bastara, las tres rutas anónimas —entrar, recuperar,
     // refrescar— tendrían cubo nuevo a voluntad, que es el agujero de antes con otro nombre.
     expect(r.json()).toMatchObject({
-      clave: 'ip:203.0.113.9',
+      clave: 'ip:203.0.113.9|GET /eco',
       maximo: RITMO_ANONIMO_POR_MINUTO,
     });
     await app.close();
@@ -121,8 +121,27 @@ describe('la clave del cubo', () => {
 
     // Es la causa raíz del bloqueo injusto: la consulta entera salía por la IP del WiFi.
     const clave = (r: { json: () => unknown }): unknown => (r.json() as { clave: unknown }).clave;
-    expect(clave(uno)).toBe('dev:aaa');
-    expect(clave(otro)).toBe('dev:bbb');
+    expect(clave(uno)).toBe('dev:aaa|GET /eco');
+    expect(clave(otro)).toBe('dev:bbb|GET /eco');
+    await app.close();
+  });
+});
+
+describe('el cubo es por ruta', () => {
+  it('agotar una ruta NO deja con 429 a la misma persona en las demás', async () => {
+    const app = Fastify({ trustProxy: REDES });
+    await app.register(rateLimit, { ...OPCIONES_DE_RITMO, max: 1 });
+    app.get('/uno', (_req, res) => res.send({ ok: true }));
+    app.get('/dos', (_req, res) => res.send({ ok: true }));
+
+    const cabeceras = { 'x-forwarded-for': '203.0.113.9' };
+    const ir = async (url: string) =>
+      (await app.inject({ method: 'GET', url, headers: cabeceras })).statusCode;
+
+    expect(await ir('/uno')).toBe(200);
+    expect(await ir('/uno')).toBe(429);
+    // Mismo cliente, otra ruta: su cuota está intacta.
+    expect(await ir('/dos')).toBe(200);
     await app.close();
   });
 });

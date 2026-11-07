@@ -55,8 +55,20 @@ const RETENTION_SWEEP = Symbol('RETENTION_SWEEP');
       // `withTenantContext()` es lo que hace que eso sea seguro: `SET LOCAL` y
       // `set_config(…, true)` se deshacen en el COMMIT, y nunca un `SET` de sesión, que se
       // filtra al siguiente cliente.
-      useFactory: (cfg: Config): Pool =>
-        new Pool({ connectionString: cfg.DATABASE_URL_POOLER ?? cfg.DATABASE_URL, max: 10 }),
+      useFactory: (cfg: Config): Pool => {
+        const pool = new Pool({
+          connectionString: cfg.DATABASE_URL_POOLER ?? cfg.DATABASE_URL,
+          max: 10,
+        });
+        // Una conexión ociosa que la base cierra (reinicio, PgBouncer) emite 'error' en el
+        // pool; sin oyente tumba el proceso. El pool la descarta y abre otra al hacer falta.
+        pool.on('error', (cause) =>
+          process.stderr.write(
+            `${JSON.stringify({ nivel: 'warning', mensaje: 'conexión ociosa descartada', codigo: (cause as { code?: string }).code ?? null })}\n`,
+          ),
+        );
+        return pool;
+      },
       inject: [CONFIG],
     },
     {

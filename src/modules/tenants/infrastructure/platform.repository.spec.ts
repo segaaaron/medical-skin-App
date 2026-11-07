@@ -712,7 +712,7 @@ describe('suspender, reactivar y borrar una consulta', () => {
           [FILE.practice],
         )
         .then((r) => Number(r.rows[0]?.n));
-    expect(await vivas()).toBeGreaterThan(0);
+    expect(await vivas()).toBe(3);
 
     const suspendida = await lifecycle.setStatus({
       actor: ACTOR,
@@ -720,7 +720,7 @@ describe('suspender, reactivar y borrar una consulta', () => {
       status: 'suspendida',
     });
     expect(suspendida).toMatchObject({ status: 'suspendida' });
-    expect(suspendida?.revokedSessions).toBeGreaterThan(0);
+    expect(suspendida?.revokedSessions).toBe(3);
     // ESTO ES LO QUE HACE QUE SUSPENDER SUSPENDA. Sin la revocación, quien ya estaba dentro
     // seguiría trabajando hasta doce horas, que es lo que dura su refresco.
     expect(await vivas()).toBe(0);
@@ -784,7 +784,7 @@ describe('suspender, reactivar y borrar una consulta', () => {
     );
 
     const borrada = await lifecycle.remove({ actor: ACTOR, practiceId: OTHER.practice });
-    expect(borrada?.patients).toBeGreaterThan(0);
+    expect(borrada?.patients).toBe(1);
 
     // La consulta y TODO lo que colgaba de ella.
     const quedan = async (tabla: string, columna: string, valor: string) =>

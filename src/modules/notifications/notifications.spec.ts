@@ -691,7 +691,7 @@ describe('los dos programadores que miran la agenda', () => {
     };
 
     // La sesión firmada de hace 30 días sigue ahí, así que la consulta la ve.
-    expect(await pendientes()).toBeGreaterThan(0);
+    expect(await pendientes()).toBe(1);
 
     // UNA FILA CON BASURA EN `desde` no excluye a nadie —correcto— y sobre todo NO LANZA: con el
     // casteo a `date`, esto era «invalid input syntax for type date» en cada disparo del trabajo.
@@ -707,7 +707,7 @@ describe('los dos programadores que miran la agenda', () => {
                jsonb_build_object('tratamiento_id', $3::text, 'desde', 'ayer'), 'basura')`,
       [quien[0]!.practice_id, quien[0]!.account_id, quien[0]!.treatment_id],
     );
-    expect(await pendientes()).toBeGreaterThan(0);
+    expect(await pendientes()).toBe(1);
 
     // Y EL AVISO DE VERDAD SÍ LA EXCLUYE, escrito por el camino de producción.
     expect(await new Notifications(outbox, [], null, clock).callBack()).toBe(2);

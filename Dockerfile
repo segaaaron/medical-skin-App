@@ -35,6 +35,9 @@ RUN pnpm build
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# argon2, sharp y el sistema de archivos comparten este pool de hilos de Node (4 por omisión):
+# una ráfaga de accesos no debe dejar en cola el procesamiento de fotos.
+ENV UV_THREADPOOL_SIZE=8
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -51,6 +54,12 @@ RUN chown -R node:node /app
 USER node
 
 EXPOSE 3000
+
+# La salud la decide la propia API: responde ok solo si puede hablar con la base. `start-period`
+# cubre las migraciones que corren antes de escuchar. El despliegue no debe reemplazar al
+# contenedor anterior hasta que este esté sano.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # LAS MIGRACIONES ANTES DE ESCUCHAR, y en el mismo contenedor: si fallan, el proceso muere y el
 # despliegue no se da por bueno. Un arranque que sirve peticiones contra un esquema viejo es peor

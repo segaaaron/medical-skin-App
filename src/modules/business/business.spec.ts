@@ -306,7 +306,7 @@ describe('cobrar, y no cobrar dos veces', () => {
     const hers = (await business.payments({}, ana)) as {
       cobros: Record<string, unknown>[];
     };
-    expect(hers.cobros.length).toBeGreaterThan(0);
+    expect(hers.cobros).toHaveLength(2);
     for (const row of hers.cobros) {
       expect(row).toHaveProperty('importe');
       expect(row).not.toHaveProperty('medio');

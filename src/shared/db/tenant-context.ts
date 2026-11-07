@@ -30,7 +30,17 @@ export type TenantContext = {
   practiceId?: string | null;
   /** `medskin.account_id`. Los cuatro roles con sesión. `app_anonymous` no lo fija. */
   accountId?: string | null;
+  /** Sustituye los 30 s de las consultas. Solo para trabajos largos conocidos (exportaciones). */
+  statementTimeout?: string;
 };
+
+// Valores de partida, sin medir con carga real: se ajustan si la suite o producción muestran
+// una consulta legítima que los supere.
+const STATEMENT_TIMEOUT = '30s';
+const LOCK_TIMEOUT = '5s';
+const IDLE_IN_TRANSACTION_TIMEOUT = '60s';
+
+const TIMEOUT = /^\d{1,6}(ms|s|min)$/;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,7 +56,11 @@ function validUuid(value: string | null | undefined, field: string): string | nu
  * es el único sitio donde un nombre entra en el SQL por texto y por eso es el único que
  * tiene que estar cerrado con llave.
  */
-function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string; accountId: string } {
+function checkedContext(ctx: TenantContext): {
+  role: DbRole;
+  practiceId: string;
+  accountId: string;
+} {
   if (!DB_ROLES.includes(ctx.role)) throw new Error(`Rol de base desconocido: ${String(ctx.role)}`);
 
   const practiceId = validUuid(ctx.practiceId, 'practiceId');
@@ -61,19 +75,24 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   // `SECURITY DEFINER` del acceso, que validan sus argumentos y devuelven el resultado.
   if (ctx.role === 'app_anonymous') {
     if (practiceId || accountId) {
-      throw new Error('app_anonymous no fija ningún contexto: cuando llega la petición no hay sesión.');
+      throw new Error(
+        'app_anonymous no fija ningún contexto: cuando llega la petición no hay sesión.',
+      );
     }
     return { role: ctx.role, practiceId: '', accountId: '' };
   }
 
-  if (!accountId) throw new Error(`El rol ${ctx.role} exige accountId: toda petición autenticada lo fija.`);
+  if (!accountId)
+    throw new Error(`El rol ${ctx.role} exige accountId: toda petición autenticada lo fija.`);
   // `app_account` es el rol del token que NO dice qué es la persona: el de recuperación
   // (§ migración 0013). Sus políticas son las tres por `account_id` —`account`,
   // `credential`, `session`— más el `SELECT` de `patient_link`, y nada clínico ni de
   // ninguna consulta. Por eso no fija `practice_id`: cuando llega no se sabe si hay uno, y
   // un `practice_id` adivinado sería una lectura que ese token no autoriza.
   if (ctx.role === 'app_account' && practiceId) {
-    throw new Error('app_account no fija practiceId: su token no dice a qué consulta pertenece quien llama.');
+    throw new Error(
+      'app_account no fija practiceId: su token no dice a qué consulta pertenece quien llama.',
+    );
   }
   if (ctx.role === 'app_practitioner' && !practiceId) {
     throw new Error('app_practitioner exige practiceId: sus políticas se leen por consulta.');
@@ -91,7 +110,9 @@ function checkedContext(ctx: TenantContext): { role: DbRole; practiceId: string;
   // `medskin_create_practice_owner(p_practice_id, …)` y de
   // `medskin_platform_practice_stats(p_practice_id)`, y las dos son así por esto.
   if (ctx.role === 'app_platform' && practiceId) {
-    throw new Error('app_platform no fija practiceId: la consola no es una consulta y ninguna de sus políticas lo lee.');
+    throw new Error(
+      'app_platform no fija practiceId: la consola no es una consulta y ninguna de sus políticas lo lee.',
+    );
   }
 
   return { role: ctx.role, practiceId: practiceId ?? '', accountId };
@@ -108,7 +129,23 @@ export async function withTenantContext<T>(
   work: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const { role, practiceId, accountId } = checkedContext(ctx);
+  const statementTimeout = ctx.statementTimeout ?? STATEMENT_TIMEOUT;
+  if (!TIMEOUT.test(statementTimeout))
+    throw new Error('Contexto de consulta inválido: statementTimeout.');
   const client = await pool.connect();
+  // Sin un oyente, la base que corta la conexión con la transacción abierta (tiempo de
+  // inactividad, reinicio, fallo) emite 'error' sin nadie que lo reciba y Node termina el
+  // proceso entero. Con él, el fallo llega a la siguiente consulta y esa petición responde 500.
+  const onClientError = (cause: Error): void => {
+    process.stderr.write(
+      `${JSON.stringify({
+        nivel: 'error',
+        mensaje: 'la conexión a la base se cayó con una transacción abierta',
+        codigo: (cause as { code?: string }).code ?? null,
+      })}\n`,
+    );
+  };
+  client.on('error', onClientError);
 
   try {
     await client.query('BEGIN');
@@ -116,23 +153,31 @@ export async function withTenantContext<T>(
     await client.query(`SET LOCAL ROLE ${role}`);
     // Los dos siempre, aunque uno vaya vacío: `nullif(..., '')` lo convierte en NULL
     // dentro de las funciones de política, y NULL no es igual a nada.
+    // Los tres tiempos van en la misma llamada: sin ellos valen 0 (sin límite) y una consulta
+    // o un bloqueo colgado retiene la conexión del pool hasta que alguien la mate.
     await client.query(
       `SELECT set_config('medskin.practice_id', $1, true),
-              set_config('medskin.account_id', $2, true)`,
-      [practiceId, accountId],
+              set_config('medskin.account_id', $2, true),
+              set_config('statement_timeout', $3, true),
+              set_config('lock_timeout', $4, true),
+              set_config('idle_in_transaction_session_timeout', $5, true)`,
+      [practiceId, accountId, statementTimeout, LOCK_TIMEOUT, IDLE_IN_TRANSACTION_TIMEOUT],
     );
 
     const result = await work(client);
     await client.query('COMMIT');
+    client.removeListener('error', onClientError);
     client.release();
     return result;
   } catch (failure) {
     try {
       await client.query('ROLLBACK');
+      client.removeListener('error', onClientError);
       client.release();
     } catch (rollbackFailure) {
       // Nunca se traga un fallo (§10.3, regla 5). La conexión se destruye en vez de volver
       // al pool con una transacción abierta, y los dos fallos viajan juntos.
+      client.removeListener('error', onClientError);
       client.release(rollbackFailure as Error);
       throw new AggregateError(
         [failure, rollbackFailure],

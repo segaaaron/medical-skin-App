@@ -603,6 +603,27 @@
       "when": 1793769200000,
       "tag": "0085_la_ficha_dice_si_el_pin_sigue_sin_estrenar",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793770000000,
+      "tag": "0086_el_trabajador_de_fotos_reclama_lo_que_procesa",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1793770700000,
+      "tag": "0087_las_funciones_del_definer_cierran_pg_temp",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793771400000,
+      "tag": "0088_el_estado_operativo_para_vigilar",
+      "breakpoints": true
     }
   ]
 }
